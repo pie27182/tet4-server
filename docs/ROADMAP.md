@@ -29,9 +29,9 @@ serializer test does not prove that the real client accepts the message.
 
 ## Milestone 1 — stable channel lobby
 
-<text>Current blocker: [GitHub Issue #4](https://github.com/pie27182/tet4-server/issues/4).
-Related observations: [Issue #1 — missing channel row](https://github.com/pie27182/tet4-server/issues/2)
-and [Issue #2 — client crash](https://github.com/pie27182/tet4-server/issues/3).</text>
+Current blocker: [GitHub Issue #4](https://github.com/pie27182/tet4-server/issues/4).
+Related blockers: [GitHub issue #2 — missing channel row](https://github.com/pie27182/tet4-server/issues/2)
+and [GitHub issue #3 — client crash](https://github.com/pie27182/tet4-server/issues/3).
 
 - [ ] Capture and decode the complete `Cmd_Channel_GetMemberListToS` request
       (`0x0AE3BBDA`); locate its serializer/deserializer and model handler.

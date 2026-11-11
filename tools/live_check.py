@@ -27,7 +27,7 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from tet4server import channel, cds, tpack  # noqa: E402
+from tet4server import channel, cds, game, tpack  # noqa: E402
 
 log = logging.getLogger("live")
 HERE = Path(__file__).resolve().parent
@@ -61,6 +61,7 @@ def main() -> int:
     threading.Thread(target=tpack.serve, args=("127.0.0.1", 10454), daemon=True).start()
     threading.Thread(target=cds.serve, args=("127.0.0.1", 15000), daemon=True).start()
     threading.Thread(target=channel.serve, args=("127.0.0.1", 15001), daemon=True).start()
+    threading.Thread(target=game.serve, args=("127.0.0.1", channel.GAME_SERVER_PORT), daemon=True).start()
 
     recorder = subprocess.Popen(
         ["wf-recorder", "-g", args.geometry, "-r", str(args.fps), "-c", "libx264",

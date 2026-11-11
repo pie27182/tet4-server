@@ -19,16 +19,9 @@ captured bytes.
 
 ## In progress
 
-- [ ] **Client crash after the channel exchange** (`docs/REPRODUCE.md`, section 7). In the
-      checked runs `Tet4.exe` ends with an access violation about 2–3 s after
-      `Cmd_LayerAlignment` and `Cmd_Channel_ExitChannelToS`. Likely caused by the missing
-      `EnterChannelByUserId` reply. Confirm first: decode the request and reply formats
-      and check whether an error reply stops the crash.
-- [ ] **Reply to `Cmd_Channel_EnterChannelByUserIdToS`** (`0x0696068A`). The client waits
-      for it. Candidates from RTTI: `Cmd_Channel_EnterChannelToC` (`0x00C0FC8A`),
-      `Cmd_Channel_EnterChannelErrorToC` (`0x08579CBA`),
-      `Cmd_Channel_EnterChannelWithTicketToC` (`0x0DA8E7EA`). Decode the request
-      (`Serialize` and converter) and the chosen reply first.
+- [ ] **Client crash after the channel exchange**: `ISSUE-002` in `docs/ISSUES.md`.
+- [ ] **Reply to `Cmd_Channel_EnterChannelByUserIdToS`**: `ISSUE-003` in `docs/ISSUES.md`.
+- [ ] **Channel row missing in the lobby**: `ISSUE-001` in `docs/ISSUES.md`.
 
 ## To do
 

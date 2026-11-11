@@ -34,6 +34,9 @@ stays in the lobby. Single Mode is not started. See [`docs/ROADMAP.md`](docs/ROA
 - [`docs/ADDRESSES.md`](docs/ADDRESSES.md): the addresses used in the documentation.
 - [`docs/ONLINE.md`](docs/ONLINE.md): how the original online service was reached (launcher
   remote gateway: pinned TLS tunnel, JSON hello) and how a local gateway could work.
+- [`docs/ISSUES.md`](docs/ISSUES.md): known open problems, with stable IDs and fix criteria.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md): ground rules (no client files, test accounts only,
+  evidence for every reply), branches, commits, and how an issue is closed.
 
 ## Layout
 

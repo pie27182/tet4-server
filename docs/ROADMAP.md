@@ -37,10 +37,13 @@ serializer test proves layout, not that the client accepts the message.
 
 ## Milestone 2 — enter a Single Mode session
 
-- [ ] Find the UI/controller event invoked by the Single Mode button and capture the
-      exact outgoing `Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToS` request
-      (`0x031AC76A`); verify every field against the client serializer at
-      `Tet4.exe:0x004A18F0`.
+- [x] Trace the Single Mode button event: `Tet4.exe:0x0049D0A0` constructs
+      `Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToS` (`0x031AC76A`) and sends
+      it on the channel connection. Its serializer at `0x004A18F0` is decoded;
+      `tet4server.channel` now parses and logs the eight strings and four uint32 fields.
+- [ ] Capture the request from a fresh live run after the empty member/room-list probes;
+      confirm actual values (the builder sets `k602e`, `N000S`, GameID `TET4`,
+      `k23e` and `k24e`, with remaining fields defaulted).
 - [ ] Decode the full `Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToC` response
       (`0x0DF37B3A`): constructor, Serialize/Deserialize, converter, result-key
       handling, and all nested/related data. Implement a reply that makes the client

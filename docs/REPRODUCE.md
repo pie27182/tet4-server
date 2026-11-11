@@ -46,8 +46,7 @@ cause.
 python3 -m unittest discover -s tests -t .
 ```
 
-Expected: `OK`, 21 tests. The tests use byte vectors from captured runs and do not need
-the client.
+Expected: `OK`, 27 tests. The protocol-layout tests do not need the client.
 
 ## 2. Client files
 
@@ -124,9 +123,10 @@ TPack 0x0b60835a ... LoginTPack ctx=2
 CDS select table=COMMON tid=1
 channel frame id=0x0365c03a          -> sent Cmd_AuthToC
 channel frame id=0x0fab330a          -> sent Cmd_Channel_GetUserIdToC for member b'test'
-channel frame id=0x0696068a          (Cmd_Channel_EnterChannelByUserIdToS, no reply sent)
+channel frame id=0x0696068a          -> sent Cmd_Channel_EnterChannelToC probe
 channel frame id=0x09d0057a          (Cmd_LayerAlignment)
-channel frame id=0x0a75af8a          (Cmd_Channel_ExitChannelToS)
+channel frame id=0x0ae3bbda          -> sent empty Cmd_Channel_GetMemberListToC
+channel frame id=0x0dda299a          -> sent empty Cmd_Channel_GetRoomListToC
 ```
 
 Expected on screen: the lobby (buttons 내 아이템, 상점, 싱글모드, the room list) with
@@ -229,18 +229,18 @@ matters, with `tools/disasm.py`:
 
 ## 7. Known problems
 
-- **The client crashes after the channel exchange.** In the runs we checked in detail
-  (patched and unmodified copies, `docs/CLIENT.md`), `Tet4.exe` ended about 2–3 s
-  after it sent `Cmd_LayerAlignment` and `Cmd_Channel_ExitChannelToS`. Not every run
-  was checked this way. Wine shows "Tet4.exe has
-  stopped working" with `Exception c0000005` (access violation). This happened with
-  both the unmodified and the patched copy. Symbols of the modules are not loaded, so
-  the faulting function is not known. The most likely cause is the missing
-  `Cmd_Channel_EnterChannelByUserIdToS` reply: the client waits for it, gives up, and
-  then crashes. This is a hypothesis.
-- **No reply to `EnterChannelByUserIdToS`.** Nothing answers it, so the client waits.
-- **Single Mode is not implemented.** The online path (the launcher's remote gateway)
-  is described in `docs/ONLINE.md` but not implemented.
+- **The client crash is not yet explained.** Earlier runs of the old server
+  (before the EnterChannelToC reply) ended about 2–3 s after
+  `Cmd_LayerAlignment` and `Cmd_Channel_ExitChannelToS`, with Wine
+  `Exception c0000005`. The updated server progresses to GetMemberListToS, but the
+  full member/room-list response path has not yet been live-verified. Repeat the run
+  with the current branch before deciding whether the crash remains.
+- **Empty member and room lists are probes.** Their top-level serializers and vector
+  counts are recovered, but the client must be run to confirm it accepts the empty
+  vectors and proceeds to Single Mode entry.
+- **Single Mode is not implemented yet.** The roadmap tracks room entry, game-state
+  initialization, gameplay and game-end messages. The remote TLS gateway is not needed
+  for the local protocol path.
 - **Some runs show the channel row and some do not.** The CDS reply is byte-identical
   in both cases; the difference comes from the client's state (see `docs/CLIENT.md`).
   The cause is not known.

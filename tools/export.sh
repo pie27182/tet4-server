@@ -7,6 +7,7 @@ set -e
 MODULE="$1"; OUT="$2"
 TOOLS="$(cd "$(dirname "$0")" && pwd)"
 PROJ="$(mktemp -d)"
-"$GHIDRA" "$PROJ" proj -import "$MODULE" -processor x86:LE:32:default \
-    -postScript "$TOOLS/ExportAllFunctions.java" "$OUT"
+"$GHIDRA" "$PROJ" proj -import "$MODULE" \
+    -scriptPath "$TOOLS" -postScript ExportAllFunctions.java "$OUT"
+test -s "$OUT/$(basename "$MODULE").c" || { echo "EXPORT_FAILED: no output in $OUT" >&2; exit 1; }
 echo EXPORT_DONE

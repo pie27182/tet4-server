@@ -17,7 +17,7 @@ Versions are the ones this work was done with. Other versions were not tested.
 | `wf-recorder` | screen recording in `live_check.py` | 0.6.0 |
 | `ffmpeg` | frame extraction, scene detection | n9.0.2 |
 | `grim` | screenshots (`tools/` and ad-hoc checks) | any recent version |
-| Ghidra (`analyzeHeadless`) | decompilation (`tools/export.sh`) | 12.2 PUBLIC |
+| Ghidra 12.2 PUBLIC, unzipped in `work/` | decompilation (`tools/export_all.sh`) | 12.2 PUBLIC |
 | OpenJDK (for Ghidra) | Ghidra runtime | 27.0.1 |
 | `pefile`, `capstone` (in `.venv`) | `tools/disasm.py` | pefile 2024.8.26, capstone 5.0.7 |
 
@@ -33,10 +33,12 @@ python3 -m venv .venv
 
 Use `.venv/bin/python` for `tools/disasm.py`. Other tools use plain `python3`.
 
-Disk space: the client folder is about 190 MB, a patched copy of it another 190 MB,
-and the decompiled output about 40 MB. Ghidra projects are several hundred MB while
-an export runs. `/tmp` is often a small tmpfs with a per-user quota; use a directory on
-a disk with room (see section 8).
+Disk space, all inside the repository (git-ignored): the client folder about 190 MB, a
+patched copy another 190 MB, Ghidra itself about 900 MB, the decompiled output about
+40 MB, and Ghidra projects several hundred MB while an export runs. The export tools
+write only inside `work/`. The live run uses Wine's default prefix, `~/.wine`, which is
+outside the repository (section 5). Section 8 explains the quota errors that `/tmp` can
+cause.
 
 ## 1. Tests
 
@@ -50,9 +52,11 @@ the client.
 ## 2. Client files
 
 The client is the official Hangame Tetris distribution, version 1.3.4. The repository
-does not contain it and cannot. Put your own copy of the folder into the repository as
-`client/` (the path is git-ignored, and nothing in `client/` is committed or put into the
-bundle). Every tool reads from there by default.
+does not contain it and cannot. Copy the whole contents of your client folder into `client/` in the repository, so that
+`client/Tet4.exe` exists and the DLLs, `Tet4/`, `common/` and `Sysfiles/` sit directly
+under `client/`. Do not link it from elsewhere: a copy in place is what the tools expect.
+The folder is git-ignored; nothing in `client/` is committed or put into the bundle.
+Every tool reads from there by default.
 
 - `files.sha256.json` in the folder lists every file (2068 entries) with its sha256.
 - `tools/check_client.py` verifies them:
@@ -102,7 +106,8 @@ python3 tools/live_check.py
 ```
 
 The default client is `client-patched/`, and the output goes to `live-runs/<time>/`
-(both git-ignored).
+(both git-ignored). Wine uses its default prefix, `~/.wine`; the repository does not
+create or change a prefix of its own.
 
 The script starts the TPack, CDS and channel servers from this repository, starts
 `wf-recorder` (region `0,0 1536x864`, 15 fps, 1280x720 output), then starts the client
@@ -136,24 +141,50 @@ and that no Wine process is still running (`wineserver -k`).
 
 Every address in `docs/CLIENT.md` and `docs/ADDRESSES.md` comes from these exports.
 
+### 6.1 Ghidra inside the repository
+
+Download Ghidra 12.2 PUBLIC (the release zip from the Ghidra releases page), and unzip it
+into `work/` so the folder is `work/ghidra_12.2_PUBLIC/`. The work was done with OpenJDK
+27.0.1; other versions were not tested. Nothing is installed outside the repository:
+`tools/export.sh` keeps Ghidra's settings and cache in `work/xdg/`, and the Ghidra
+projects in `work/ghidra/`. Both are git-ignored.
+
+To use a Ghidra installed elsewhere, set `GHIDRA` to its `support/analyzeHeadless`.
+
+### 6.2 Export every module
+
 ```
-export GHIDRA=~/ghidra_12.2_PUBLIC/support/analyzeHeadless
-for m in Tet4.exe HgSock3.dll HgCom3.dll HgModel3.dll HgCtr3.dll CDSClientConnector.dll \
-         TPackClientConnector.dll XInNetwork.dll XStream.dll XSystem.dll XPlatform.dll \
-         CasualComm.dll GAS.dll HgAvtr3.dll HgBoard3.dll HgDlg3.dll HGF5V.dll HgFrm3.dll \
-         HgKor3.dll HgSoundOut.exe HgTool3.dll HgView3.dll ipcHani.dll IRIA.dll \
-         HgAniGm3.dll HgAniGm3_16Bit.dll GcDxbase.dll GcDxbase_3d.dll XDebug.dll; do
-  GHIDRA=~/ghidra_12.2_PUBLIC/support/analyzeHeadless tools/export.sh client/$m
-done
+tools/export_all.sh
 ```
 
-Output goes to `work/decompiled/` and the Ghidra project to `work/ghidra/` (both
-git-ignored). Pass a second argument to `export.sh` for another output folder, or set
-`GHIDRA_PROJECTS` for another project folder.
+This runs `tools/export.sh` for the 29 modules in the list (see the script) and writes:
 
-`tools/export.sh` runs Ghidra headless, imports the module with its default analysis,
-and runs `tools/ExportAllFunctions.java`. For each module it writes `<module>.c` (the
-decompiled C) and `<module>.index.tsv` (entry, size, name, signature) into `OUT`.
+- `work/decompiled/<module>.c`: the decompiled C of every function;
+- `work/decompiled/<module>.index.tsv`: entry address, size, name and signature;
+- `work/logs/export-<module>.log`: the Ghidra output for each module.
+
+It takes a long time (the 18683 functions of `Tet4.exe` are the largest part) and about
+40 MB of disk. It prints `ok` or `FAIL` for each module and exits non-zero if any failed.
+
+### 6.3 One module
+
+```
+tools/export.sh client/HgSock3.dll                 # output: work/decompiled
+tools/export.sh client/HgSock3.dll /some/outdir    # another output folder
+```
+
+`tools/export.sh` runs Ghidra headless with this command, which is the exact one used:
+
+```
+work/ghidra_12.2_PUBLIC/support/analyzeHeadless work/ghidra <module> \
+    -import client/<module> -overwrite \
+    -scriptPath tools -postScript ExportAllFunctions.java work/decompiled
+```
+
+The script imports the module with Ghidra's default analysis and runs
+`tools/ExportAllFunctions.java`, which writes `<module>.c` and `<module>.index.tsv` for
+every function. A second export of `HgSoundOut.exe` gave an identical index; the other
+modules were not compared this way.
 
 Expected function counts (lines of the index minus the header):
 
@@ -218,9 +249,9 @@ matters, with `tools/disasm.py`:
 
 - **`Disk quota exceeded` or `Unable to lock project` during an export.** Both mean the
   user quota is used up. `/tmp` is a tmpfs with a user quota, so the first thing to
-  check is `df -h /tmp` and your own files there. The Ghidra project is in
-  `work/ghidra`; if that disk is full, set `GHIDRA_PROJECTS` to another folder. The
-  path must not start a directory name with a dot, because Ghidra rejects it.
+  check is `df -h /tmp` and your own files there. The tools use `work/` only, so the
+  quota is for the disk the repository is on. Ghidra also rejects project paths with a
+  dot-prefixed name, so do not put the repository in such a folder.
 - **Old Wine processes.** If the client does not start, or starts with a stale
   session, run `wineserver -k` and check that the ports 10454, 15000 and 15001 are free
   (`ss -ltn`).

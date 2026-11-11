@@ -45,13 +45,21 @@ tet4server/   protocol code (xdr, tpack, cds, crypto)
 tests/        unittest tests; byte vectors come from captured runs
 docs/         client description, method, roadmap
 tools/        client check and patch, live run, Ghidra export, function lookup,
-              RTTI extractor, sample startup string
+              disassembler, RTTI extractor, sample startup string
+
+Local data, all git-ignored and never in the bundle (created by you or the tools):
+client/           your copy of the client folder (you put it here)
+client-patched/   patched copy made by tools/patch_client.py
+work/             Ghidra (unzipped here), decompiled output, Ghidra project, logs
+live-runs/        recordings and frames from tools/live_check.py
+.venv/            Python packages for tools/disasm.py
 ```
 
 ## What you need
 
-**Client files (not included).** Your own copy of the official client folder, version
-1.3.4, placed in the repository as `client/` (git-ignored, never committed or bundled).
+**Client files (not included).** Copy the whole contents of your official client folder,
+version 1.3.4, into `client/` in the repository (git-ignored, never committed or bundled).
+Put the files directly in `client/`, not in a subfolder, so `client/Tet4.exe` exists.
 Check it with `tools/check_client.py`. The game needs `Tet4.exe`, all DLLs, and
 the `Tet4/`, `common/` and `Sysfiles/` folders. `h-tetra.exe` is the launcher; the local
 flow does not use it. For the experiments make a patched copy with

@@ -33,8 +33,8 @@ Client binaries are not part of this repository.
 - Every message on every socket: `uint32be length | body`, where `length` is the body size.
 - Strings: `uint32be length | bytes`. No padding, no terminator.
 - Integers are big-endian. Message IDs are 32-bit values, matching `GetID()` of each
-  message class. They were extracted from RTTI in `HgCom3.dll` with
-  `tools/tet4_rtti_extract.py`.
+  message class, read from MSVC RTTI with `tools/tet4_rtti_extract.py`: channel
+  messages from `HgCom3.dll`, Single Mode messages from `Tet4.exe`.
 
 ## 4. TPack (account)
 
@@ -144,16 +144,20 @@ Without a valid reply it closes the channel socket after about 66 s. **[wire]**
 
 ## 8. Single Mode (not yet started)
 
-Message IDs, from RTTI in `HgCom3.dll` **[static]**:
+Message IDs, from RTTI in `Tet4.exe` **[static]**:
 
-| Message | ID |
+| Class | ID |
 |---|---|
-| `AutoEnterSingleModeRoomTetrisToS` | `0x031AC76A` |
-| `AutoEnterSingleModeRoomTetrisToC` | `0x0DF37B3A` |
-| RoomInfo ToC | `0x04B61A2A` |
-| GameReport ToS / ToC | `0x05BCDF3A` / `0x0EE1D56A` |
-| PolyMinoPut ToS | `0x0CC4004A` |
-| ResultMember ToC | `0x0928E8BA` |
+| `Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToS` | `0x031AC76A` |
+| `Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToC` | `0x0DF37B3A` |
+| `Cmd_ChannelOrderTypeSingleModeRoomInfoTetrisToC` | `0x04B61A2A` |
+| `Cmd_Channel_OrderTypeSingleModeResultMemberTetrisToC` | `0x0928E8BA` |
+| `Cmd_Room_OrderTypeSingleModeGameReportTetrisToS` | `0x05BCDF3A` |
+| `Cmd_Room_OrderTypeSingleModeGameReportTetrisToC` | `0x0EE1D56A` |
+| `Cmd_Room_OrderTypeSingleModePolyMinoPutTetrisToS` | `0x0CC4004A` |
 | `_SingleModeInfo` | `0x0071FA1A` |
+
+The extractor needs these names passed explicitly for `Tet4.exe` (its default list
+covers exactly these classes): `tools/tet4_rtti_extract.py Tet4.exe --json`.
 
 Their fields and the order in which the client expects them are unknown.

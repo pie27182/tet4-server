@@ -32,8 +32,9 @@ the behavior is confirmed by a captured run or a test against captured bytes.
       and the client sends its next message.
 - [ ] **Channel login state.** Identify the messages after authorization (room list or
       enter-channel request) and their replies.
-- [ ] **Single Mode entry.** `AutoEnterSingleModeRoomTetrisToS` (`0x031AC76A`) and its
-      reply `0x0DF37B3A`, RoomInfo `0x04B61A2A`, `_SingleModeInfo` `0x0071FA1A`.
+- [ ] **Single Mode entry.** `Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToS`
+      (`0x031AC76A`) and its reply `...ToC` (`0x0DF37B3A`), room info
+      `Cmd_ChannelOrderTypeSingleModeRoomInfoTetrisToC` (`0x04B61A2A`), `_SingleModeInfo` (`0x0071FA1A`).
 - [ ] **Game board appears.** Initial state and piece sequence needed for the first
       playable screen.
 - [ ] **Gameplay messages.** PolyMinoPut `0x0CC4004A`, GameReport `0x05BCDF3A` /

@@ -41,6 +41,9 @@ GET_MEMBER_LIST_TOS = 0x0AE3BBDA
 GET_MEMBER_LIST_TOC = 0x06B816EA
 GET_ROOM_LIST_TOS = 0x0DDA299A
 GET_ROOM_LIST_TOC = 0x0226968A
+AUTO_ENTER_SINGLE_MODE_TOS = 0x031AC76A
+AUTO_ENTER_SINGLE_MODE_TOC = 0x0DF37B3A
+SINGLE_MODE_ROOM_INFO_TOC = 0x04B61A2A
 HANDSHAKE_PLAIN = struct.pack("<24H", *range(24))
 
 log = logging.getLogger("tet4.channel")
@@ -209,6 +212,41 @@ def get_room_list_to_c(
     )
 
 
+
+@dataclass(frozen=True)
+class AutoEnterSingleModeRequest:
+    """Wire fields of Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToS."""
+    strings: tuple[bytes, ...]  # 8 strings, in Serialize order
+    integers: tuple[int, ...]   # 4 uint32 values, interleaved with strings
+
+
+def parse_auto_enter_single_mode_request(payload: bytes) -> AutoEnterSingleModeRequest:
+    """Parse AutoEnterSingleModeRoomTetrisToS from the client.
+
+    Tet4.exe Serialize FUN_004A18F0:
+      string(+0x0c), u32(+0x28), string(+0x2c), string(+0x48),
+      string(+0x64), u32(+0x80), u32(+0x84), string(+0x88),
+      u32(+0xa4), string(+0xa8), string(+0xc4), string(+0xe0).
+    """
+    r = Reader(payload)
+    if r.u32() != AUTO_ENTER_SINGLE_MODE_TOS:
+        raise ProtocolError("not Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToS")
+    strings = []
+    integers = []
+    strings.append(r.string())
+    integers.append(r.u32())
+    strings.append(r.string())
+    strings.append(r.string())
+    strings.append(r.string())
+    integers.extend((r.u32(), r.u32()))
+    strings.append(r.string())
+    integers.append(r.u32())
+    strings.extend((r.string(), r.string(), r.string()))
+    if r.remaining():
+        raise ProtocolError(f"unexpected {r.remaining()} trailing AutoEnterSingleMode bytes")
+    return AutoEnterSingleModeRequest(tuple(strings), tuple(integers))
+
+
 def frame(body: bytes) -> bytes:
     """Length-prefixed frame: uint32be length, then MAGIC + message."""
     payload = MAGIC + body
@@ -289,6 +327,14 @@ def handle(conn) -> None:
                     "for keys=%r option=%d (0 rooms)",
                     request.strings,
                     request.option,
+                )
+            elif msg_id == AUTO_ENTER_SINGLE_MODE_TOS:
+                request = parse_auto_enter_single_mode_request(payload)
+                log.info(
+                    "received Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToS "
+                    "strings=%r integers=%r",
+                    request.strings,
+                    request.integers,
                 )
     except (ProtocolError, OSError) as exc:
         log.info("channel closed: %s", exc)

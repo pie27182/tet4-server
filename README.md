@@ -17,9 +17,10 @@ Working, verified with the real client (`tools/live_check.py`):
 - Channel authorization (`Cmd_AuthToC`) and the user-id reply (`Cmd_Channel_GetUserIdToC`);
   the client accepts both and continues
 
-The channel-entry response now has a statically derived zero/default probe, but its
-acceptance and channel metadata are not yet verified with the real client. Single Mode
-is not started. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
+The server sends a statically derived `Cmd_Channel_EnterChannelToC` probe. A live run
+on 2026-11-11 showed that the client proceeds to `LayerAlignment` and then requests
+`Cmd_Channel_GetMemberListToS`. The member/room-list exchange and stable lobby are
+not implemented yet; Single Mode is not started. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Documentation
 
@@ -35,9 +36,10 @@ is not started. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
 - [`docs/ADDRESSES.md`](docs/ADDRESSES.md): the addresses used in the documentation.
 - [`docs/ONLINE.md`](docs/ONLINE.md): how the original online service was reached (launcher
   remote gateway: pinned TLS tunnel, JSON hello) and how a local gateway could work.
-- [`docs/ISSUES.md`](docs/ISSUES.md): known open problems, with stable IDs and fix criteria.
-- [`CONTRIBUTING.md`](CONTRIBUTING.md): ground rules (no client files, test accounts only,
-  evidence for every reply), branches, commits, and how an issue is closed.
+- [GitHub Issues](https://github.com/pie27182/tet4-server/issues): defects, protocol
+  uncertainties and blockers only.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md): ground rules, evidence requirements, and how
+  the roadmap and defect reports are maintained.
 
 ## Layout
 
@@ -109,7 +111,8 @@ Versions, disk space and the decompilation list: [`docs/REPRODUCE.md`](docs/REPR
 4. **Check.** Run the tests, then a live run. Compare what the client sends and does
    next with what the docs predict.
 5. **Record.** Verified facts go in `docs/CLIENT.md`, marked as seen on the wire or
-   read from code. Progress goes in `docs/ROADMAP.md`.
+   read from code. Implementation steps and milestones go in `docs/ROADMAP.md`;
+   defects and blockers go in GitHub Issues.
 
 Rule: the server sends a reply only when a capture or the decompiled code supports
 it. Requests with no known reply get no answer.

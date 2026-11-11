@@ -48,7 +48,8 @@ tools/        client check and patch, live run, Ghidra export, function lookup,
 ## What you need
 
 **Client files (not included).** Your own copy of the official client folder, version
-1.3.4. Check it with `tools/check_client.py`. The game needs `Tet4.exe`, all DLLs, and
+1.3.4, placed in the repository as `client/` (git-ignored, never committed or bundled).
+Check it with `tools/check_client.py`. The game needs `Tet4.exe`, all DLLs, and
 the `Tet4/`, `common/` and `Sysfiles/` folders. `h-tetra.exe` is the launcher; the local
 flow does not use it. For the experiments make a patched copy with
 `tools/patch_client.py` (see `docs/REPRODUCE.md`, section 3).
@@ -57,7 +58,7 @@ flow does not use it. For the experiments make a patched copy with
 - Python 3 (standard library only) for the servers and tests.
 - Wine, `wf-recorder`, `ffmpeg`, `grim` and a Wayland session, for live runs.
 - Ghidra 12.2 with OpenJDK, for decompiling the client (`tools/export.sh`).
-- `pefile` and `capstone` only for ad-hoc disassembly checks.
+- `pefile` and `capstone` in `.venv` for `tools/disasm.py`.
 
 Versions, disk space and the decompilation list: [`docs/REPRODUCE.md`](docs/REPRODUCE.md).
 
@@ -90,9 +91,9 @@ Full steps, with what you should see at each one, are in
 [`docs/REPRODUCE.md`](docs/REPRODUCE.md). In short:
 
 ```
-python3 tools/check_client.py ~/h-tetra-client
-python3 tools/patch_client.py ~/h-tetra-client ~/h-tetra-client-patched
-python3 tools/live_check.py --client-dir ~/h-tetra-client-patched --out ~/live-runs/first
+python3 tools/check_client.py          # client/ in the repository
+python3 tools/patch_client.py          # writes client-patched/
+python3 tools/live_check.py            # writes live-runs/<time>/
 ```
 
 The startup string is `tools/bootstrap-sample.txt` (test account, local servers). The

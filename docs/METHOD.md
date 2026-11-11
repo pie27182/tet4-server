@@ -23,7 +23,7 @@ any claim and avoid repeating the same dead ends.
   Imports each PE module with analysis and writes one file per function, with the
   decompiled C and the function address. 25 modules were exported (about 41,000 functions;
   2 failed to decompile).
-- **pefile + capstone** (Python). Disassembles a function range at a given address.
+- **pefile + capstone** (Python, `tools/disasm.py`). Disassembles a function range at a given address.
   Used whenever the decompiler output was ambiguous. This is how the MT state offset
   (`+0x20`) and the TEA key source (`EAX = object`) were settled.
 - **`tools/tet4_rtti_extract.py`**. Reads MSVC RTTI in `HgCom3.dll` to get the class names

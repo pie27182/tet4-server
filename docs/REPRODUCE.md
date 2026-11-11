@@ -19,9 +19,19 @@ Versions are the ones this work was done with. Other versions were not tested.
 | `grim` | screenshots (`tools/` and ad-hoc checks) | any recent version |
 | Ghidra (`analyzeHeadless`) | decompilation (`tools/export.sh`) | 12.2 PUBLIC |
 | OpenJDK (for Ghidra) | Ghidra runtime | 27.0.1 |
-| `pefile`, `capstone` | disassembly checks in ad-hoc analysis (not used by any repo tool) | pefile 2024.8.26, capstone 5.0.7 |
+| `pefile`, `capstone` (in `.venv`) | `tools/disasm.py` | pefile 2024.8.26, capstone 5.0.7 |
 
 The client files are needed for everything except the tests. See section 2.
+
+Set up the Python environment for the disassembler once (the repository has no other
+dependencies):
+
+```
+python3 -m venv .venv
+.venv/bin/pip install pefile capstone
+```
+
+Use `.venv/bin/python` for `tools/disasm.py`. Other tools use plain `python3`.
 
 Disk space: the client folder is about 190 MB, a patched copy of it another 190 MB,
 and the decompiled output about 40 MB. Ghidra projects are several hundred MB while
@@ -40,13 +50,15 @@ the client.
 ## 2. Client files
 
 The client is the official Hangame Tetris distribution, version 1.3.4. The repository
-does not contain it and cannot. You need your own copy of the folder.
+does not contain it and cannot. Put your own copy of the folder into the repository as
+`client/` (the path is git-ignored, and nothing in `client/` is committed or put into the
+bundle). Every tool reads from there by default.
 
 - `files.sha256.json` in the folder lists every file (2068 entries) with its sha256.
 - `tools/check_client.py` verifies them:
 
   ```
-  python3 tools/check_client.py ~/h-tetra-client
+  python3 tools/check_client.py
   ```
 
   Expected: `missing: 0  changed: 0`, `OK`, exit status 0. Otherwise you do not have the
@@ -59,13 +71,13 @@ the `Tet4/`, `common/` and `Sysfiles/` folders.
 ## 3. Patched copy
 
 ```
-python3 tools/patch_client.py ~/h-tetra-client ~/h-tetra-client-patched
-python3 tools/check_client.py ~/h-tetra-client-patched
+python3 tools/patch_client.py
+python3 tools/check_client.py client-patched
 ```
 
-The first command writes a new folder and checks the result against the sha256 of the
-patched `Tet4.exe` used in the experiments. The second must report only `changed: 1`
-(`Tet4.exe`).
+The first command reads `client/` and writes `client-patched/` (both git-ignored), then
+checks the result against the sha256 of the patched `Tet4.exe` used in the experiments.
+The second command, run on `client-patched/`, must report only `changed: 1` (`Tet4.exe`).
 
 Why: in our runs the unmodified client sends no TPack requests to `127.0.0.1:10454`
 (`docs/CLIENT.md`, section 4). The patch replaces three TPack hostnames with
@@ -86,14 +98,18 @@ account name (`test`), `k8e` the ticket.
 ## 5. Live run
 
 ```
-python3 tools/live_check.py --client-dir ~/h-tetra-client-patched --out ~/live-runs/first
+python3 tools/live_check.py
 ```
+
+The default client is `client-patched/`, and the output goes to `live-runs/<time>/`
+(both git-ignored).
 
 The script starts the TPack, CDS and channel servers from this repository, starts
 `wf-recorder` (region `0,0 1536x864`, 15 fps, 1280x720 output), then starts the client
 under Wine. Close the game when you are done: the recording stops after Wine has
 exited, and the script saves `session.mp4` and `frames/` (one PNG per visual change).
-Options: `--geometry`, `--fps`, `--scene` (the frame-change threshold, default 0.02).
+Options: `--client-dir`, `--out`, `--bootstrap`, `--geometry`, `--fps`, `--scene` (the
+frame-change threshold, default 0.02). Run `python3 tools/live_check.py --help`.
 
 Expected in the console, in this order (timestamps will differ):
 
@@ -122,15 +138,18 @@ Every address in `docs/CLIENT.md` and `docs/ADDRESSES.md` comes from these expor
 
 ```
 export GHIDRA=~/ghidra_12.2_PUBLIC/support/analyzeHeadless
-OUT=~/tet4-clean-re/decompiled
 for m in Tet4.exe HgSock3.dll HgCom3.dll HgModel3.dll HgCtr3.dll CDSClientConnector.dll \
          TPackClientConnector.dll XInNetwork.dll XStream.dll XSystem.dll XPlatform.dll \
          CasualComm.dll GAS.dll HgAvtr3.dll HgBoard3.dll HgDlg3.dll HGF5V.dll HgFrm3.dll \
          HgKor3.dll HgSoundOut.exe HgTool3.dll HgView3.dll ipcHani.dll IRIA.dll \
          HgAniGm3.dll HgAniGm3_16Bit.dll GcDxbase.dll GcDxbase_3d.dll XDebug.dll; do
-  tools/export.sh ~/h-tetra-client/$m $OUT
+  GHIDRA=~/ghidra_12.2_PUBLIC/support/analyzeHeadless tools/export.sh client/$m
 done
 ```
+
+Output goes to `work/decompiled/` and the Ghidra project to `work/ghidra/` (both
+git-ignored). Pass a second argument to `export.sh` for another output folder, or set
+`GHIDRA_PROJECTS` for another project folder.
 
 `tools/export.sh` runs Ghidra headless, imports the module with its default analysis,
 and runs `tools/ExportAllFunctions.java`. For each module it writes `<module>.c` (the
@@ -162,8 +181,8 @@ window drawing) and `IRIA.dll` (an advertising function). The export writes the 
 Look up an address or a name:
 
 ```
-tools/find_function.py ~/tet4-clean-re/decompiled 0x606041d0 --show
-tools/find_function.py ~/tet4-clean-re/decompiled GenerateKey
+tools/find_function.py 0x606041d0 --show
+tools/find_function.py GenerateKey
 ```
 
 Names given by this project (for example `BuildChannelList`) are not in the export.
@@ -171,7 +190,11 @@ The export has `FUN_60903600`; `docs/ADDRESSES.md` gives both where they matter.
 
 Ghidra's decompiler is not always right about constants: `0x60928388` is a `double`
 (0.1) although Ghidra prints it as a float. Check the instructions when a constant
-matters (`tools/` has no disassembler script; `capstone` was used ad hoc).
+matters, with `tools/disasm.py`:
+
+```
+.venv/bin/python tools/disasm.py client/HgSock3.dll 0x606041d0 --count 20
+```
 
 ## 7. Known problems
 
@@ -195,9 +218,9 @@ matters (`tools/` has no disassembler script; `capstone` was used ad hoc).
 
 - **`Disk quota exceeded` or `Unable to lock project` during an export.** Both mean the
   user quota is used up. `/tmp` is a tmpfs with a user quota, so the first thing to
-  check is `df -h /tmp` and your own files there. Ghidra projects can be placed
-  elsewhere with `TMPDIR`; the path must not start a directory name with a dot,
-  because Ghidra rejects it.
+  check is `df -h /tmp` and your own files there. The Ghidra project is in
+  `work/ghidra`; if that disk is full, set `GHIDRA_PROJECTS` to another folder. The
+  path must not start a directory name with a dot, because Ghidra rejects it.
 - **Old Wine processes.** If the client does not start, or starts with a stale
   session, run `wineserver -k` and check that the ports 10454, 15000 and 15001 are free
   (`ss -ltn`).

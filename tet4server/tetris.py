@@ -33,6 +33,8 @@ def cells(piece_type: str, rotation: int = 0) -> tuple[tuple[int, int], ...]:
     if piece_type not in SHAPES:
         raise ValueError(f"unknown tetromino: {piece_type!r}")
     result = SHAPES[piece_type]
+    if piece_type == "O":
+        return result
     for _ in range(rotation % 4):
         result = tuple((3 - y, x) for x, y in result)
     return result

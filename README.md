@@ -28,6 +28,10 @@ stays in the lobby. Single Mode is not started. See [`docs/ROADMAP.md`](docs/ROA
 - [`docs/METHOD.md`](docs/METHOD.md): tools and method used for the analysis, and
   the wrong turns to avoid.
 - [`docs/ROADMAP.md`](docs/ROADMAP.md): ordered checklist of what is done and what remains.
+- [`docs/REPRODUCE.md`](docs/REPRODUCE.md): step by step, from the repository and your own
+  client folder to a recorded session. Start here to reproduce the results.
+- [`docs/FILES.md`](docs/FILES.md): what every file of the client folder is.
+- [`docs/ADDRESSES.md`](docs/ADDRESSES.md): the addresses used in the documentation.
 
 ## Layout
 
@@ -35,14 +39,15 @@ stays in the lobby. Single Mode is not started. See [`docs/ROADMAP.md`](docs/ROA
 tet4server/   protocol code (xdr, tpack, cds, crypto)
 tests/        unittest tests; byte vectors come from captured runs
 docs/         client description, method, roadmap
-tools/        Ghidra export script, RTTI extractor for message IDs
+tools/        client check and patch, live run, Ghidra export, function lookup,
+              RTTI extractor, sample startup string
 ```
 
 ## Requirements
 
 - Python 3 (standard library only). Tested with Python 3.14.
-- A legal copy of the original client files, placed locally. They are not included.
-  Only needed to run the client itself, not the tests.
+- A legal copy of the original client folder (version 1.3.4). It is not included.
+  Only needed to run the client itself, not the tests. `tools/check_client.py` checks it.
 
 ## Running the tests
 
@@ -52,28 +57,16 @@ python3 -m unittest discover -s tests -t .
 
 ## Running the live check
 
-This starts the TPack, CDS and channel servers from this repository, launches the
-real client under Wine, and records the screen with `wf-recorder`. You need the client
-files, Wine, `wf-recorder`, `ffmpeg`, and a Wayland session.
-
-1. Put the client's startup string in a file, e.g. `~/tet4-bootstrap.txt`. It must
-   begin with `metp://127.0.0.1:15000/` and include the TPack port (`k602e=10454`).
-   Use a test account.
-2. Run:
+Full steps, with what you should see at each one, are in
+[`docs/REPRODUCE.md`](docs/REPRODUCE.md). In short:
 
 ```
-python3 tools/live_check.py --client-dir ~/h-tetra-client \
-    --bootstrap ~/tet4-bootstrap.txt --out /tmp/live-run
+python3 tools/check_client.py ~/h-tetra-client
+python3 tools/patch_client.py ~/h-tetra-client ~/h-tetra-client-patched
+python3 tools/live_check.py --client-dir ~/h-tetra-client-patched --out ~/live-runs/first
 ```
 
-The recording starts before the client and stops after Wine has fully exited: close
-the game yourself, or press Ctrl+C. The output directory gets `session.mp4` and
-`frames/`, one PNG for each visual change. See `python3 tools/live_check.py --help`
-for `--geometry`, `--fps` and `--scene` (the frame-change threshold).
-
-## Legal and privacy notes
-
-- This repository contains no game binaries, no captures, and no credentials.
-  Captured byte vectors in tests are reduced to the minimum needed for the checks.
-- Use only a test account with this server. Do not point the client at real accounts
-  on third-party servers.
+The startup string is `tools/bootstrap-sample.txt` (test account, local servers). The
+script starts the servers from this repository, starts `wf-recorder`, then the client.
+Close the game when you are done: the recording stops after Wine exits. The output
+directory gets `session.mp4` and `frames/` (one PNG per visual change).

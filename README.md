@@ -38,7 +38,7 @@ tools/        Ghidra export script, RTTI extractor for message IDs
 
 ## Requirements
 
-- Python 3.10 or newer (standard library only).
+- Python 3 (standard library only). Tested with Python 3.14.
 - A legal copy of the original client files, placed locally. They are not included.
   Only needed to run the client itself, not the tests.
 

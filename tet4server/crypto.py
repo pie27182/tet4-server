@@ -128,7 +128,9 @@ class Stream:
 
     @classmethod
     def from_master(cls, master, direction: str):
-        """direction 'recv': the server reads client data (client send side uses words 6..11)."""
+        """Server-side streams. 'decrypt_client' reads what the client sends (mirror of the
+        client send context, master words 6..11); 'encrypt_to_client' writes to the client
+        (mirror of the client receive context, master words 0..5)."""
         if direction == "decrypt_client":
             return cls(master[6:8], master[8:12])
         if direction == "encrypt_to_client":

@@ -134,6 +134,27 @@ the channel group header "초보~고수 등급 입장 가능". Depending on the 
 channel row "1 (0/100)" with an enter button may appear under it, and a "connecting"
 dialog with a cancel button may cover the lobby. `docs/CLIENT.md` describes both.
 
+
+### Reproduce the old channel-row refresh behavior
+
+The earlier run that showed the channel row `1 (0/100)` used a channel endpoint that
+completed the 48-byte secure handshake but sent **no channel application replies**.
+The client then abandoned that connection and requested the CDS directory again
+(observed as `tid=2`); the row appeared after that second CDS response. This is a
+UI-refresh fallback, not proof that channel entry or the lobby works.
+
+To reproduce that exact server behavior without changing the normal full mode:
+
+```sh
+python3 tools/live_check.py --channel-mode discovery-only --out live-runs/channel-row-refresh
+```
+
+Expected sequence: CDS `tid=1`, channel handshake response, no `AuthToC` or other
+channel reply, client closes the channel socket, then CDS `tid=2`. Check the recorded
+frames for the channel row `1 (0/100)` and its `입장` button. The old run showed this
+result; the mode is now available for a fresh confirmation against the current client.
+Use `--channel-mode full` (the default) for the newer channel/member/room-list path.
+
 After the room list loads, click the client's Single Mode button. The next expected
 server-side observations are an AutoEnter request, the server reply pointing at
 `127.0.0.1:15002`, a new game-socket connection and its secure handshake. The game

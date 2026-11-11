@@ -81,6 +81,7 @@ class EnterChannelRequestTest(unittest.TestCase):
             + channel.pack_u32(0)
             + channel.pack_string(b"")
             + channel.pack_string(b"")
+            + struct.pack(">Q", 0)
             + b"\x00"
         )
         with self.assertRaises(ProtocolError):

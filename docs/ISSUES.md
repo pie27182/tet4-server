@@ -83,7 +83,7 @@ chosen from the code, and a live run goes past the channel stage without a crash
 
 - **Status:** investigating
 - **Area:** channel protocol
-- **Expected:** a reply to \`Cmd_Channel_EnterChannelByUserIdToS\` that the client accepts.
+- **Expected:** a reply to `Cmd_Channel_EnterChannelByUserIdToS` that the client accepts.
 - **Actual:** main does not reply. The feat/ISSUE-003-enter-channel-reply-probe
   branch adds a response using the statically recovered layout, but its default
   metadata values and live acceptance are not yet verified.

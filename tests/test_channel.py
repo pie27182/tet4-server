@@ -220,7 +220,7 @@ class AutoEnterSingleModeRequestTest(unittest.TestCase):
         integers = (0,) * 4
         with self.assertRaises(ProtocolError):
             channel.parse_auto_enter_single_mode_request(
-                self.make_payload(strings, integers) + b"\\x00"
+                self.make_payload(strings, integers) + b"\x00"
             )
 
 

@@ -20,7 +20,9 @@ Working, verified with the real client (`tools/live_check.py`):
 A live probe showed that the client accepts the channel-entry response far enough to
 send `LayerAlignment` and request the member list. Structurally decoded empty member-
 and room-list replies are now implemented, but their live acceptance is still to be
-verified. Single Mode is not yet playable. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
+verified. Single Mode is not yet playable. A local game socket, inbound message parsers
+and a deterministic Tetris-engine prototype are in place; the server-to-client start
+state and game updates are not yet implemented. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Documentation
 
@@ -43,7 +45,7 @@ verified. Single Mode is not yet playable. See [`docs/ROADMAP.md`](docs/ROADMAP.
 ## Layout
 
 ```
-tet4server/   protocol code (xdr, tpack, cds, crypto, channel, game)
+tet4server/   protocol code (xdr, tpack, cds, crypto, channel, game, tetris)
 tests/        unittest tests; byte vectors come from captured runs
 docs/         client description, method, roadmap
 tools/        client check and patch, live run, Ghidra export, function lookup,

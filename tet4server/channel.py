@@ -43,6 +43,8 @@ GET_ROOM_LIST_TOS = 0x0DDA299A
 GET_ROOM_LIST_TOC = 0x0226968A
 AUTO_ENTER_SINGLE_MODE_TOS = 0x031AC76A
 AUTO_ENTER_SINGLE_MODE_TOC = 0x0DF37B3A
+GAME_SERVER_HOST = b"127.0.0.1"
+GAME_SERVER_PORT = 15002
 SINGLE_MODE_ROOM_INFO_TOC = 0x04B61A2A
 HANDSHAKE_PLAIN = struct.pack("<24H", *range(24))
 
@@ -247,6 +249,65 @@ def parse_auto_enter_single_mode_request(payload: bytes) -> AutoEnterSingleModeR
     return AutoEnterSingleModeRequest(tuple(strings), tuple(integers))
 
 
+def auto_enter_single_mode_to_c(
+    game_host: bytes = GAME_SERVER_HOST,
+    game_port: int = GAME_SERVER_PORT,
+    strings: tuple[bytes, ...] | None = None,
+    integers: tuple[int, ...] | None = None,
+) -> bytes:
+    """Serialize the AutoEnter ToC response and direct the client to our local game socket.
+
+    Tet4.exe Serialize FUN_00442E90 / Deserialize FUN_00443080:
+      str, u32, str, str, str, u32, u32, str, u32,
+      str, str, str, str, u32, str, str, u32, str.
+
+    The success converter rejects status string "v2e" at +0xfc. The game server
+    endpoint is read from k52e (string +0x138) and k53e (uint32 +0x154).
+    Remaining constructor-default fields are empty/zero until the client confirms
+    which room metadata is mandatory. This is a controlled local probe, not yet a
+    verified successful room transition.
+    """
+    if not isinstance(game_host, bytes) or not game_host:
+        raise ValueError("game_host must be a non-empty byte string")
+    if not isinstance(game_port, int) or not 1 <= game_port <= 0xFFFFFFFF:
+        raise ValueError("game_port must be in 1..0xffffffff")
+    values = list((b"",) * 12 if strings is None else strings)
+    numbers = list((0,) * 6 if integers is None else integers)
+    if len(values) != 12 or any(not isinstance(v, bytes) for v in values):
+        raise ValueError("AutoEnterToC requires exactly twelve byte-string fields")
+    if len(numbers) != 6 or any(
+        not isinstance(v, int) or not 0 <= v <= 0xFFFFFFFF for v in numbers
+    ):
+        raise ValueError("AutoEnterToC requires exactly six uint32 fields")
+
+    # +0xfc is the result string; anything except "v2e" follows success.
+    values[8] = b""
+    # +0x138 / +0x154 are the game server host / port.
+    values[10] = game_host
+    numbers[5] = game_port
+    return (
+        pack_u32(AUTO_ENTER_SINGLE_MODE_TOC)
+        + pack_string(values[0])
+        + pack_u32(numbers[0])
+        + pack_string(values[1])
+        + pack_string(values[2])
+        + pack_string(values[3])
+        + pack_u32(numbers[1])
+        + pack_u32(numbers[2])
+        + pack_string(values[4])
+        + pack_u32(numbers[3])
+        + pack_string(values[5])
+        + pack_string(values[6])
+        + pack_string(values[7])
+        + pack_string(values[8])
+        + pack_u32(numbers[4])
+        + pack_string(values[9])
+        + pack_string(values[10])
+        + pack_u32(numbers[5])
+        + pack_string(values[11])
+    )
+
+
 def frame(body: bytes) -> bytes:
     """Length-prefixed frame: uint32be length, then MAGIC + message."""
     payload = MAGIC + body
@@ -335,6 +396,13 @@ def handle(conn) -> None:
                     "strings=%r integers=%r",
                     request.strings,
                     request.integers,
+                )
+                session.send(conn, auto_enter_single_mode_to_c())
+                log.info(
+                    "sent Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToC "
+                    "with local game endpoint %s:%d",
+                    GAME_SERVER_HOST.decode("ascii"),
+                    GAME_SERVER_PORT,
                 )
     except (ProtocolError, OSError) as exc:
         log.info("channel closed: %s", exc)

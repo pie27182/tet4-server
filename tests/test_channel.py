@@ -140,7 +140,7 @@ class GetMemberListTest(unittest.TestCase):
     def test_request_rejects_trailing_bytes(self):
         payload = channel.pack_u32(channel.GET_MEMBER_LIST_TOS) + b"".join(
             channel.pack_string(b"") for _ in range(3)
-        ) + b"\\x00"
+        ) + b"\x00"
         with self.assertRaises(ProtocolError):
             channel.parse_get_member_list_request(payload)
 
@@ -155,12 +155,12 @@ class GetMemberListTest(unittest.TestCase):
 
 
 class GetRoomListTest(unittest.TestCase):
-    def test_request_has_three_strings_and_u8(self):
+    def test_request_has_three_strings_and_u32(self):
         values = (b"TET4", b"01D0A", b"1")
         payload = (
             channel.pack_u32(channel.GET_ROOM_LIST_TOS)
             + b"".join(channel.pack_string(v) for v in values)
-            + b"\\x07"
+            + channel.pack_u32(7)
         )
         request = channel.parse_get_room_list_request(payload)
         self.assertEqual(request.strings, values)
@@ -170,7 +170,7 @@ class GetRoomListTest(unittest.TestCase):
         payload = (
             channel.pack_u32(channel.GET_ROOM_LIST_TOS)
             + b"".join(channel.pack_string(b"") for _ in range(3))
-            + b"\\x00\\x00"
+            + b"\x00"
         )
         with self.assertRaises(ProtocolError):
             channel.parse_get_room_list_request(payload)

@@ -37,6 +37,10 @@ GET_USER_ID_BY_MEMBER_TOS = 0x0FAB330A
 GET_USER_ID_TOC = 0x0A80E29A
 ENTER_CHANNEL_BY_USER_ID_TOS = 0x0696068A
 ENTER_CHANNEL_TOC = 0x00C0FC8A
+GET_MEMBER_LIST_TOS = 0x0AE3BBDA
+GET_MEMBER_LIST_TOC = 0x06B816EA
+GET_ROOM_LIST_TOS = 0x0DDA299A
+GET_ROOM_LIST_TOC = 0x0226968A
 HANDSHAKE_PLAIN = struct.pack("<24H", *range(24))
 
 log = logging.getLogger("tet4.channel")
@@ -124,6 +128,86 @@ def enter_channel_to_c(
     )
 
 
+
+@dataclass(frozen=True)
+class StringListRequest:
+    """Three-string request used by GetMemberListToS and GetRoomListToS."""
+    strings: tuple[bytes, bytes, bytes]
+    option: int | None = None
+
+
+def parse_get_member_list_request(payload: bytes) -> StringListRequest:
+    """Parse Cmd_Channel_GetMemberListToS: u32 id | string × 3."""
+    r = Reader(payload)
+    if r.u32() != GET_MEMBER_LIST_TOS:
+        raise ProtocolError("not Cmd_Channel_GetMemberListToS")
+    strings = tuple(r.string() for _ in range(3))
+    if r.remaining():
+        raise ProtocolError(f"unexpected {r.remaining()} trailing member-list request bytes")
+    return StringListRequest(strings)  # type: ignore[arg-type]
+
+
+def parse_get_room_list_request(payload: bytes) -> StringListRequest:
+    """Parse Cmd_Channel_GetRoomListToS: u32 id | string × 3 | u8."""
+    r = Reader(payload)
+    if r.u32() != GET_ROOM_LIST_TOS:
+        raise ProtocolError("not Cmd_Channel_GetRoomListToS")
+    strings = tuple(r.string() for _ in range(3))
+    option = r.take(1)[0]
+    if r.remaining():
+        raise ProtocolError(f"unexpected {r.remaining()} trailing room-list request bytes")
+    return StringListRequest(strings, option)  # type: ignore[arg-type]
+
+
+def get_member_list_to_c(
+    strings: tuple[bytes, bytes, bytes] = (b"", b"", b""),
+    final: bytes = b"",
+) -> bytes:
+    """Serialize an empty Cmd_Channel_GetMemberListToC response.
+
+    HgCom3.dll Serialize FUN_601301D0: string × 3 | vector | string.
+    The vector is encoded as a uint32 count followed by entries. This probe
+    intentionally returns zero members; member-record serialization remains
+    unimplemented until actual member data is available.
+    """
+    if len(strings) != 3 or any(not isinstance(v, bytes) for v in strings):
+        raise ValueError("GetMemberListToC requires exactly three byte-string fields")
+    if not isinstance(final, bytes):
+        raise ValueError("GetMemberListToC final field must be bytes")
+    return (
+        pack_u32(GET_MEMBER_LIST_TOC)
+        + b"".join(pack_string(v) for v in strings)
+        + pack_u32(0)
+        + pack_string(final)
+    )
+
+
+def get_room_list_to_c(
+    strings: tuple[bytes, bytes, bytes] = (b"", b"", b""),
+    option: int = 0,
+    final: bytes = b"",
+) -> bytes:
+    """Serialize an empty Cmd_Channel_GetRoomListToC response.
+
+    HgCom3.dll Serialize FUN_60130630: string × 3 | uint32 | string | vector.
+    The vector count is zero; room-record serialization is intentionally not
+    guessed before a real room is observed.
+    """
+    if len(strings) != 3 or any(not isinstance(v, bytes) for v in strings):
+        raise ValueError("GetRoomListToC requires exactly three byte-string fields")
+    if not isinstance(option, int) or not 0 <= option <= 0xFFFFFFFF:
+        raise ValueError("GetRoomListToC option must fit in uint32")
+    if not isinstance(final, bytes):
+        raise ValueError("GetRoomListToC final field must be bytes")
+    return (
+        pack_u32(GET_ROOM_LIST_TOC)
+        + b"".join(pack_string(v) for v in strings)
+        + pack_u32(option)
+        + pack_string(final)
+        + pack_u32(0)
+    )
+
+
 def frame(body: bytes) -> bytes:
     """Length-prefixed frame: uint32be length, then MAGIC + message."""
     payload = MAGIC + body
@@ -187,6 +271,23 @@ def handle(conn) -> None:
                 log.info(
                     "sent Cmd_Channel_EnterChannelToC probe for user_id=%d",
                     request.user_id,
+                )
+            elif msg_id == GET_MEMBER_LIST_TOS:
+                request = parse_get_member_list_request(payload)
+                session.send(conn, get_member_list_to_c())
+                log.info(
+                    "sent empty Cmd_Channel_GetMemberListToC "
+                    "for keys=%r (0 members)",
+                    request.strings,
+                )
+            elif msg_id == GET_ROOM_LIST_TOS:
+                request = parse_get_room_list_request(payload)
+                session.send(conn, get_room_list_to_c())
+                log.info(
+                    "sent empty Cmd_Channel_GetRoomListToC "
+                    "for keys=%r option=%d (0 rooms)",
+                    request.strings,
+                    request.option,
                 )
     except (ProtocolError, OSError) as exc:
         log.info("channel closed: %s", exc)

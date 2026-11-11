@@ -239,14 +239,33 @@ The button handler sets these values before serialization:
 - `str(+0xc4)` and `str(+0xe0)` = `k23e` and `k24e` from MetpInfo(4);
 - all other strings and uint32 fields remain constructor defaults (empty / zero).
 
-The server now decodes this request and logs its fields, but deliberately does not send
-a guessed success response yet. The response class is significantly larger:
-`Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToC` (`0x0DF37B3A`) has 12 strings,
-6 additional uint32 fields, and a result/error field consumed by the client's converter
-`FUN_00445F60`. The converter calls `fillEnterRoomParameter` and then
-`connGameSvr` on its success path. The exact connection/session values must be
-recovered before a response is safe to send.
+The server decodes this request and returns a controlled local endpoint in
+`Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToC` (`0x0DF37B3A`). Its
+Serialize/Deserialize methods are `FUN_00442E90` / `FUN_00443080`; converter:
+`FUN_00445F60`. The top-level field order is:
 
-`Cmd_ChannelOrderTypeSingleModeRoomInfoTetrisToC` (`0x04B61A2A`) has a much smaller
+`u32 id | str | u32 | str | str | str | u32 | u32 | str | u32 |
+str | str | str | str | u32 | str | str | u32 | str`.
+
+The converter applies the `TT_XDR` header and maps the fields into MetpInfo(5).
+It treats status string at offset `+0xfc` equal to `v2e` as failure; any other value
+takes the success path. That path calls `fillEnterRoomParameter`, moves the lobby
+state forward, and then calls `game.connGameSvr`.
+
+The game endpoint is explicit in the response:
+- string at `+0x138` becomes `k52e`, the game host;
+- uint32 at `+0x154` becomes `k53e`, the game port.
+  `CGameLobbyModel::Msg_ConnectGameServer` (`HgModel3.dll:0x60914950`) calls
+  `CNetworkModel::Connect("game", k52e, k53e, ...)`.
+
+For the local probe the server sets host `127.0.0.1`, port `15002`, leaves the status
+field empty (not `v2e`), and leaves remaining room metadata at constructor defaults.
+`tet4server/game.py` listens on that port, performs the secure handshake and logs
+the first client frames. It deliberately sends no game-level acknowledgements yet.
+This is a structurally valid route into the local game socket, not a verified playable
+room: the remaining metadata and game-service handshake messages still need live
+validation.
+
+`Cmd_ChannelOrderTypeSingleModeRoomInfoTetrisToC` (`0x04B61A2A`) has a smaller
 layout: `u32 id | string | u32 | u8` (`Serialize FUN_00443D90`). Its role in the
 transition still needs to be confirmed from the live message sequence.

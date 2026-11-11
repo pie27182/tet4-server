@@ -118,9 +118,8 @@ Setup of each context:
 Verified: run16's 108 bytes decrypt with the send-context mirror to
 `00000068 | "XLBP" | 0365C03A | ...`. Frame length 104 equals the payload size.
 
-Not yet verified: the server-to-client direction (`encrypt`). It mirrors the client
-receive filter in code, but the client has not yet accepted one of our encrypted
-replies.
+Server-to-client direction (`encrypt`, master words 0..5): **[wire]** verified. The client
+decrypts our frame, dispatches it by id, and reacts (see section 7).
 
 ## 7. Channel messages
 
@@ -129,18 +128,36 @@ The 4-byte length counts the body after itself.
 
 | Message | ID | Direction | Status |
 |---|---|---|---|
-| `Cmd_AuthToS` | `0x0365C03A` | client to server | **[wire]** first message on the channel |
-| `Cmd_AuthToC` | `0x008500CA` | server to client | **[static]** ID only |
-| `Msg_GetAuth` (`channel/getAuth`) | — | handler in `HgModel3.dll` | **[static]** reads field `k161e`; shows a dialog |
+| `Cmd_AuthToS` | `0x0365C03A` | client to server | **[wire]** first message; fields not decoded |
+| `Cmd_AuthToC` | `0x008500CA` | server to client | **[wire]** our empty reply (result 0) accepted |
+| `Cmd_Channel_GetUserIdByMemberIdToS` | `0x0FAB330A` | client to server | **[wire]** sent after `Cmd_AuthToC`; body `string member_id` |
+| `Cmd_Channel_GetUserIdToC` | `0x0A80E29A` | server to client | **[wire]** our reply accepted (k161e = 0) |
+| `Cmd_Channel_EnterChannelByUserIdToS` | `0x0696068A` | client to server | **[wire]** sent after `GetUserIdToC`; reply not yet sent |
+| `Cmd_LayerAlignment` | `0x09D0057A` | client to server | **[wire]** sent by the client; special id in the dispatcher |
 
 `Cmd_AuthToS` fields seen in run16, in order: `test` (string), `TET4` (string), 32 bytes
-of `A` (string), `TicketAuthByMemberId` (string), with zero dwords between them.
-**The meaning of each field is not yet established** (account, game ID, ticket, auth
-method). The client's serializer for `Cmd_AuthToS` and the reply format for `Cmd_AuthToC`
-are the next static tasks.
+of `A` (string), `TicketAuthByMemberId` (string), with zero dwords between them. Its
+meaning is not established; the server does not read it.
 
-After the handshake the client shows a "connecting" dialog with a cancel button.
-Without a valid reply it closes the channel socket after about 66 s. **[wire]**
+**Server reply layouts** (code, verified by the client's reactions):
+
+- `Cmd_AuthToC` = `u32 id | _KeyType (i64 | str | i64 | str | str) | str | str | i32`.
+  The `i32` goes to key `k161e`; zero is success. Serialize `0x601356E0`, converter
+  `FUN_6013F8B0`. Our reply: all strings empty, i32 0.
+- `Cmd_Channel_GetUserIdToC` = `u32 id | i64 | str (k3e) | str (k2e) | i32 (k161e)`.
+  Serialize `0x60135DA0`, converter `FUN_6013F9B0`, handler `Msg_GetUserId`
+  (`HgModel3.dll`, `0x6090FFE0`). Our reply echoes the member id in `k3e`.
+  The key meanings are taken from the handler, not confirmed by a successful session.
+- `Cmd_Channel_GetUserIdByMemberIdToS` = `u32 id | str member_id`, read from the frame.
+
+The client's dispatcher reads the 4-byte magic `XLBP` (consumed), then peeks the id
+(`+0x0C`, not consumed), so the id is read again by the message's own `Deserialize`.
+The converters are registered with `PC_RegisterX2M` (`FUN_60121A40`) from an init routine
+in `HgCom3.dll`, which maps `0x0A80E29A` to `FUN_6013F9B0` and `0x008500CA` to `FUN_6013F8B0`.
+
+Live run (`tools/live_check.py`): the client reaches the lobby and keeps a "connecting"
+dialog with a cancel button open while it waits for the reply to
+`Cmd_Channel_EnterChannelByUserIdToS`. **[wire]**
 
 ## 8. Single Mode (not yet started)
 

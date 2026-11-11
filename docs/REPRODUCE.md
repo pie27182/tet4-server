@@ -137,8 +137,10 @@ dialog with a cancel button may cover the lobby. `docs/CLIENT.md` describes both
 After the room list loads, click the client's Single Mode button. The next expected
 server-side observations are an AutoEnter request, the server reply pointing at
 `127.0.0.1:15002`, a new game-socket connection and its secure handshake. The game
-listener currently logs the first decoded frames without replying; those frames are
-the evidence needed to implement the game login/start sequence.
+listener currently saves decoded frame bodies as binary files in
+`live-runs/<run>/game-frames/` without replying; those files are the evidence needed to
+implement the game login/start sequence. They are local and ignored by Git. Use a test
+account because captured frames may contain session data.
 
 If the client never reaches `CDS select`, check that `--client-dir` is the patched copy
 and that no Wine process is still running (`wineserver -k`).

@@ -17,8 +17,9 @@ Working, verified with the real client (`tools/live_check.py`):
 - Channel authorization (`Cmd_AuthToC`) and the user-id reply (`Cmd_Channel_GetUserIdToC`);
   the client accepts both and continues
 
-Not yet working: the client waits for the reply to `EnterChannelByUserIdToS`, so it
-stays in the lobby. Single Mode is not started. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
+The channel-entry response now has a statically derived zero/default probe, but its
+acceptance and channel metadata are not yet verified with the real client. Single Mode
+is not started. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Documentation
 

@@ -4,7 +4,7 @@ import threading
 import unittest
 
 from tet4server import channel, crypto
-from tet4server.xdr import Reader
+from tet4server.xdr import ProtocolError, Reader
 
 CLIENT_SHARE = bytes.fromhex(
     "d33bdf696bac88168ab62b1761a3cd381b62aabf1a11925193e07fbd57b8d564"
@@ -52,6 +52,76 @@ class GetUserIdToCLayoutTest(unittest.TestCase):
         self.assertEqual(r.string(), b"test")                # string (+0x18), key k3e
         self.assertEqual(r.string(), b"")                    # string (+0x34), key k2e
         self.assertEqual(r.i32(), 0)                         # i32 (+0x50), key k161e
+        self.assertEqual(r.remaining(), 0)
+
+
+class EnterChannelRequestTest(unittest.TestCase):
+    def test_request_fields_follow_serialize_order(self):
+        strings = tuple(f"s{i}".encode("ascii") for i in range(7))
+        payload = (
+            channel.pack_u32(channel.ENTER_CHANNEL_BY_USER_ID_TOS)
+            + struct.pack(">Q", 0x0102030405060708)
+            + b"".join(channel.pack_string(v) for v in strings[:5])
+            + channel.pack_u32(0x10203040)
+            + b"".join(channel.pack_string(v) for v in strings[5:])
+        )
+        request = channel.parse_enter_channel_request(payload)
+        self.assertEqual(request.user_id, 0x0102030405060708)
+        self.assertEqual(request.strings, strings[:5])
+        self.assertEqual(request.option, 0x10203040)
+        self.assertEqual(request.trailing_strings, strings[5:])
+
+    def test_request_rejects_trailing_bytes(self):
+        payload = (
+            channel.pack_u32(channel.ENTER_CHANNEL_BY_USER_ID_TOS)
+            + struct.pack(">Q", 1)
+            + b"".join(channel.pack_string(b"") for _ in range(5))
+            + channel.pack_u32(0)
+            + channel.pack_string(b"")
+            + channel.pack_string(b"")
+            + b"\x00"
+        )
+        with self.assertRaises(ProtocolError):
+            channel.parse_enter_channel_request(payload)
+
+
+class EnterChannelToCLayoutTest(unittest.TestCase):
+    def test_fields_follow_serialize_order(self):
+        strings = tuple(f"str{i}".encode("ascii") for i in range(9))
+        u32s = tuple(0x10203040 + i for i in range(8))
+        r = Reader(channel.enter_channel_to_c(strings, u32s, flag=0x7F))
+        self.assertEqual(r.u32(), channel.ENTER_CHANNEL_TOC)
+        for value in strings[:5]:
+            self.assertEqual(r.string(), value)
+        for value in u32s[:3]:
+            self.assertEqual(r.u32(), value)
+        self.assertEqual(r.take(1), b"\x7f")
+        self.assertEqual(r.string(), strings[5])
+        for value in u32s[3:5]:
+            self.assertEqual(r.u32(), value)
+        self.assertEqual(r.string(), strings[6])
+        self.assertEqual(r.string(), strings[7])
+        for value in u32s[5:]:
+            self.assertEqual(r.u32(), value)
+        self.assertEqual(r.string(), strings[8])
+        self.assertEqual(r.remaining(), 0)
+
+    def test_default_reply_contains_empty_result_key_field(self):
+        r = Reader(channel.enter_channel_to_c())
+        self.assertEqual(r.u32(), channel.ENTER_CHANNEL_TOC)
+        for _ in range(5):
+            self.assertEqual(r.string(), b"")
+        for _ in range(3):
+            self.assertEqual(r.u32(), 0)
+        self.assertEqual(r.take(1), b"\x00")
+        self.assertEqual(r.string(), b"")
+        for _ in range(2):
+            self.assertEqual(r.u32(), 0)
+        for _ in range(2):
+            self.assertEqual(r.string(), b"")
+        for _ in range(3):
+            self.assertEqual(r.u32(), 0)
+        self.assertEqual(r.string(), b"")  # k1e is present
         self.assertEqual(r.remaining(), 0)
 
 

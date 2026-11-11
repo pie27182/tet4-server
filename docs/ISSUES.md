@@ -79,18 +79,26 @@ chosen from the code, and a live run goes past the channel stage without a crash
 
 ---
 
-## ISSUE-003: no server reply for entering a channel
+## ISSUE-003: channel-entry reply and state
 
-- **Status:** open
+- **Status:** investigating
 - **Area:** channel protocol
-- **Expected:** a reply to `Cmd_Channel_EnterChannelByUserIdToS` that the client accepts.
-- **Actual:** no reply. The server only logs the request (by design: no reply without
-  evidence).
+- **Expected:** a reply to \`Cmd_Channel_EnterChannelByUserIdToS\` that the client accepts.
+- **Actual:** main does not reply. The feat/ISSUE-003-enter-channel-reply-probe
+  branch adds a response using the statically recovered layout, but its default
+  metadata values and live acceptance are not yet verified.
 
-**Note:** this is the cause of ISSUE-002 as far as we know. It stays separate because
-the fix needs decoding, not only a crash investigation.
+**Evidence (static):** request serializer FUN_6012cfd0 and handler
+CChannelLobbyModel::Msg_EnterChannelByUserId (HgModel3.dll, 0x609083C0);
+response serializer FUN_6012e4a0, deserializer FUN_6012e600, converter
+FUN_60139620 (HgCom3.dll). GetResultKeyState requires k1e and rejects v2e;
+the default-constructed response contains an empty k1e string.
 
-**Fix criteria:** the request is decoded (`Serialize` and the converter in
-`HgCom3.dll`), the reply format is taken from the code, and a test checks the bytes.
+**Note:** this is a likely contributor to ISSUE-002, but that causal link remains a
+hypothesis. The response probe is intentionally not marked as a fix.
+
+**Fix criteria:** a live run shows the client accepts the response, reaches the next
+channel stage without crashing, and the required metadata values are understood. The
+request and response layout also have byte-level tests.
 
 **Fixed by:** —

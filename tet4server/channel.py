@@ -1,4 +1,4 @@
-"""Channel server (port from CDS, 15001): handshake, frames, and the auth reply.
+"""Channel server (port from CDS, 15001): handshake, frames, auth and channel-entry replies.
 
 Frame on the secure socket, after decryption:
     uint32be length | "XLBP" | uint32be message id | message fields
@@ -23,6 +23,7 @@ Strings are uint32be length + bytes, with no padding. i64 is big-endian.
 """
 import logging
 import socket
+from dataclasses import dataclass
 import struct
 import threading
 
@@ -34,6 +35,8 @@ AUTH_TO_S = 0x0365C03A
 AUTH_TO_C = 0x008500CA
 GET_USER_ID_BY_MEMBER_TOS = 0x0FAB330A
 GET_USER_ID_TOC = 0x0A80E29A
+ENTER_CHANNEL_BY_USER_ID_TOS = 0x0696068A
+ENTER_CHANNEL_TOC = 0x00C0FC8A
 HANDSHAKE_PLAIN = struct.pack("<24H", *range(24))
 
 log = logging.getLogger("tet4.channel")
@@ -53,6 +56,70 @@ def get_user_id_to_c(member_id: bytes, text_b: bytes = b"", code: int = 0) -> by
     return (pack_u32(GET_USER_ID_TOC)
             + struct.pack(">q", 0) + pack_string(member_id) + pack_string(text_b)
             + struct.pack(">i", code))
+
+
+@dataclass(frozen=True)
+class EnterChannelRequest:
+    """Wire fields of Cmd_Channel_EnterChannelByUserIdToS."""
+    user_id: int
+    strings: tuple[bytes, ...]
+    option: int
+    trailing_strings: tuple[bytes, ...]
+
+
+def parse_enter_channel_request(payload: bytes) -> EnterChannelRequest:
+    """Parse a complete frame payload, including its message ID."""
+    r = Reader(payload)
+    if r.u32() != ENTER_CHANNEL_BY_USER_ID_TOS:
+        raise ProtocolError("not Cmd_Channel_EnterChannelByUserIdToS")
+    user_id = r.u64()
+    strings = tuple(r.string() for _ in range(5))
+    option = r.u32()
+    trailing_strings = tuple(r.string() for _ in range(2))
+    if r.remaining():
+        raise ProtocolError(f"unexpected {r.remaining()} trailing request bytes")
+    return EnterChannelRequest(user_id, strings, option, trailing_strings)
+
+
+def enter_channel_to_c(
+    strings: tuple[bytes, ...] | None = None,
+    u32s: tuple[int, ...] | None = None,
+    flag: int = 0,
+) -> bytes:
+    """Serialize a success-shaped probe for Cmd_Channel_EnterChannelToC.
+
+    Serialize at 0x6012e4a0 establishes the layout. Until channel-state values
+    are recovered, defaults mirror the message constructor: nine present-but-empty
+    strings, eight zero uint32s and a zero byte. The final string is converted to
+    k1e; an empty value is present and is not the explicit failure value "v2e".
+    This probe is not yet live-verified.
+    """
+    if strings is None:
+        strings = (b"",) * 9
+    if u32s is None:
+        u32s = (0,) * 8
+    if len(strings) != 9 or any(not isinstance(v, bytes) for v in strings):
+        raise ValueError("EnterChannelToC requires exactly nine byte-string fields")
+    if len(u32s) != 8 or any(
+        not isinstance(v, int) or not 0 <= v <= 0xFFFFFFFF for v in u32s
+    ):
+        raise ValueError("EnterChannelToC requires exactly eight uint32 fields")
+    if not isinstance(flag, int) or not 0 <= flag <= 0xFF:
+        raise ValueError("EnterChannelToC flag must fit in one byte")
+
+    # Field order: str*5, u32*3, u8, str, u32*2, str*2, u32*3, str.
+    return (
+        pack_u32(ENTER_CHANNEL_TOC)
+        + b"".join(pack_string(v) for v in strings[:5])
+        + b"".join(pack_u32(v) for v in u32s[:3])
+        + struct.pack(">B", flag)
+        + pack_string(strings[5])
+        + b"".join(pack_u32(v) for v in u32s[3:5])
+        + pack_string(strings[6])
+        + pack_string(strings[7])
+        + b"".join(pack_u32(v) for v in u32s[5:8])
+        + pack_string(strings[8])
+    )
 
 
 def frame(body: bytes) -> bytes:
@@ -112,6 +179,13 @@ def handle(conn) -> None:
                 member = r.string()
                 session.send(conn, get_user_id_to_c(member))
                 log.info("sent Cmd_Channel_GetUserIdToC for member %r", member)
+            elif msg_id == ENTER_CHANNEL_BY_USER_ID_TOS:
+                request = parse_enter_channel_request(payload)
+                session.send(conn, enter_channel_to_c())
+                log.info(
+                    "sent Cmd_Channel_EnterChannelToC probe for user_id=%d",
+                    request.user_id,
+                )
     except (ProtocolError, OSError) as exc:
         log.info("channel closed: %s", exc)
     finally:

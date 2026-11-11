@@ -28,6 +28,9 @@ class Reader:
     def u32(self) -> int:
         return struct.unpack(">I", self.take(4))[0]
 
+    def u64(self) -> int:
+        return struct.unpack(">Q", self.take(8))[0]
+
     def i32(self) -> int:
         return struct.unpack(">i", self.take(4))[0]
 

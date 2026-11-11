@@ -20,7 +20,7 @@ captured bytes.
 ## In progress
 
 - [ ] **Client crash after the channel exchange**: `ISSUE-002` in `docs/ISSUES.md`.
-- [ ] **Reply to `Cmd_Channel_EnterChannelByUserIdToS`**: `ISSUE-003` in `docs/ISSUES.md`.
+- [ ] **Reply to `Cmd_Channel_EnterChannelByUserIdToS`**: static request/response layouts and a zero/default probe are implemented; live acceptance and channel metadata remain to be verified (`ISSUE-003`).
 - [ ] **Channel row missing in the lobby**: `ISSUE-001` in `docs/ISSUES.md`.
 
 ## To do

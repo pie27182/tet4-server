@@ -133,6 +133,7 @@ The 4-byte length counts the body after itself.
 | `Cmd_Channel_GetUserIdByMemberIdToS` | `0x0FAB330A` | client to server | **[wire]** sent after `Cmd_AuthToC`; body `string member_id` |
 | `Cmd_Channel_GetUserIdToC` | `0x0A80E29A` | server to client | **[wire]** our reply accepted (k161e = 0) |
 | `Cmd_Channel_EnterChannelByUserIdToS` | `0x0696068A` | client to server | **[wire]** sent after `GetUserIdToC`; reply not yet sent |
+| `Cmd_Channel_EnterChannelToC` | `0x00C0FC8A` | server to client | **[static]** response layout implemented as an unverified zero/default probe |
 | `Cmd_LayerAlignment` | `0x09D0057A` | client to server | **[wire]** sent by the client; special id in the dispatcher |
 
 `Cmd_AuthToS` fields seen in run16, in order: `test` (string), `TET4` (string), 32 bytes
@@ -149,6 +150,21 @@ meaning is not established; the server does not read it.
   (`HgModel3.dll`, `0x6090FFE0`). Our reply echoes the member id in `k3e`.
   The key meanings are taken from the handler, not confirmed by a successful session.
 - `Cmd_Channel_GetUserIdByMemberIdToS` = `u32 id | str member_id`, read from the frame.
+
+- Cmd_Channel_EnterChannelByUserIdToS = u32 id | u64 user_id | str × 5 | u32 | str × 2.
+  Static layout from Serialize FUN_6012cfd0; the u64 and seven strings are read
+  by CChannelLobbyModel::Msg_EnterChannelByUserId (HgModel3.dll, 0x609083C0).
+- Cmd_Channel_EnterChannelToC = u32 id | str × 5 | u32 × 3 | u8 | str | u32 × 2 |
+  str × 2 | u32 × 3 | str. Static layout from Serialize FUN_6012e4a0 and
+  Deserialize FUN_6012e600 (HgCom3.dll). Its converter is FUN_60139620.
+  The final string is exposed as key k1e. GetResultKeyState (HgCom3.dll,
+  0x60111AC0) requires k1e to be present and rejects value v2e; successful
+  Net_Channel_EnterChannel (HgCtr3.dll, 0x60206420) calls fillChannelInfo
+  and sendGetMemberList.
+- The server currently sends a probe only: empty strings, zero integers and a zero
+  byte, matching the message constructor's initialized values. This exercises the
+  decoded wire layout and result-key presence; channel metadata values and live
+  client acceptance are not yet verified. [static; probe not live-verified]
 
 The client's dispatcher reads the 4-byte magic `XLBP` (consumed), then peeks the id
 (`+0x0C`, not consumed), so the id is read again by the message's own `Deserialize`.

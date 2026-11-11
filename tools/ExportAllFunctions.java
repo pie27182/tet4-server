@@ -13,7 +13,8 @@ public class ExportAllFunctions extends GhidraScript {
     @Override
     public void run() throws Exception {
         String[] args = getScriptArgs();
-        String outDir = args.length > 0 ? args[0] : "/tmp/decomp-out";
+        if (args.length < 1) throw new IllegalArgumentException("usage: -postScript ExportAllFunctions.java <outdir>");
+        String outDir = args[0];
         String mod = currentProgram.getName();
         File dir = new File(outDir);
         dir.mkdirs();

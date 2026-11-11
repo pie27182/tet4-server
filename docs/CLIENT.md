@@ -221,4 +221,32 @@ Message IDs, from RTTI in `Tet4.exe` **[static]**:
 The extractor needs these names passed explicitly for `Tet4.exe` (its default list
 covers exactly these classes): `tools/tet4_rtti_extract.py Tet4.exe --json`.
 
-Their fields and the order in which the client expects them are unknown.
+### Single Mode auto-enter request [static]
+
+The Single Mode button path is `FUN_0049D0A0` in `Tet4.exe`. It constructs
+`Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToS` and sends it on the channel
+connection through `FUN_00456160(..., "channel", 3)`.
+
+Serialize `FUN_004A18F0` gives this request body:
+
+`u32 id | str(+0x0c) | u32(+0x28) | str(+0x2c) | str(+0x48) | str(+0x64) |
+u32(+0x80) | u32(+0x84) | str(+0x88) | u32(+0xa4) | str(+0xa8) | str(+0xc4) | str(+0xe0)`.
+
+The button handler sets these values before serialization:
+- `str(+0x0c)` = bootstrap value `k602e`;
+- `str(+0x64)` = `N000S`;
+- `str(+0xa8)` = GameID (`TET4`);
+- `str(+0xc4)` and `str(+0xe0)` = `k23e` and `k24e` from MetpInfo(4);
+- all other strings and uint32 fields remain constructor defaults (empty / zero).
+
+The server now decodes this request and logs its fields, but deliberately does not send
+a guessed success response yet. The response class is significantly larger:
+`Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToC` (`0x0DF37B3A`) has 12 strings,
+6 additional uint32 fields, and a result/error field consumed by the client's converter
+`FUN_00445F60`. The converter calls `fillEnterRoomParameter` and then
+`connGameSvr` on its success path. The exact connection/session values must be
+recovered before a response is safe to send.
+
+`Cmd_ChannelOrderTypeSingleModeRoomInfoTetrisToC` (`0x04B61A2A`) has a much smaller
+layout: `u32 id | string | u32 | u8` (`Serialize FUN_00443D90`). Its role in the
+transition still needs to be confirmed from the live message sequence.

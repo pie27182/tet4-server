@@ -44,6 +44,17 @@ class AuthToCLayoutTest(unittest.TestCase):
         self.assertEqual(framed[4:8], b"XLBP")
 
 
+class GetUserIdToCLayoutTest(unittest.TestCase):
+    def test_fields_follow_serialize_order(self):
+        r = Reader(channel.get_user_id_to_c(b"test", b"", code=0))
+        self.assertEqual(r.u32(), channel.GET_USER_ID_TOC)
+        self.assertEqual(r.take(8), struct.pack(">q", 0))   # int64 (+0x10)
+        self.assertEqual(r.string(), b"test")                # string (+0x18), key k3e
+        self.assertEqual(r.string(), b"")                    # string (+0x34), key k2e
+        self.assertEqual(r.i32(), 0)                         # i32 (+0x50), key k161e
+        self.assertEqual(r.remaining(), 0)
+
+
 class SessionTest(unittest.TestCase):
     def test_client_frame_is_read_by_server_session(self):
         master = master_for_run16()

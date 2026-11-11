@@ -13,6 +13,12 @@ _KeyType::Serialize at 0x60128690 (HgCom3.dll):
     string  (+0x88)
     string  (+0xA4)
     i32     (+0xC0)
+Cmd_Channel_GetUserIdByMemberIdToS (0x0FAB330A): id | string member_id
+Cmd_Channel_GetUserIdToC (0x0A80E29A), Serialize at 0x60135DA0 and converter
+FUN_6013F9B0 (HgCom3.dll):
+    u32 id | i64 | string (+0x18 -> "k3e") | string (+0x34 -> "k2e") | i32 (+0x50 -> "k161e")
+    k161e == 0 is the success path in Msg_GetUserId (HgModel3.dll, 0x6090FFE0).
+
 Strings are uint32be length + bytes, with no padding. i64 is big-endian.
 """
 import logging
@@ -26,6 +32,8 @@ from .xdr import ProtocolError, Reader, pack_string, pack_u32
 MAGIC = b"XLBP"
 AUTH_TO_S = 0x0365C03A
 AUTH_TO_C = 0x008500CA
+GET_USER_ID_BY_MEMBER_TOS = 0x0FAB330A
+GET_USER_ID_TOC = 0x0A80E29A
 HANDSHAKE_PLAIN = struct.pack("<24H", *range(24))
 
 log = logging.getLogger("tet4.channel")
@@ -37,6 +45,13 @@ def auth_to_c(text_a: bytes = b"", text_b: bytes = b"", code: int = 0) -> bytes:
             + struct.pack(">q", 0) + pack_string(b"") + struct.pack(">q", 0)
             + pack_string(b"") + pack_string(b"")
             + pack_string(text_a) + pack_string(text_b)
+            + struct.pack(">i", code))
+
+
+def get_user_id_to_c(member_id: bytes, text_b: bytes = b"", code: int = 0) -> bytes:
+    """Body of Cmd_Channel_GetUserIdToC (after the magic)."""
+    return (pack_u32(GET_USER_ID_TOC)
+            + struct.pack(">q", 0) + pack_string(member_id) + pack_string(text_b)
             + struct.pack(">i", code))
 
 
@@ -86,11 +101,17 @@ def handle(conn) -> None:
     try:
         session = handshake(conn)
         while True:
-            msg_id, _ = session.read_frame(conn)
+            msg_id, payload = session.read_frame(conn)
             log.info("channel frame id=0x%08x", msg_id)
             if msg_id == AUTH_TO_S:
                 session.send(conn, auth_to_c())
                 log.info("sent Cmd_AuthToC")
+            elif msg_id == GET_USER_ID_BY_MEMBER_TOS:
+                r = Reader(payload)
+                r.u32()
+                member = r.string()
+                session.send(conn, get_user_id_to_c(member))
+                log.info("sent Cmd_Channel_GetUserIdToC for member %r", member)
     except (ProtocolError, OSError) as exc:
         log.info("channel closed: %s", exc)
     finally:

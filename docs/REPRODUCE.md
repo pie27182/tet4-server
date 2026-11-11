@@ -46,7 +46,7 @@ cause.
 python3 -m unittest discover -s tests -t .
 ```
 
-Expected: `OK`, 27 tests. The protocol-layout tests do not need the client.
+Expected: `OK`, 31 tests. The protocol-layout tests do not need the client.
 
 ## 2. Client files
 
@@ -108,7 +108,7 @@ The default client is `client-patched/`, and the output goes to `live-runs/<time
 (both git-ignored). Wine uses its default prefix, `~/.wine`; the repository does not
 create or change a prefix of its own.
 
-The script starts the TPack, CDS and channel servers from this repository, starts
+The script starts the TPack, CDS, channel and local game-socket servers from this repository, starts
 `wf-recorder` (region `0,0 1536x864`, 15 fps, 1280x720 output), then starts the client
 under Wine. Close the game when you are done: the recording stops after Wine has
 exited, and the script saves `session.mp4` and `frames/` (one PNG per visual change).
@@ -133,6 +133,12 @@ Expected on screen: the lobby (buttons 내 아이템, 상점, 싱글모드, the 
 the channel group header "초보~고수 등급 입장 가능". Depending on the client's state, the
 channel row "1 (0/100)" with an enter button may appear under it, and a "connecting"
 dialog with a cancel button may cover the lobby. `docs/CLIENT.md` describes both.
+
+After the room list loads, click the client's Single Mode button. The next expected
+server-side observations are an AutoEnter request, the server reply pointing at
+`127.0.0.1:15002`, a new game-socket connection and its secure handshake. The game
+listener currently logs the first decoded frames without replying; those frames are
+the evidence needed to implement the game login/start sequence.
 
 If the client never reaches `CDS select`, check that `--client-dir` is the patched copy
 and that no Wine process is still running (`wineserver -k`).

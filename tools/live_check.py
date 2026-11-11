@@ -8,12 +8,12 @@ frame where the picture changes is saved as a PNG.
 Needs the original client files (not in this repository), Wine, wf-recorder and
 ffmpeg, and a Wayland session. Example:
 
-    python3 tools/live_check.py --client-dir ~/h-tetra-client \\
-        --bootstrap ~/tet4-bootstrap.txt --out /tmp/live-run
+    python3 tools/live_check.py --client-dir ~/h-tetra-client-patched --out /tmp/live-run
 
 Output in --out: session.mp4 (the recording) and frames/ (one PNG per visual change).
-The bootstrap file holds the command-line string that starts Tet4.exe (it must
-contain the TPack port and metp://127.0.0.1:15000/). Use a test account only.
+The startup string defaults to tools/bootstrap-sample.txt (test account, local
+servers); pass --bootstrap to use another one. It must start with
+metp://127.0.0.1:15000/ and include the TPack port (k602e=10454).
 """
 import argparse
 import logging
@@ -30,13 +30,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from tet4server import channel, cds, tpack  # noqa: E402
 
 log = logging.getLogger("live")
+HERE = Path(__file__).resolve().parent
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--client-dir", type=Path, required=True)
-    ap.add_argument("--bootstrap", type=Path, required=True)
+    ap.add_argument("--bootstrap", type=Path, default=HERE / "bootstrap-sample.txt",
+                    help="startup string (default: tools/bootstrap-sample.txt)")
     ap.add_argument("--out", type=Path,
                     default=Path(f"/tmp/live-{datetime.now():%Y%m%d-%H%M%S}"),
                     help="output directory for session.mp4 and frames/")
@@ -46,6 +48,8 @@ def main() -> int:
     ap.add_argument("--scene", type=float, default=0.02,
                     help="scene-change threshold for frame extraction (0..1, lower = more frames)")
     args = ap.parse_args()
+    if not (args.client_dir / "Tet4.exe").is_file():
+        ap.error(f"no Tet4.exe in {args.client_dir}; see docs/REPRODUCE.md")
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     args.out.mkdir(parents=True, exist_ok=True)

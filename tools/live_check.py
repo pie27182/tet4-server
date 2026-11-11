@@ -47,6 +47,11 @@ def main() -> int:
     ap.add_argument("--fps", type=int, default=15, help="wf-recorder frame rate")
     ap.add_argument("--scene", type=float, default=0.02,
                     help="scene-change threshold for frame extraction (0..1, lower = more frames)")
+    ap.add_argument(
+        "--channel-mode", choices=("full", "discovery-only"), default="full",
+        help=("full answers known channel messages; discovery-only sends only the "
+              "secure handshake and waits for the client to close the socket"),
+    )
     args = ap.parse_args()
     if not (args.client_dir / "Tet4.exe").is_file():
         ap.error(f"no Tet4.exe in {args.client_dir}; see docs/REPRODUCE.md")
@@ -60,7 +65,12 @@ def main() -> int:
 
     threading.Thread(target=tpack.serve, args=("127.0.0.1", 10454), daemon=True).start()
     threading.Thread(target=cds.serve, args=("127.0.0.1", 15000), daemon=True).start()
-    threading.Thread(target=channel.serve, args=("127.0.0.1", 15001), daemon=True).start()
+    threading.Thread(
+        target=channel.serve,
+        args=("127.0.0.1", 15001, args.channel_mode == "discovery-only"),
+        daemon=True,
+    ).start()
+    log.info("channel mode: %s", args.channel_mode)
     threading.Thread(target=game.serve, args=("127.0.0.1", channel.GAME_SERVER_PORT, args.out / "game-frames"), daemon=True).start()
 
     recorder = subprocess.Popen(

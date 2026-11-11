@@ -9,14 +9,16 @@ that the client already speaks, based on captured traffic and decompiled code.
 
 ## Status
 
-Working, verified against captured traffic:
+Working, verified with the real client (`tools/live_check.py`):
 
 - TPack account replies (AuthSession, LoginTPack)
 - CDS channel directory reply
-- Secure channel handshake and the client-to-server stream cipher
+- Secure channel handshake, both stream directions
+- Channel authorization (`Cmd_AuthToC`) and the user-id reply (`Cmd_Channel_GetUserIdToC`);
+  the client accepts both and continues
 
-Not yet working: channel authorization and everything after it. The client still
-stops at a "connecting" dialog. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
+Not yet working: the client waits for the reply to `EnterChannelByUserIdToS`, so it
+stays in the lobby. Single Mode is not started. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Documentation
 

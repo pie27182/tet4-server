@@ -69,6 +69,11 @@ disassembler. It can be added if a function resists both.
 
 ## Wrong turns (do not repeat)
 
+- **Environment, not code.** Several runs and exports failed with `Disk quota exceeded`
+  or `Unable to lock project`. The cause was the user quota on `/tmp` (tmpfs) and on
+  `/home`, filled by our own experiment directories. Check `df` and remove your own
+  intermediate run folders before blaming a tool (`docs/REPRODUCE.md`, section 8).
+
 - **Host in column 2.** An early reading treated column 2 as the host. The client then
   connected to `0.0.58.153`, which is `inet_addr("15001")`, so the column was wrong.
 - **Count in the error slot.** The CDS reply briefly put the row count in the error

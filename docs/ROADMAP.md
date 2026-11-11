@@ -1,48 +1,106 @@
-# Roadmap
+# Roadmap — fully working Single Mode
 
-Ordered by dependency. Each step needs the one above it. Items are checked only when
-the behavior is confirmed by a live run with the real client or by a test against
-captured bytes.
+This is the implementation plan for the local Tet4 server. GitHub Issues track defects,
+regressions and blockers; this roadmap tracks planned product behavior and the order in
+which we implement it.
 
-## Done
+**Target:** use the original 2012 client against the local server, enter Single Mode,
+see the board, play a complete game, see the result, and return to the lobby without a
+crash. Multiplayer, chat, shop and other game modes are out of scope.
 
-- [x] **Client analysis: startup chain and ports** (`CLIENT.md` 1–2)
-- [x] **TPack: AuthSession, LoginTPack** (`tet4server/tpack.py`, `tests/test_tpack.py`)
-- [x] **CDS: select reply** with tid echo, error 0, host/port in columns 3/4
-      (`tet4server/cds.py`, `tests/test_cds.py`)
-- [x] **Secure handshake** (48-byte shares, master derivation, `tet4server/crypto.py`)
-- [x] **Stream cipher, both directions.** Client-to-server decrypts the first frame;
-      server-to-client frames are decrypted and dispatched by the client.
-- [x] **Channel auth reply:** `Cmd_AuthToC` (our reply, result 0) accepted by the client.
-- [x] **Channel user-id reply:** `Cmd_Channel_GetUserIdToC` accepted; the client moves on.
-- [x] **Live check tool** (`tools/live_check.py`) runs the real client against the repo servers.
+Items are checked only when their stated evidence exists. A static layout or passing
+serializer test does not prove that the real client accepts the message.
 
-## In progress
+## Foundation — verified
 
-- [ ] **Client crash after the channel exchange**: `ISSUE-002` in `docs/ISSUES.md`.
-- [ ] **Reply to `Cmd_Channel_EnterChannelByUserIdToS`**: static request/response layouts and a zero/default probe are implemented; live acceptance and channel metadata remain to be verified (`ISSUE-003`).
-- [ ] **Channel row missing in the lobby**: `ISSUE-001` in `docs/ISSUES.md`.
+- [x] Client startup chain, ports, framing and TPack account exchange.
+- [x] CDS channel-directory reply, including request transaction-ID echo and host/port
+      in the positions consumed by the client.
+- [x] Secure channel handshake and stream cipher in both directions.
+- [x] Channel authorization: client accepts our `Cmd_AuthToC` reply.
+- [x] User-id lookup: client accepts our `Cmd_Channel_GetUserIdToC` reply.
+- [x] Live-run harness starts the repository servers and records the actual client.
+- [x] Decode `Cmd_Channel_EnterChannelByUserIdToS` and serialize the statically
+      recovered `Cmd_Channel_EnterChannelToC` layout, with byte-layout tests.
+- [x] **Live transition evidence (2026-11-11):** after the server's
+      `EnterChannelToC` probe, the client sends `LayerAlignment` and then
+      `Cmd_Channel_GetMemberListToS`. This proves progression to the next request,
+      not completion of channel entry.
 
-## To do
+## Milestone 1 — stable channel lobby
 
-- [ ] **Decode `Cmd_AuthToS` fields** (`test`, `TET4`, 32×`A`, `TicketAuthByMemberId`).
-      The server does not need them yet; this is for a later check of the account.
-- [ ] **Channel state after entering:** room list (`Cmd_Channel_GetRoomListToC`
-      `0x0226968A`) and member list, with their request and reply layouts.
-- [ ] **Single Mode entry.** `Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToS`
-      (`0x031AC76A`) and its reply `...ToC` (`0x0DF37B3A`), room info
-      `Cmd_ChannelOrderTypeSingleModeRoomInfoTetrisToC` (`0x04B61A2A`),
-      `_SingleModeInfo` (`0x0071FA1A`).
-- [ ] **Game board appears.** Initial state and piece sequence needed for the first
-      playable screen.
-- [ ] **Gameplay messages.** PolyMinoPut `0x0CC4004A`, GameReport `0x05BCDF3A` /
-      `0x0EE1D56A`.
-- [ ] **Game end.** ResultMember `0x0928E8BA` and return to the menu without errors.
-- [ ] **Application runner** (`python -m tet4server`) starting TPack, CDS and channel
-      together.
+<text>Current blocker: [GitHub Issue #4](https://github.com/pie27182/tet4-server/issues/4).
+Related observations: [Issue #1 — missing channel row](https://github.com/pie27182/tet4-server/issues/2)
+and [Issue #2 — client crash](https://github.com/pie27182/tet4-server/issues/3).</text>
 
-## Out of scope for now
+- [ ] Capture and decode the complete `Cmd_Channel_GetMemberListToS` request
+      (`0x0AE3BBDA`); locate its serializer/deserializer and model handler.
+- [ ] Recover the matching member-list response class, converter and record layout.
+      Determine whether an empty vector is a valid initial response; do not assume it.
+- [ ] Implement the member-list response and byte-level tests using recovered field
+      order and record samples/default constructors.
+- [ ] Identify and decode the room-list request/response pair; verify any RTTI-derived
+      message IDs against the registrations and handlers in the decompiled modules.
+- [ ] Implement room-list serialization and byte-level tests.
+- [ ] Supply the channel metadata required by the client's channel model; replace the
+      all-zero EnterChannel probe with values supported by static or wire evidence.
+- [ ] Run the real client and verify both list exchanges, the visible stable channel
+      lobby, and that the Single Mode button can be clicked.
+- [ ] Investigate and resolve any crash that remains after the channel exchange.
 
-- Multiplayer rooms, chat, friends, shop, and other channel features.
-- Other game modes.
-- Replacing the client with a browser or custom implementation.
+**Milestone exit:** the client remains in the channel lobby, list requests complete,
+and the Single Mode action is reachable. Do not mark it done just because the client
+sends the next request.
+
+## Milestone 2 — Single Mode launch
+
+- [ ] Capture the real request generated by clicking Single Mode:
+      `Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToS` (`0x031AC76A`).
+- [ ] Recover the request fields, the matching response
+      `Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToC` (`0x0DF37B3A`), and
+      their model/controller handlers.
+- [ ] Implement the request parser and response serializer with byte-level tests.
+- [ ] Recover and send the channel room-info message
+      `Cmd_ChannelOrderTypeSingleModeRoomInfoTetrisToC` (`0x04B61A2A`).
+- [ ] Recover the `_SingleModeInfo` structure (`0x0071FA1A`) and its conversion
+      into the client model.
+- [ ] Verify with the real client that the room transition succeeds and the board
+      window is actually displayed.
+
+**Milestone exit:** clicking Single Mode reliably opens a board with an initialized
+game state. A room-transition reply by itself is not enough.
+
+## Milestone 3 — playable game loop
+
+- [ ] Recover the initial board, piece sequence, timing and game parameters needed by
+      the first playable screen.
+- [ ] Decode and implement player piece placement:
+      `Cmd_Room_OrderTypeSingleModePolyMinoPutTetrisToS` (`0x0CC4004A`).
+- [ ] Decode and implement the game-report exchange:
+      `Cmd_Room_OrderTypeSingleModeGameReportTetrisToS` (`0x05BCDF3A`) and
+      `Cmd_Room_OrderTypeSingleModeGameReportTetrisToC` (`0x0EE1D56A`).
+- [ ] Verify multiple piece placements against the real client and confirm that the
+      board state remains synchronized.
+- [ ] Recover the game-end/result message
+      `Cmd_Channel_OrderTypeSingleModeResultMemberTetrisToC` (`0x0928E8BA`).
+- [ ] Verify game-over, result display and a clean return to the channel lobby.
+
+**Milestone exit:** one complete Single Mode game can be played from start to finish,
+the result is displayed, and the client returns to the lobby without crashing.
+
+## Milestone 4 — repeatable local launch
+
+- [ ] Add an application runner (`python -m tet4server`) that starts TPack, CDS and
+      channel listeners together, shuts them down cleanly, and reports useful logs.
+- [ ] Add a documented smoke-test path that checks ports, runs unit tests, starts the
+      server, and records a live client session.
+- [ ] Re-run the complete regression suite after the end-to-end game flow is stable.
+
+## Working rules
+
+- Capture first; decode from captured bytes and/or decompiled code; never invent
+  protocol fields or success values.
+- Every implemented message gets a byte-layout test. Every UI/game milestone gets a
+  live-client acceptance run.
+- Keep the next actionable step at the top of the active milestone. Record verified
+  facts in `docs/CLIENT.md` and environment procedures in `docs/REPRODUCE.md`.

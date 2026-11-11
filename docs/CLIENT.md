@@ -71,8 +71,8 @@ Columns used by the default row:
 
 The default row is `TET4, 01D0A, 1, 127.0.0.1, 15001, 1, 100, 10, 0`.
 
-**Channel host and port are taken by position, not by name.** `BuildChannelList`
-(`HgModel3.dll`, `0x60903600`) runs a switch whose counter starts at -1, so column `k`
+**Channel host and port are taken by position, not by name.** `FUN_60903600`
+(`HgModel3.dll`; the name `BuildChannelList` is ours, Ghidra leaves it unnamed) runs a switch whose counter starts at -1, so column `k`
 feeds case `k-1` and column 0 is skipped. Host goes into column 3 (`ChannelIP`,
 member `+0x71`) and port into column 4 (`ChannelPort`, member `+0xA4`). **[static, wire]**
 Earlier experiments that put the host in column 2 made the client connect to

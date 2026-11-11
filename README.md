@@ -43,7 +43,7 @@ verified. Single Mode is not yet playable. See [`docs/ROADMAP.md`](docs/ROADMAP.
 ## Layout
 
 ```
-tet4server/   protocol code (xdr, tpack, cds, crypto, channel)
+tet4server/   protocol code (xdr, tpack, cds, crypto, channel, game)
 tests/        unittest tests; byte vectors come from captured runs
 docs/         client description, method, roadmap
 tools/        client check and patch, live run, Ghidra export, function lookup,

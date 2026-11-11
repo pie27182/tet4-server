@@ -42,7 +42,7 @@ is not started. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
 ## Layout
 
 ```
-tet4server/   protocol code (xdr, tpack, cds, crypto)
+tet4server/   protocol code (xdr, tpack, cds, crypto, channel)
 tests/        unittest tests; byte vectors come from captured runs
 docs/         client description, method, roadmap
 tools/        client check and patch, live run, Ghidra export, function lookup,

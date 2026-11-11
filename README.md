@@ -32,6 +32,8 @@ stays in the lobby. Single Mode is not started. See [`docs/ROADMAP.md`](docs/ROA
   client folder to a recorded session. Start here to reproduce the results.
 - [`docs/FILES.md`](docs/FILES.md): what every file of the client folder is.
 - [`docs/ADDRESSES.md`](docs/ADDRESSES.md): the addresses used in the documentation.
+- [`docs/ONLINE.md`](docs/ONLINE.md): how the original online service was reached (launcher
+  remote gateway: pinned TLS tunnel, JSON hello) and how a local gateway could work.
 
 ## Layout
 

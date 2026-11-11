@@ -98,7 +98,8 @@ def enter_channel_to_c(
     are recovered, defaults mirror the message constructor: nine present-but-empty
     strings, eight zero uint32s and a zero byte. The final string is converted to
     k1e; an empty value is present and is not the explicit failure value "v2e".
-    This probe is not yet live-verified.
+    The live client advanced to LayerAlignment and then requested the member list
+    after this reply. Metadata correctness and a stable lobby are still unverified.
     """
     if strings is None:
         strings = (b"",) * 9
@@ -148,12 +149,12 @@ def parse_get_member_list_request(payload: bytes) -> StringListRequest:
 
 
 def parse_get_room_list_request(payload: bytes) -> StringListRequest:
-    """Parse Cmd_Channel_GetRoomListToS: u32 id | string × 3 | u8."""
+    """Parse Cmd_Channel_GetRoomListToS: u32 id | string × 3 | u32."""
     r = Reader(payload)
     if r.u32() != GET_ROOM_LIST_TOS:
         raise ProtocolError("not Cmd_Channel_GetRoomListToS")
     strings = tuple(r.string() for _ in range(3))
-    option = r.take(1)[0]
+    option = r.u32()
     if r.remaining():
         raise ProtocolError(f"unexpected {r.remaining()} trailing room-list request bytes")
     return StringListRequest(strings, option)  # type: ignore[arg-type]

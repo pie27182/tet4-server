@@ -124,15 +124,17 @@ TPack 0x0b60835a ... LoginTPack ctx=2
 CDS select table=COMMON tid=1
 channel frame id=0x0365c03a          -> sent Cmd_AuthToC
 channel frame id=0x0fab330a          -> sent Cmd_Channel_GetUserIdToC for member b'test'
-channel frame id=0x0696068a          (Cmd_Channel_EnterChannelByUserIdToS, no reply sent)
+channel frame id=0x0696068a          (Cmd_Channel_EnterChannelByUserIdToS)
+sent Cmd_Channel_EnterChannelToC probe
 channel frame id=0x09d0057a          (Cmd_LayerAlignment)
-channel frame id=0x0a75af8a          (Cmd_Channel_ExitChannelToS)
+channel frame id=0x0ae3bbda          (Cmd_Channel_GetMemberListToS; payload logged as hex)
 ```
 
-Expected on screen: the lobby (buttons 내 아이템, 상점, 싱글모드, the room list) with
-the channel group header "초보~고수 등급 입장 가능". Depending on the client's state, the
-channel row "1 (0/100)" with an enter button may appear under it, and a "connecting"
-dialog with a cancel button may cover the lobby. `docs/CLIENT.md` describes both.
+Expected on screen: the client progresses from the lobby's channel-entry action into
+the channel model. The latest observed network sequence reaches
+`Cmd_Channel_GetMemberListToS`, but list loading and a stable lobby are not yet
+verified. The channel row may still be absent in some client states; see
+[Issue #2](https://github.com/pie27182/tet4-server/issues/2).
 
 If the client never reaches `CDS select`, check that `--client-dir` is the patched copy
 and that no Wine process is still running (`wineserver -k`).
@@ -227,23 +229,23 @@ matters, with `tools/disasm.py`:
 .venv/bin/python tools/disasm.py client/HgSock3.dll 0x606041d0 --count 20
 ```
 
-## 7. Known problems
+## 7. Current blockers
 
-- **The client crashes after the channel exchange.** In the runs we checked in detail
-  (patched and unmodified copies, `docs/CLIENT.md`), `Tet4.exe` ended about 2–3 s
-  after it sent `Cmd_LayerAlignment` and `Cmd_Channel_ExitChannelToS`. Not every run
-  was checked this way. Wine shows "Tet4.exe has
-  stopped working" with `Exception c0000005` (access violation). This happened with
-  both the unmodified and the patched copy. Symbols of the modules are not loaded, so
-  the faulting function is not known. The most likely cause is the missing
-  `Cmd_Channel_EnterChannelByUserIdToS` reply: the client waits for it, gives up, and
-  then crashes. This is a hypothesis.
-- **No reply to `EnterChannelByUserIdToS`.** Nothing answers it, so the client waits.
-- **Single Mode is not implemented.** The online path (the launcher's remote gateway)
-  is described in `docs/ONLINE.md` but not implemented.
-- **Some runs show the channel row and some do not.** The CDS reply is byte-identical
-  in both cases; the difference comes from the client's state (see `docs/CLIENT.md`).
-  The cause is not known.
+- **Channel lists are not implemented.** The client now sends
+  `Cmd_Channel_GetMemberListToS` after the EnterChannel probe. The server currently
+  logs only the message ID; it does not decode the request or send a member-list
+  response. Room-list loading and a stable channel lobby remain unverified.
+  Track progress in [Issue #4](https://github.com/pie27182/tet4-server/issues/4).
+- **The earlier channel-exchange crash still needs a controlled reproduction.**
+  The reported access violation occurred after `LayerAlignment` and
+  `Cmd_Channel_ExitChannelToS` in older runs. The cause is not established; see
+  [Issue #3](https://github.com/pie27182/tet4-server/issues/3).
+- **The channel row is intermittently absent.** The CDS reply was byte-identical in
+  compared states, so the cause appears to depend on client state rather than the
+  row bytes alone; see [Issue #2](https://github.com/pie27182/tet4-server/issues/2).
+- **Single Mode is not implemented.** The RTTI IDs are known, but message layouts,
+  handlers, game initialization and gameplay are still to be recovered. See
+  `docs/ROADMAP.md`.
 
 ## 8. Troubleshooting
 

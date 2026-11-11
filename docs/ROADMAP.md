@@ -79,12 +79,17 @@ serializer test proves layout, not that the client accepts the message.
       `Cmd_Room_OrderTypeSingleModeGameReportTetrisToS` (`0x05BCDF3A`) is
       four strings, two uint32s, one byte bool, and three uint32s; the listener
       parses non-sensitive numeric fields and saves the original frame locally.
-- [ ] Implement authoritative board state, active/next pieces, rotation and movement
-      rules, collisions, line clears, score/level progression and deterministic tests.
-      Do not trust client-reported score/board data as authoritative.
-- [ ] Implement authoritative piece placement, collision/line clearing, score and level
-      progression, and broadcast/response messages. Prefer a deterministic engine with
-      unit tests over trusting client-reported board state.
+- [x] Add an independent deterministic engine prototype: seeded seven-bag queue,
+      piece spawn/move/rotate/hold, gravity step, hard drop, collision, lock, line clear,
+      score and level progression. Unit tests cover these state transitions.
+- [ ] Confirm the original client's board dimensions, piece IDs, rotation/wall-kick
+      rules, gravity timing, hold behavior and score mapping; adjust the prototype to
+      match before connecting it to the wire protocol.
+- [ ] Serialize the engine state into the actual `StartNewGameToC` /
+      `GameReportToC` nested structures. The required `_SingleModeInfo` and
+      `_TetrisMemberInfo` fields are not yet fully decoded.
+- [ ] Connect `PolyMinoPutToS` actions to the engine, validate them against the
+      authoritative board, and send the client's required update/report messages.
 - [ ] Decode and implement server-to-client start/update messages, including
       `Cmd_Room_OrderTypeSingleModeGameReportTetrisToC` (`0x0EE1D56A`), and all
       required per-turn updates.
@@ -100,7 +105,11 @@ serializer test proves layout, not that the client accepts the message.
 
 ## Engineering / regression tasks
 
-- [x] Live-run harness starts TPack, CDS and channel services and records the session.
+- [x] Live-run harness starts TPack, CDS, channel and game-socket services, records
+      the session, and saves decoded game frames as local ignored binary fixtures.
+- [ ] Run the current 44-test suite in GitHub Actions after the latest game parser and
+      deterministic engine commits; the last successful CI run covered the earlier
+      31-test revision.
 - [ ] Add a top-level `python -m tet4server` runner with orderly startup/shutdown.
 - [ ] Make the protocol sequence reproducible from a clean checkout using only
       documented local client files and a test account.

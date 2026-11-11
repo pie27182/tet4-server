@@ -133,6 +133,8 @@ python3 tools/live_check.py            # writes live-runs/<time>/
 ```
 
 The startup string is `tools/bootstrap-sample.txt` (test account, local servers). The
-script starts the servers from this repository, starts `wf-recorder`, then the client.
-Close the game when you are done: the recording stops after Wine exits. The output
-directory gets `session.mp4` and `frames/` (one PNG per visual change).
+script starts TPack, CDS, channel and local game-socket servers from this repository,
+starts `wf-recorder`, then the client. Decoded game-socket frame bodies are saved as
+ignored `.bin` files under `live-runs/<run>/game-frames/`. Close the game when you are
+done: the recording stops after Wine exits. The output directory gets `session.mp4`,
+`frames/` (one PNG per visual change), and `game-frames/`.

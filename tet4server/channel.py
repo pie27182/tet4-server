@@ -350,9 +350,28 @@ def handshake(conn) -> Session:
     return Session(crypto.master_words(share, server_wire))
 
 
-def handle(conn) -> None:
+def handle(conn, discovery_only: bool = False) -> None:
     try:
         session = handshake(conn)
+        if discovery_only:
+            # Reproduce the old channel-directory refresh path: complete only the
+            # 48-byte secure handshake, deliberately send no XLBP application reply,
+            # and keep the socket open until the client abandons it.
+            log.info(
+                "channel discovery-only: handshake sent; no application replies"
+            )
+            ignored = 0
+            while True:
+                chunk = conn.recv(4096)
+                if not chunk:
+                    break
+                ignored += len(chunk)
+            log.info(
+                "channel discovery-only: client closed; ignored %d post-handshake bytes",
+                ignored,
+            )
+            return
+
         while True:
             msg_id, payload = session.read_frame(conn)
             log.info("channel frame id=0x%08x", msg_id)
@@ -410,12 +429,16 @@ def handle(conn) -> None:
         conn.close()
 
 
-def serve(host: str, port: int) -> None:
+def serve(host: str, port: int, discovery_only: bool = False) -> None:
+    """Serve channel connections; discovery_only reproduces the old CDS refresh path."""
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     srv.bind((host, port))
     srv.listen(16)
-    log.info("channel listening on %s:%d", host, port)
+    mode = "discovery-only" if discovery_only else "full"
+    log.info("channel listening on %s:%d (mode=%s)", host, port, mode)
     while True:
         conn, _ = srv.accept()
-        threading.Thread(target=handle, args=(conn,), daemon=True).start()
+        threading.Thread(
+            target=handle, args=(conn, discovery_only), daemon=True
+        ).start()

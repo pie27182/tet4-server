@@ -4,7 +4,7 @@
 Needs the original client files (not in this repository), Wine, and a Wayland
 session for screenshots (grim). Example:
 
-    python3 tools/live_check.py --client-dir ~/h-tetra-client \
+    python3 tools/live_check.py --client-dir ~/h-tetra-client \\
         --bootstrap ~/tet4-bootstrap.txt --seconds 60 --shots /tmp/shots
 
 The bootstrap file holds the command-line string that starts Tet4.exe (it must

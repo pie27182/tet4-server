@@ -50,6 +50,25 @@ tools/        Ghidra export script, RTTI extractor for message IDs
 python3 -m unittest discover -s tests -t .
 ```
 
+## Running the live check
+
+This starts the TPack, CDS and channel servers from this repository and launches the
+real client under Wine. You need the client files, Wine, and a Wayland session for
+screenshots (`grim`).
+
+1. Put the client's startup string in a file, e.g. `~/tet4-bootstrap.txt`. It must
+   begin with `metp://127.0.0.1:15000/` and include the TPack port (`k602e=10454`).
+   Use a test account.
+2. Run:
+
+```
+python3 tools/live_check.py --client-dir ~/h-tetra-client \
+    --bootstrap ~/tet4-bootstrap.txt --seconds 60 --shots /tmp/shots
+```
+
+The script prints each request the servers receive and writes screenshots to
+`--shots`. See `python3 tools/live_check.py --help` for all options.
+
 ## Legal and privacy notes
 
 - This repository contains no game binaries, no captures, and no credentials.

@@ -261,6 +261,40 @@ class AutoEnterSingleModeResponseTest(unittest.TestCase):
             channel.auto_enter_single_mode_to_c(game_host=b"127.0.0.1", game_port=0)
 
 
+class DiscoveryOnlyChannelTest(unittest.TestCase):
+    def test_handshake_only_sends_no_application_reply_and_waits_for_close(self):
+        client, server = socket.socketpair()
+        client.settimeout(0.15)
+        worker = threading.Thread(
+            target=channel.handle, args=(server, True), daemon=True
+        )
+        try:
+            worker.start()
+            client.sendall(CLIENT_SHARE)
+            server_share = bytearray()
+            while len(server_share) < 48:
+                part = client.recv(48 - len(server_share))
+                self.assertTrue(part)
+                server_share.extend(part)
+            self.assertEqual(len(server_share), 48)
+
+            # After the handshake the legacy mode must stay silent, not send
+            # AuthToC or any guessed application-level response.
+            with self.assertRaises(socket.timeout):
+                client.recv(1)
+
+            # The client owns the close in the observed retry scenario.
+            client.shutdown(socket.SHUT_WR)
+            worker.join(timeout=1)
+            self.assertFalse(worker.is_alive())
+            self.assertEqual(client.recv(1), b"")
+        finally:
+            client.close()
+            if worker.is_alive():
+                server.close()
+                worker.join(timeout=1)
+
+
 class SessionTest(unittest.TestCase):
     def test_client_frame_is_read_by_server_session(self):
         master = master_for_run16()

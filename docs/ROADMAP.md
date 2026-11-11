@@ -1,7 +1,8 @@
 # Roadmap
 
 Ordered by dependency. Each step needs the one above it. Items are checked only when
-the behavior is confirmed by a captured run or a test against captured bytes.
+the behavior is confirmed by a live run with the real client or by a test against
+captured bytes.
 
 ## Done
 
@@ -10,31 +11,30 @@ the behavior is confirmed by a captured run or a test against captured bytes.
 - [x] **CDS: select reply** with tid echo, error 0, host/port in columns 3/4
       (`tet4server/cds.py`, `tests/test_cds.py`)
 - [x] **Secure handshake** (48-byte shares, master derivation, `tet4server/crypto.py`)
-- [x] **Stream cipher, client-to-server direction** (decrypts run16's first frame,
-      `tests/test_crypto.py`)
-- [x] **Message ID of the first channel message** (`Cmd_AuthToS = 0x0365C03A`)
+- [x] **Stream cipher, both directions.** Client-to-server decrypts the first frame;
+      server-to-client frames are decrypted and dispatched by the client.
+- [x] **Channel auth reply:** `Cmd_AuthToC` (our reply, result 0) accepted by the client.
+- [x] **Channel user-id reply:** `Cmd_Channel_GetUserIdToC` accepted; the client moves on.
+- [x] **Live check tool** (`tools/live_check.py`) runs the real client against the repo servers.
 
 ## In progress
 
-- [ ] **Decode `Cmd_AuthToS` fields.** Known: `test`, `TET4`, 32×`A`,
-      `TicketAuthByMemberId`. Unknown: the meaning of each field and the zero dwords
-      between them. Source: serializer in `HgCom3.dll`.
-- [ ] **Server-to-client stream** (`encrypt`). Mirror of the client receive filter, not
-      yet accepted by the client.
+- [ ] **Reply to `Cmd_Channel_EnterChannelByUserIdToS`** (`0x0696068A`). The client waits
+      for it. Candidates from RTTI: `Cmd_Channel_EnterChannelToC` (`0x00C0FC8A`),
+      `Cmd_Channel_EnterChannelErrorToC` (`0x08579CBA`),
+      `Cmd_Channel_EnterChannelWithTicketToC` (`0x0DA8E7EA`). Decode the request
+      (`Serialize` and converter) and the chosen reply first.
 
 ## To do
 
-- [ ] **Channel framing module** (`tet4server/channel.py`): read handshake, read frames
-      through the decrypt stream, write frames through the encrypt stream. Test against
-      the run16 vector.
-- [ ] **`Cmd_AuthToC` reply and `Msg_GetAuth`.** Find the reply format in `HgCom3.dll` and
-      the field `k161e` read in `HgModel3.dll`. Target: the "connecting" dialog closes
-      and the client sends its next message.
-- [ ] **Channel login state.** Identify the messages after authorization (room list or
-      enter-channel request) and their replies.
+- [ ] **Decode `Cmd_AuthToS` fields** (`test`, `TET4`, 32×`A`, `TicketAuthByMemberId`).
+      The server does not need them yet; this is for a later check of the account.
+- [ ] **Channel state after entering:** room list (`Cmd_Channel_GetRoomListToC`
+      `0x0226968A`) and member list, with their request and reply layouts.
 - [ ] **Single Mode entry.** `Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToS`
       (`0x031AC76A`) and its reply `...ToC` (`0x0DF37B3A`), room info
-      `Cmd_ChannelOrderTypeSingleModeRoomInfoTetrisToC` (`0x04B61A2A`), `_SingleModeInfo` (`0x0071FA1A`).
+      `Cmd_ChannelOrderTypeSingleModeRoomInfoTetrisToC` (`0x04B61A2A`),
+      `_SingleModeInfo` (`0x0071FA1A`).
 - [ ] **Game board appears.** Initial state and piece sequence needed for the first
       playable screen.
 - [ ] **Gameplay messages.** PolyMinoPut `0x0CC4004A`, GameReport `0x05BCDF3A` /

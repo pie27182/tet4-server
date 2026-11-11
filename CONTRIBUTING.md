@@ -15,15 +15,28 @@ evidence: a captured byte sequence or decompiled code. Read `docs/METHOD.md` fir
 - **Mark facts.** In docs, say whether something was seen on the wire, read from code,
   or is a hypothesis.
 
-## Reporting a problem
+## Problems versus planned work
 
-Add an entry to `docs/ISSUES.md` with the next free number. Each entry has: status, area,
-expected, actual, evidence, hypotheses (marked as not verified), fix criteria, and
-`Fixed by`. Write how to reproduce in `docs/REPRODUCE.md`.
+**GitHub Issues are for problems**, not for the feature checklist. Open one issue for a
+reproducible defect, protocol uncertainty that blocks progress, or a concrete regression.
+Include:
 
-When a git hosting service is used, open one issue per entry with the same ID in the
-title, and link it back to `docs/ISSUES.md`. The file in the repository stays the source
-of truth.
+- expected and actual behavior;
+- reproduction steps or the exact live-run sequence;
+- evidence (frame IDs, byte samples with secrets removed, decompiler function addresses);
+- hypotheses clearly marked as unverified;
+- a testable resolution criterion.
+
+Do not create an Issue for every planned feature or implementation step.
+
+**`docs/ROADMAP.md` is the implementation plan.** Put milestones, feature work,
+dependencies and progress there. Keep the sequence ordered so the next actionable step
+towards a playable Single Mode is obvious. Update it in the same change that completes
+or materially advances a milestone.
+
+Write reproducible environment setup and live-run instructions in
+`docs/REPRODUCE.md`. The GitHub Issues list is the only defect tracker; there is no
+parallel `docs/ISSUES.md` file.
 
 ## Making a change
 
@@ -34,7 +47,8 @@ of truth.
 3. Make a live run when the change affects the client's behaviour, and describe what it
    showed (not the recording itself).
 4. Update the docs in the same commit as the change: `docs/CLIENT.md` for verified
-   facts, `docs/ROADMAP.md` for progress, `docs/ISSUES.md` for issues.
+   protocol facts and `docs/ROADMAP.md` for implementation progress. Link the PR or
+   commit from the relevant GitHub Issue when it fixes or advances a blocker.
 
 ## Commit messages
 
@@ -47,13 +61,13 @@ of truth.
 
 ## Closing an issue
 
-1. The fix commit says `Fixes ISSUE-NNN` in its message.
-2. A follow-up commit in `docs/ISSUES.md` sets `Status: fixed` and fills `Fixed by:`
-   with the commit hash. The hash cannot be in the same commit it names.
-3. Close the matching hosting issue, if one exists, with a link to the commit.
+Close a GitHub Issue only after its problem is actually fixed and the stated resolution
+criterion has been verified. Prefer linking the fixing PR or commit and include the
+relevant test or live-run evidence in the issue. A serializer unit test alone does not
+close an issue whose acceptance criterion requires the real client to reach a UI state.
 
-Do not delete entries. A closed issue stays in the file with its ID, so old commit
-messages still point to something.
+The roadmap is not closed by closing an Issue: update the corresponding roadmap
+milestone separately when its completion criteria are met.
 
 ## Before you push or share
 

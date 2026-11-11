@@ -9,12 +9,53 @@ import logging
 import socket
 import threading
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 
 from . import channel
-from .xdr import ProtocolError
+from .xdr import ProtocolError, Reader
 
 log = logging.getLogger("tet4.game")
+
+GAME_REPORT_TOS = 0x05BCDF3A
+POLY_MINO_PUT_TOS = 0x0CC4004A
+
+
+@dataclass(frozen=True)
+class GameReportRequest:
+    strings: tuple[bytes, bytes, bytes, bytes]
+    counters: tuple[int, int, int, int, int]
+    flag: int
+
+
+@dataclass(frozen=True)
+class PolyMinoPutRequest:
+    values: tuple[int, int, int, int]
+
+
+def parse_game_report_request(payload: bytes) -> GameReportRequest:
+    """Parse the statically recovered Single Mode GameReportToS wire layout."""
+    r = Reader(payload)
+    if r.u32() != GAME_REPORT_TOS:
+        raise ProtocolError("not Cmd_Room_OrderTypeSingleModeGameReportTetrisToS")
+    strings = tuple(r.string() for _ in range(4))
+    counters = (r.u32(), r.u32())
+    flag = r.take(1)[0]
+    counters += (r.u32(), r.u32(), r.u32())
+    if r.remaining():
+        raise ProtocolError(f"unexpected {r.remaining()} trailing GameReportToS bytes")
+    return GameReportRequest(strings, counters, flag)  # type: ignore[arg-type]
+
+
+def parse_poly_mino_put_request(payload: bytes) -> PolyMinoPutRequest:
+    """Parse Cmd_Room_OrderTypeSingleModePolyMinoPutTetrisToS (four uint32s)."""
+    r = Reader(payload)
+    if r.u32() != POLY_MINO_PUT_TOS:
+        raise ProtocolError("not Cmd_Room_OrderTypeSingleModePolyMinoPutTetrisToS")
+    values = tuple(r.u32() for _ in range(4))
+    if r.remaining():
+        raise ProtocolError(f"unexpected {r.remaining()} trailing PolyMinoPutToS bytes")
+    return PolyMinoPutRequest(values)  # type: ignore[arg-type]
 
 
 def save_frame(
@@ -43,14 +84,37 @@ def handle(conn: socket.socket, capture_dir: Path | None = None) -> None:
             msg_id, payload = session.read_frame(conn)
             sequence += 1
             saved = save_frame(capture_dir, connection_id, sequence, msg_id, payload)
-            log.info(
-                "game frame connection=%s seq=%d id=0x%08x payload_len=%d captured=%s",
-                connection_id,
-                sequence,
-                msg_id,
-                len(payload),
-                saved is not None,
-            )
+            if msg_id == GAME_REPORT_TOS:
+                request = parse_game_report_request(payload)
+                log.info(
+                    "Single Mode GameReportToS connection=%s seq=%d "
+                    "string_lengths=%r counters=%r flag=%d captured=%s",
+                    connection_id,
+                    sequence,
+                    tuple(map(len, request.strings)),
+                    request.counters,
+                    request.flag,
+                    saved is not None,
+                )
+            elif msg_id == POLY_MINO_PUT_TOS:
+                request = parse_poly_mino_put_request(payload)
+                log.info(
+                    "Single Mode PolyMinoPutToS connection=%s seq=%d "
+                    "values=%r captured=%s",
+                    connection_id,
+                    sequence,
+                    request.values,
+                    saved is not None,
+                )
+            else:
+                log.info(
+                    "game frame connection=%s seq=%d id=0x%08x payload_len=%d captured=%s",
+                    connection_id,
+                    sequence,
+                    msg_id,
+                    len(payload),
+                    saved is not None,
+                )
     except (ProtocolError, OSError) as exc:
         log.info("game socket %s closed: %s", connection_id, exc)
     finally:

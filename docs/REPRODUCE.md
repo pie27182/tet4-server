@@ -46,7 +46,7 @@ cause.
 python3 -m unittest discover -s tests -t .
 ```
 
-Expected: `OK`, 31 tests. The protocol-layout tests do not need the client.
+Expected: `OK`, 33 tests. The protocol-layout tests do not need the client.
 
 ## 2. Client files
 
@@ -259,7 +259,7 @@ matters, with `tools/disasm.py`:
   quota is for the disk the repository is on. Ghidra also rejects project paths with a
   dot-prefixed name, so do not put the repository in such a folder.
 - **Old Wine processes.** If the client does not start, or starts with a stale
-  session, run `wineserver -k` and check that the ports 10454, 15000 and 15001 are free
+  session, run `wineserver -k` and check that the ports 10454, 15000, 15001 and 15002 are free
   (`ss -ltn`).
 - **`live_check.py` stops with `No such file or directory`.** The startup string is
   read from `--bootstrap` (default `tools/bootstrap-sample.txt`). Give a path that

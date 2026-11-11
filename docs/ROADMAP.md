@@ -44,10 +44,17 @@ serializer test proves layout, not that the client accepts the message.
 - [ ] Capture the request from a fresh live run after the empty member/room-list probes;
       confirm actual values (the builder sets `k602e`, `N000S`, GameID `TET4`,
       `k23e` and `k24e`, with remaining fields defaulted).
-- [ ] Decode the full `Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToC` response
-      (`0x0DF37B3A`): constructor, Serialize/Deserialize, converter, result-key
-      handling, and all nested/related data. Implement a reply that makes the client
-      enter a local single-player room.
+- [x] Recover the AutoEnter response's full top-level field order from
+      `Tet4.exe:0x00442E90` / `0x00443080` and its success converter
+      `0x00445F60`. The converter rejects status `v2e`; the game endpoint is
+      `k52e` (host) + `k53e` (port).
+- [x] Add a controlled local AutoEnter response pointing at
+      `127.0.0.1:15002`, plus a game-socket listener using the recovered secure
+      handshake. The listener currently captures frames and deliberately sends no
+      game-level replies.
+- [ ] Run the client, click Single Mode and verify AutoEnter success, connection to
+      the local game socket, and capture the first game request. The room metadata
+      fields other than host/port are still constructor defaults and may need values.
 - [ ] Decode and implement `Cmd_ChannelOrderTypeSingleModeRoomInfoTetrisToC`
       (`0x04B61A2A`) and the nested `_SingleModeInfo` (`0x0071FA1A`).
 - [ ] Verify the real client transitions from the lobby to the Single Mode room screen

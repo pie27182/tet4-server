@@ -96,6 +96,25 @@ the result is displayed, and the client returns to the lobby without crashing.
       server, and records a live client session.
 - [ ] Re-run the complete regression suite after the end-to-end game flow is stable.
 
+## Fastest next execution loop
+
+The repository cannot contain the original client binaries or local Ghidra output; those
+stay in the developer's ignored `client/` and `work/` directories. After pulling this
+branch:
+
+1. Run `python3 tools/live_check.py` with the test client.
+2. Copy the log line for `0x0AE3BBDA` (`GetMemberListToS`), including
+   `payload_hex`. Redact credentials/session secrets before sharing.
+3. Run the RTTI scanner against the channel message module:
+   `python3 tools/tet4_rtti_extract.py client/HgCom3.dll --all-cmd --json > work/HgCom3-rtti.json`.
+4. Use the request/response class entries and their Serialize/Deserialize addresses to
+   inspect `work/decompiled/HgCom3.dll.c` and `work/decompiled/HgModel3.dll.c`.
+5. In parallel, extract the Single Mode classes:
+   `python3 tools/tet4_rtti_extract.py client/Tet4.exe --json > work/Tet4-single-mode-rtti.json`.
+
+This should turn the next step from broad searching into a focused reconstruction of
+the member-list request and response, while preparing the known Single Mode messages.
+
 ## Working rules
 
 - Capture first; decode from captured bytes and/or decompiled code; never invent

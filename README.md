@@ -45,12 +45,38 @@ tools/        client check and patch, live run, Ghidra export, function lookup,
               RTTI extractor, sample startup string
 ```
 
-## Requirements
+## What you need
 
-Python 3 (standard library only) for the servers and tests. Running the real client
-needs your own copy of the client folder (version 1.3.4, not included), Wine, `wf-recorder`,
-`ffmpeg`, `grim` and a Wayland session. Decompiling needs Ghidra 12.2. Versions and
-disk notes: [`docs/REPRODUCE.md`](docs/REPRODUCE.md), section 0.
+**Client files (not included).** Your own copy of the official client folder, version
+1.3.4. Check it with `tools/check_client.py`. The game needs `Tet4.exe`, all DLLs, and
+the `Tet4/`, `common/` and `Sysfiles/` folders. `h-tetra.exe` is the launcher; the local
+flow does not use it. For the experiments make a patched copy with
+`tools/patch_client.py` (see `docs/REPRODUCE.md`, section 3).
+
+**Tools.**
+- Python 3 (standard library only) for the servers and tests.
+- Wine, `wf-recorder`, `ffmpeg`, `grim` and a Wayland session, for live runs.
+- Ghidra 12.2 with OpenJDK, for decompiling the client (`tools/export.sh`).
+- `pefile` and `capstone` only for ad-hoc disassembly checks.
+
+Versions, disk space and the decompilation list: [`docs/REPRODUCE.md`](docs/REPRODUCE.md).
+
+## How the server is developed
+
+1. **Capture.** Run the client against the local servers (`tools/live_check.py`) and
+   read the server logs and the recording. Save byte captures as test vectors.
+2. **Decompile.** Export the modules with `tools/export.sh` and look up addresses with
+   `tools/find_function.py`. Message IDs come from `tools/tet4_rtti_extract.py`;
+   field order comes from the `Serialize` and `Deserialize` functions.
+3. **Implement** in `tet4server/`, with a byte-level test in `tests/` that uses a
+   capture.
+4. **Check.** Run the tests, then a live run. Compare what the client sends and does
+   next with what the docs predict.
+5. **Record.** Verified facts go in `docs/CLIENT.md`, marked as seen on the wire or
+   read from code. Progress goes in `docs/ROADMAP.md`.
+
+Rule: the server sends a reply only when a capture or the decompiled code supports
+it. Requests with no known reply get no answer.
 
 ## Running the tests
 

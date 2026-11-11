@@ -186,6 +186,44 @@ class GetRoomListTest(unittest.TestCase):
         self.assertEqual(r.remaining(), 0)
 
 
+
+class AutoEnterSingleModeRequestTest(unittest.TestCase):
+    def make_payload(self, strings, integers):
+        return (
+            channel.pack_u32(channel.AUTO_ENTER_SINGLE_MODE_TOS)
+            + channel.pack_string(strings[0])
+            + channel.pack_u32(integers[0])
+            + channel.pack_string(strings[1])
+            + channel.pack_string(strings[2])
+            + channel.pack_string(strings[3])
+            + channel.pack_u32(integers[1])
+            + channel.pack_u32(integers[2])
+            + channel.pack_string(strings[4])
+            + channel.pack_u32(integers[3])
+            + b"".join(channel.pack_string(v) for v in strings[5:])
+        )
+
+    def test_fields_follow_client_serialize_order(self):
+        strings = (
+            b"account-token", b"reserved-a", b"reserved-b", b"N000S",
+            b"reserved-c", b"TET4", b"sub-id", b"channel-id",
+        )
+        integers = (1, 2, 3, 4)
+        request = channel.parse_auto_enter_single_mode_request(
+            self.make_payload(strings, integers)
+        )
+        self.assertEqual(request.strings, strings)
+        self.assertEqual(request.integers, integers)
+
+    def test_request_rejects_trailing_bytes(self):
+        strings = (b"",) * 8
+        integers = (0,) * 4
+        with self.assertRaises(ProtocolError):
+            channel.parse_auto_enter_single_mode_request(
+                self.make_payload(strings, integers) + b"\\x00"
+            )
+
+
 class SessionTest(unittest.TestCase):
     def test_client_frame_is_read_by_server_session(self):
         master = master_for_run16()

@@ -61,7 +61,7 @@ def main() -> int:
     threading.Thread(target=tpack.serve, args=("127.0.0.1", 10454), daemon=True).start()
     threading.Thread(target=cds.serve, args=("127.0.0.1", 15000), daemon=True).start()
     threading.Thread(target=channel.serve, args=("127.0.0.1", 15001), daemon=True).start()
-    threading.Thread(target=game.serve, args=("127.0.0.1", channel.GAME_SERVER_PORT), daemon=True).start()
+    threading.Thread(target=game.serve, args=("127.0.0.1", channel.GAME_SERVER_PORT, args.out / "game-frames"), daemon=True).start()
 
     recorder = subprocess.Popen(
         ["wf-recorder", "-g", args.geometry, "-r", str(args.fps), "-c", "libx264",

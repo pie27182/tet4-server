@@ -46,7 +46,7 @@ cause.
 python3 -m unittest discover -s tests -t .
 ```
 
-Expected: `OK`, 17 tests. The tests use byte vectors from captured runs and do not need
+Expected: `OK`, 21 tests. The tests use byte vectors from captured runs and do not need
 the client.
 
 ## 2. Client files

@@ -21,9 +21,9 @@ FUN_6013F9B0 (HgCom3.dll):
 
 Strings are uint32be length + bytes, with no padding. i64 is big-endian.
 """
+from dataclasses import dataclass
 import logging
 import socket
-from dataclasses import dataclass
 import struct
 import threading
 

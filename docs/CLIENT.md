@@ -132,7 +132,7 @@ The 4-byte length counts the body after itself.
 | `Cmd_AuthToC` | `0x008500CA` | server to client | **[wire]** our empty reply (result 0) accepted |
 | `Cmd_Channel_GetUserIdByMemberIdToS` | `0x0FAB330A` | client to server | **[wire]** sent after `Cmd_AuthToC`; body `string member_id` |
 | `Cmd_Channel_GetUserIdToC` | `0x0A80E29A` | server to client | **[wire]** our reply accepted (k161e = 0) |
-| `Cmd_Channel_EnterChannelByUserIdToS` | `0x0696068A` | client to server | **[wire]** sent after `GetUserIdToC`; reply not yet sent |
+| `Cmd_Channel_EnterChannelByUserIdToS` | `0x0696068A` | client to server | **[wire]** request observed; request layout decoded from static analysis |
 | `Cmd_Channel_EnterChannelToC` | `0x00C0FC8A` | server to client | **[static]** response layout implemented as an unverified zero/default probe |
 | `Cmd_LayerAlignment` | `0x09D0057A` | client to server | **[wire]** sent by the client; special id in the dispatcher |
 
@@ -140,7 +140,7 @@ The 4-byte length counts the body after itself.
 of `A` (string), `TicketAuthByMemberId` (string), with zero dwords between them. Its
 meaning is not established; the server does not read it.
 
-**Server reply layouts** (code, verified by the client's reactions):
+**Server reply layouts** (wire evidence and static analysis, marked per message):
 
 - `Cmd_AuthToC` = `u32 id | _KeyType (i64 | str | i64 | str | str) | str | str | i32`.
   The `i32` goes to key `k161e`; zero is success. Serialize `0x601356E0`, converter

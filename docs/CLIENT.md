@@ -270,6 +270,23 @@ validation.
 layout: `u32 id | string | u32 | u8` (`Serialize FUN_00443D90`). Its role in the
 transition still needs to be confirmed from the live message sequence.
 
+### Start-game message container [static; dispatch relationship pending]
+
+The client also has an XDR class `Cmd_Room_OrderTypeStartNewGameTetrisToC`
+(`0x06FE5D0A`):
+- constructor: `FUN_0044AD80`;
+- GetSize: `FUN_0044ACA0`;
+- serializer/deserializer pair: `FUN_0044ACF0` and `FUN_0044B1D0` (the latter validates
+  the nested message vector plus scalar fields);
+- body shape: `u32 id | vector<XDR::IMessage> | string | u32`.
+
+The client controller has `CGameLobbyController::Net_StartNewGame`
+(`HgCtr3.dll:0x60207880`), which dispatches `onStartNewGame` to the game view.
+This is a strong candidate for the start event carried by the class above, but the
+message-to-handler registration key is not yet confirmed from the stripped global
+string reference. The vector's nested message types and required initial board
+configuration are not yet decoded; do not send an empty vector as if it started a game.
+
 ### Single Mode game client-to-server messages [static]
 
 The client sends game input/report messages over the separate `game` connection:

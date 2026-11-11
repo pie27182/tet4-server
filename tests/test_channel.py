@@ -128,6 +128,15 @@ class EnterChannelToCLayoutTest(unittest.TestCase):
         self.assertEqual(r.remaining(), 0)
 
 
+class UnhandledFrameLogTest(unittest.TestCase):
+    def test_log_line_contains_id_and_complete_decrypted_payload(self):
+        payload = bytes.fromhex("0ae3bbda01020304")
+        self.assertEqual(
+            channel._unhandled_frame_log(0x0AE3BBDA, payload),
+            "unhandled channel frame id=0x0ae3bbda payload_hex=0ae3bbda01020304",
+        )
+
+
 class SessionTest(unittest.TestCase):
     def test_client_frame_is_read_by_server_session(self):
         master = master_for_run16()

@@ -271,8 +271,11 @@ matters, with `tools/disasm.py`:
   initialization, gameplay and game-end messages. The remote TLS gateway is not needed
   for the local protocol path.
 - **Some runs show the channel row and some do not.** The CDS reply is byte-identical
-  in both cases; the difference comes from the client's state (see `docs/CLIENT.md`).
-  The cause is not known.
+  in both cases. In the historical handshake-only run, the client issued a second CDS
+  request (`tid=2`) after abandoning the channel socket, and the row appeared after
+  that response. This correlates visibility with the refresh but does not prove the
+  exact UI invalidation mechanism; reproduce it with `--channel-mode discovery-only`
+  as described in section 5.
 
 ## 8. Troubleshooting
 

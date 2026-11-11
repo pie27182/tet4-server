@@ -151,8 +151,8 @@ meaning is not established; the server does not read it.
   The key meanings are taken from the handler, not confirmed by a successful session.
 - `Cmd_Channel_GetUserIdByMemberIdToS` = `u32 id | str member_id`, read from the frame.
 
-- Cmd_Channel_EnterChannelByUserIdToS = u32 id | u64 user_id | str × 5 | u32 | str × 2.
-  Static layout from Serialize FUN_6012cfd0; the u64 and seven strings are read
+- Cmd_Channel_EnterChannelByUserIdToS = u32 id | u64 user_id | str × 5 | u32 | str × 2 | u64.
+  Static layout from Serialize FUN_6012cfd0; initial and trailing u64s plus seven strings are read
   by CChannelLobbyModel::Msg_EnterChannelByUserId (HgModel3.dll, 0x609083C0).
 - Cmd_Channel_EnterChannelToC = u32 id | str × 5 | u32 × 3 | u8 | str | u32 × 2 |
   str × 2 | u32 × 3 | str. Static layout from Serialize FUN_6012e4a0 and

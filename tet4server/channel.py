@@ -65,6 +65,7 @@ class EnterChannelRequest:
     strings: tuple[bytes, ...]
     option: int
     trailing_strings: tuple[bytes, ...]
+    trailing_u64: int
 
 
 def parse_enter_channel_request(payload: bytes) -> EnterChannelRequest:
@@ -76,9 +77,10 @@ def parse_enter_channel_request(payload: bytes) -> EnterChannelRequest:
     strings = tuple(r.string() for _ in range(5))
     option = r.u32()
     trailing_strings = tuple(r.string() for _ in range(2))
+    trailing_u64 = r.u64()
     if r.remaining():
         raise ProtocolError(f"unexpected {r.remaining()} trailing request bytes")
-    return EnterChannelRequest(user_id, strings, option, trailing_strings)
+    return EnterChannelRequest(user_id, strings, option, trailing_strings, trailing_u64)
 
 
 def enter_channel_to_c(

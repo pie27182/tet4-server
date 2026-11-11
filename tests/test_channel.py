@@ -64,12 +64,14 @@ class EnterChannelRequestTest(unittest.TestCase):
             + b"".join(channel.pack_string(v) for v in strings[:5])
             + channel.pack_u32(0x10203040)
             + b"".join(channel.pack_string(v) for v in strings[5:])
+            + struct.pack(">Q", 0x8877665544332211)
         )
         request = channel.parse_enter_channel_request(payload)
         self.assertEqual(request.user_id, 0x0102030405060708)
         self.assertEqual(request.strings, strings[:5])
         self.assertEqual(request.option, 0x10203040)
         self.assertEqual(request.trailing_strings, strings[5:])
+        self.assertEqual(request.trailing_u64, 0x8877665544332211)
 
     def test_request_rejects_trailing_bytes(self):
         payload = (

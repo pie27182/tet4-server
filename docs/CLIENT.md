@@ -133,7 +133,11 @@ The 4-byte length counts the body after itself.
 | `Cmd_Channel_GetUserIdByMemberIdToS` | `0x0FAB330A` | client to server | **[wire]** sent after `Cmd_AuthToC`; body `string member_id` |
 | `Cmd_Channel_GetUserIdToC` | `0x0A80E29A` | server to client | **[wire]** our reply accepted (k161e = 0) |
 | `Cmd_Channel_EnterChannelByUserIdToS` | `0x0696068A` | client to server | **[wire]** request observed; request layout decoded from static analysis |
-| `Cmd_Channel_EnterChannelToC` | `0x00C0FC8A` | server to client | **[static]** response layout implemented as an unverified zero/default probe |
+| `Cmd_Channel_EnterChannelToC` | `0x00C0FC8A` | server to client | **[wire]** zero/default probe accepted far enough for the client to request the member list |
+| `Cmd_Channel_GetMemberListToS` | `0x0AE3BBDA` | client to server | **[wire]** observed after EnterChannelToC; request layout [static] |
+| `Cmd_Channel_GetMemberListToC` | `0x06B816EA` | server to client | **[static]** serializer recovered; empty-vector response implemented, live acceptance pending |
+| `Cmd_Channel_GetRoomListToS` | `0x0DDA299A` | client to server | **[static]** request is three strings and a uint32 |
+| `Cmd_Channel_GetRoomListToC` | `0x0226968A` | server to client | **[static]** serializer recovered; empty-vector response implemented, live acceptance pending |
 | `Cmd_LayerAlignment` | `0x09D0057A` | client to server | **[wire]** sent by the client; special id in the dispatcher |
 
 `Cmd_AuthToS` fields seen in run16, in order: `test` (string), `TET4` (string), 32 bytes
@@ -162,19 +166,42 @@ meaning is not established; the server does not read it.
   0x60111AC0) requires k1e to be present and rejects value v2e; successful
   Net_Channel_EnterChannel (HgCtr3.dll, 0x60206420) calls fillChannelInfo
   and sendGetMemberList.
-- The server currently sends a probe only: empty strings, zero integers and a zero
-  byte, matching the message constructor's initialized values. This exercises the
-  decoded wire layout and result-key presence; channel metadata values and live
-  client acceptance are not yet verified. [static; probe not live-verified]
+- The live trace shows that after this response the client sends
+  `Cmd_LayerAlignment` and then `Cmd_Channel_GetMemberListToS`. This proves the
+  response is accepted far enough to advance into the channel model, but does not
+  prove the metadata is correct or that the lobby is stable. **[wire]**
+
+The member-list path is decoded from HgCom3.dll:
+- `Cmd_Channel_GetMemberListToS` (`0x0AE3BBDA`): `u32 id | string × 3`.
+- `Cmd_Channel_GetMemberListToC` (`0x06B816EA`): `u32 id | string × 3 | vector<Member> | string`.
+  Serialize `FUN_601301D0`, Deserialize `FUN_60130260`, converter
+  `FUN_6013A4E0`; the client controller's `Net_GetMemberList` fills the member list
+  and then sends the room-list request.
+- `Cmd_Channel_GetRoomListToS` (`0x0DDA299A`): `u32 id | string × 3 | u32`.
+- `Cmd_Channel_GetRoomListToC` (`0x0226968A`): `u32 id | string × 3 | u32 | string | vector<Room>`.
+  Serialize `FUN_60130630`, Deserialize `FUN_601306D0`, converter
+  `FUN_6013B1D0`.
+
+The first server implementation returns zero-length member and room vectors. This is
+a deliberate structural probe: the top-level serializers and empty-vector representation
+are recovered, but member and room record layouts are not implemented and acceptance
+of the empty lists has not yet been verified in a live run. **[static]**
+
+The channel model's request builders (`HgModel3.dll`) use `k22e` (GameID), `k23e`,
+and `k24e` for the three string fields. The room-list request adds `k64e = 0`.
+The member-list controller handler calls `fillMemberList` and then requests the room
+list. **[static]**
 
 The client's dispatcher reads the 4-byte magic `XLBP` (consumed), then peeks the id
 (`+0x0C`, not consumed), so the id is read again by the message's own `Deserialize`.
 The converters are registered with `PC_RegisterX2M` (`FUN_60121A40`) from an init routine
 in `HgCom3.dll`, which maps `0x0A80E29A` to `FUN_6013F9B0` and `0x008500CA` to `FUN_6013F8B0`.
 
-Live run (`tools/live_check.py`): the client reaches the lobby and keeps a "connecting"
-dialog with a cancel button open while it waits for the reply to
-`Cmd_Channel_EnterChannelByUserIdToS`. **[wire]**
+Live run: after `Cmd_Channel_EnterChannelByUserIdToS`, the server's
+`Cmd_Channel_EnterChannelToC` probe is followed by client messages
+`Cmd_LayerAlignment` and `Cmd_Channel_GetMemberListToS`. The latter proves the
+client moved into the member-list stage. The updated empty member/room-list replies
+still need a fresh live run. **[wire]****
 
 ## 8. Single Mode (not yet started)
 

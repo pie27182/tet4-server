@@ -14,7 +14,7 @@ class TetrisEngineTest(unittest.TestCase):
 
     def test_cannot_move_outside_left_wall(self):
         game = TetrisEngine(seed=1)
-        game.state.current = Piece("O", x=-1, y=0)
+        game.state.current = Piece("O", x=-2, y=0)
         self.assertTrue(game.collides(game.state.current))
         self.assertFalse(game.move(-1, 0))
 

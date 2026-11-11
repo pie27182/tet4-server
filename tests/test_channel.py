@@ -224,6 +224,43 @@ class AutoEnterSingleModeRequestTest(unittest.TestCase):
             )
 
 
+
+class AutoEnterSingleModeResponseTest(unittest.TestCase):
+    def test_response_layout_routes_to_local_game_socket(self):
+        strings = tuple(f"s{i}".encode("ascii") for i in range(12))
+        integers = tuple(range(1, 7))
+        r = Reader(channel.auto_enter_single_mode_to_c(
+            game_host=b"127.0.0.1", game_port=15002,
+            strings=strings, integers=integers,
+        ))
+        self.assertEqual(r.u32(), channel.AUTO_ENTER_SINGLE_MODE_TOC)
+        self.assertEqual(r.string(), strings[0])
+        self.assertEqual(r.u32(), integers[0])
+        self.assertEqual(r.string(), strings[1])
+        self.assertEqual(r.string(), strings[2])
+        self.assertEqual(r.string(), strings[3])
+        self.assertEqual(r.u32(), integers[1])
+        self.assertEqual(r.u32(), integers[2])
+        self.assertEqual(r.string(), strings[4])
+        self.assertEqual(r.u32(), integers[3])
+        self.assertEqual(r.string(), strings[5])
+        self.assertEqual(r.string(), strings[6])
+        self.assertEqual(r.string(), strings[7])
+        self.assertEqual(r.string(), b"")  # status (+0xfc) is not v2e
+        self.assertEqual(r.u32(), integers[4])
+        self.assertEqual(r.string(), strings[9])
+        self.assertEqual(r.string(), b"127.0.0.1")  # game host (+0x138)
+        self.assertEqual(r.u32(), 15002)            # game port (+0x154)
+        self.assertEqual(r.string(), strings[11])
+        self.assertEqual(r.remaining(), 0)
+
+    def test_response_requires_valid_local_endpoint(self):
+        with self.assertRaises(ValueError):
+            channel.auto_enter_single_mode_to_c(game_host=b"", game_port=15002)
+        with self.assertRaises(ValueError):
+            channel.auto_enter_single_mode_to_c(game_host=b"127.0.0.1", game_port=0)
+
+
 class SessionTest(unittest.TestCase):
     def test_client_frame_is_read_by_server_session(self):
         master = master_for_run16()

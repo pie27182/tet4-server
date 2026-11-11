@@ -6,7 +6,7 @@ so the experiments used a copy in which three hostnames are replaced by 127.0.0.
 This script applies exactly that change to a copy you make yourself. It does not
 ship any binary: the patch is three offsets and the strings it expects to find.
 
-    python3 tools/patch_client.py ~/h-tetra-client ~/h-tetra-client-patched
+    python3 tools/patch_client.py              # client/ -> client-patched/ in the repository
 
 The source must be the clean Tet4.exe (sha256 checked). The output is checked
 against the sha256 of the patched file we used.
@@ -16,6 +16,8 @@ import hashlib
 import shutil
 import sys
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
 
 CLEAN_SHA256 = "722d91223ae28d89c4740420544fc4f372bf13b41e3bce5a139c793054407b8f"
 PATCHED_SHA256 = "f2020231a914ac11263694f3552c751e8cf5dfa6f9f7ad0710a02f5c6980ae28"
@@ -37,8 +39,8 @@ def sha256_bytes(data: bytes) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("src", type=Path, help="clean client folder")
-    ap.add_argument("dst", type=Path, help="new folder to create")
+    ap.add_argument("src", type=Path, nargs="?", default=ROOT / "client", help="clean client folder")
+    ap.add_argument("dst", type=Path, nargs="?", default=ROOT / "client-patched", help="new folder to create")
     args = ap.parse_args()
 
     if args.dst.exists():

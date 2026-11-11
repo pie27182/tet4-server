@@ -8,7 +8,7 @@ frame where the picture changes is saved as a PNG.
 Needs the original client files (not in this repository), Wine, wf-recorder and
 ffmpeg, and a Wayland session. Example:
 
-    python3 tools/live_check.py --client-dir ~/h-tetra-client-patched --out /tmp/live-run
+    python3 tools/live_check.py                # uses client-patched/ and live-runs/<time>/
 
 Output in --out: session.mp4 (the recording) and frames/ (one PNG per visual change).
 The startup string defaults to tools/bootstrap-sample.txt (test account, local
@@ -36,11 +36,11 @@ HERE = Path(__file__).resolve().parent
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--client-dir", type=Path, required=True)
+    ap.add_argument("--client-dir", type=Path, default=HERE.parent / "client-patched")
     ap.add_argument("--bootstrap", type=Path, default=HERE / "bootstrap-sample.txt",
                     help="startup string (default: tools/bootstrap-sample.txt)")
     ap.add_argument("--out", type=Path,
-                    default=Path(f"/tmp/live-{datetime.now():%Y%m%d-%H%M%S}"),
+                    default=HERE.parent / "live-runs" / f"{datetime.now():%Y%m%d-%H%M%S}",
                     help="output directory for session.mp4 and frames/")
     ap.add_argument("--geometry", default="0,0 1536x864",
                     help='wf-recorder -g region, e.g. "0,0 1536x864"')

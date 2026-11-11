@@ -8,3 +8,10 @@ __pycache__/
 /game/
 *.exe
 *.dll
+
+# Local working data: the game client and everything derived from it.
+# Put your own copy in client/; the rest is created by the tools.
+/client
+/client-patched
+/work
+/live-runs

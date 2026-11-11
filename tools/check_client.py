@@ -6,6 +6,7 @@ The folder you got from the official distribution contains files.sha256.json
 reports Tet4.exe separately, because the three-host patch (tools/patch_client.py)
 changes it on purpose.
 
+    python3 tools/check_client.py              # checks client/ in the repository
     python3 tools/check_client.py ~/h-tetra-client
 
 Exit status 0 when every file matches the manifest.
@@ -16,6 +17,7 @@ import json
 import sys
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parent.parent
 CLEAN_TET4_SHA256 = "722d91223ae28d89c4740420544fc4f372bf13b41e3bce5a139c793054407b8f"
 
 
@@ -30,7 +32,7 @@ def sha256(path: Path) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("client_dir", type=Path)
+    ap.add_argument("client_dir", type=Path, nargs="?", default=ROOT / "client")
     args = ap.parse_args()
     root = args.client_dir
     manifest_path = root / "files.sha256.json"

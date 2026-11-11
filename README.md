@@ -52,9 +52,9 @@ python3 -m unittest discover -s tests -t .
 
 ## Running the live check
 
-This starts the TPack, CDS and channel servers from this repository and launches the
-real client under Wine. You need the client files, Wine, and a Wayland session for
-screenshots (`grim`).
+This starts the TPack, CDS and channel servers from this repository, launches the
+real client under Wine, and records the screen with `wf-recorder`. You need the client
+files, Wine, `wf-recorder`, `ffmpeg`, and a Wayland session.
 
 1. Put the client's startup string in a file, e.g. `~/tet4-bootstrap.txt`. It must
    begin with `metp://127.0.0.1:15000/` and include the TPack port (`k602e=10454`).
@@ -63,11 +63,13 @@ screenshots (`grim`).
 
 ```
 python3 tools/live_check.py --client-dir ~/h-tetra-client \
-    --bootstrap ~/tet4-bootstrap.txt --seconds 60 --shots /tmp/shots
+    --bootstrap ~/tet4-bootstrap.txt --out /tmp/live-run
 ```
 
-The script prints each request the servers receive and writes screenshots to
-`--shots`. See `python3 tools/live_check.py --help` for all options.
+The recording starts before the client and stops after Wine has fully exited: close
+the game yourself, or press Ctrl+C. The output directory gets `session.mp4` and
+`frames/`, one PNG for each visual change. See `python3 tools/live_check.py --help`
+for `--geometry`, `--fps` and `--scene` (the frame-change threshold).
 
 ## Legal and privacy notes
 

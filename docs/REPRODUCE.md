@@ -218,6 +218,20 @@ tools/find_function.py 0x606041d0 --show
 tools/find_function.py GenerateKey
 ```
 
+Extract the message-class RTTI (message IDs plus GetSize/Serialize/Deserialize
+function addresses) directly from the local client binaries:
+
+```
+python3 tools/tet4_rtti_extract.py client/HgCom3.dll --all-cmd --json > work/HgCom3-rtti.json
+python3 tools/tet4_rtti_extract.py client/Tet4.exe --json > work/Tet4-single-mode-rtti.json
+```
+
+The first scan is for channel message classes such as the member/room list pair. The
+second uses the script's default list of Single Mode classes. The JSON gives the
+function addresses to inspect in the Ghidra exports; class IDs alone are not enough to
+implement a wire reply.
+
+
 Names given by this project (for example `BuildChannelList`) are not in the export.
 The export has `FUN_60903600`; `docs/ADDRESSES.md` gives both where they matter.
 

@@ -72,15 +72,22 @@ serializer test proves layout, not that the client accepts the message.
 
 ## Milestone 4 — make gameplay work
 
-- [ ] Decode client-to-server piece placement:
-      `Cmd_Room_OrderTypeSingleModePolyMinoPutTetrisToS` (`0x0CC4004A`).
-- [ ] Decode the game report/input message:
-      `Cmd_Room_OrderTypeSingleModeGameReportTetrisToS` (`0x05BCDF3A`).
+- [x] Decode client-to-server piece placement request:
+      `Cmd_Room_OrderTypeSingleModePolyMinoPutTetrisToS` (`0x0CC4004A`) is
+      `u32 id | u32 × 4`; the listener parses and captures it.
+- [x] Decode the client game report/input request:
+      `Cmd_Room_OrderTypeSingleModeGameReportTetrisToS` (`0x05BCDF3A`) is
+      four strings, two uint32s, one byte bool, and three uint32s; the listener
+      parses non-sensitive numeric fields and saves the original frame locally.
+- [ ] Implement authoritative board state, active/next pieces, rotation and movement
+      rules, collisions, line clears, score/level progression and deterministic tests.
+      Do not trust client-reported score/board data as authoritative.
 - [ ] Implement authoritative piece placement, collision/line clearing, score and level
       progression, and broadcast/response messages. Prefer a deterministic engine with
       unit tests over trusting client-reported board state.
-- [ ] Decode and implement the server-to-client game report
-      (`0x0EE1D56A`) and all required per-turn updates.
+- [ ] Decode and implement server-to-client start/update messages, including
+      `Cmd_Room_OrderTypeSingleModeGameReportTetrisToC` (`0x0EE1D56A`), and all
+      required per-turn updates.
 - [ ] Verify multiple pieces, movement/rotation/drop behavior, line clears and scoring
       against the live client.
 

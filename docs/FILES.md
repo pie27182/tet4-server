@@ -38,9 +38,9 @@ Confidence labels:
 |---|---|---|
 | `HgView3.dll`, `HgFrm3.dll`, `HgDlg3.dll`, `HGF5V.dll`, `HgTool3.dll` | Views, the main frame application (`CBaseApp`), dialogs, lobby windows, shared UI helpers. | exports |
 | `HgBoard3.dll` | Game board (`CHgBoard`, game info and end-of-game info). | exports |
-| `HgAniGm3.dll`, `HgAniGm3_16Bit.dll` | Animated game window and graphic controls (chat box, edit box). | exports |
+| `HgAniGm3.dll`, `HgAniGm3_16Bit.dll` | Animated game window and graphic controls (chat box, edit box). The 16-bit variant has 947 functions, decompiled. | code (decompiled) |
 | `HgAvtr3.dll` | Avatar classes (`CAvtr2004`, `CAvtrId`). | exports |
-| `GcDxbase.dll`, `GcDxbase_3d.dll` | DirectX-based lobby and game views. | exports |
+| `GcDxbase.dll`, `GcDxbase_3d.dll` | DirectX-based lobby and game views (468 functions each, decompiled; not analysed for the protocol). | code (decompiled) |
 | `HanVM2d.dll`, `HanVM3d.dll` | 2D and 3D graphics engine (`CGsSprite2`, `CGsAvatar`, `CGsMove`). | exports |
 | `HgKor3.dll` | Korean string table (`HgLoadString`). | exports |
 | `ipcHani.dll` | Messenger IPC (`HaniMgrSink`, `GetBuddyListData`). | exports |
@@ -63,7 +63,7 @@ Confidence labels:
 | `gdiplus.dll` | Windows GDI+ (system library shipped with the client). | name |
 | `ijl15.dll` | Intel JPEG library (third party). | name |
 | `dbghelp.dll` | Windows debug helper. | name |
-| `XDebug.dll` | Diagnostic logging (`DiagOutput`, `XLogError`, `XLogFatal`). | exports |
+| `XDebug.dll` | Diagnostic logging (`DiagOutput`, `XLogError`, `XLogFatal`). Decompiled; not analysed for the protocol. | code (decompiled) |
 | `GameGuard.des` | Anti-cheat data. Not analysed; not needed for the protocol. | not studied |
 
 ## Data and configuration

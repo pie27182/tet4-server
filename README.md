@@ -71,7 +71,9 @@ are not in it; you add them yourself (below). Then:
 
 1. Copy your client folder into `client/` (see "What you need").
 2. `python3 -m venv .venv && .venv/bin/pip install pefile capstone` (only for `tools/disasm.py`).
-3. Unzip Ghidra 12.2 into `work/` and run `tools/export_all.sh` (only for decompiling).
+3. Download Ghidra 12.2 PUBLIC from <https://github.com/NationalSecurityAgency/ghidra/releases>,
+   unzip it into `work/` (so `work/ghidra_12.2_PUBLIC/` exists) and run `tools/export_all.sh`
+   (only for decompiling).
 4. Follow `docs/REPRODUCE.md` for the live run.
 
 From the git hosting service, use `git clone <url>` instead of the first command.
@@ -89,7 +91,7 @@ flow does not use it. For the experiments make a patched copy with
 **Tools.**
 - Python 3 (standard library only) for the servers and tests.
 - Wine, `wf-recorder`, `ffmpeg`, `grim` and a Wayland session, for live runs.
-- Ghidra 12.2 with OpenJDK, for decompiling the client (`tools/export.sh`).
+- Ghidra 12.2 PUBLIC (unzipped in `work/`) with OpenJDK, for decompiling the client (`tools/export.sh`).
 - `pefile` and `capstone` in `.venv` for `tools/disasm.py`.
 
 Versions, disk space and the decompilation list: [`docs/REPRODUCE.md`](docs/REPRODUCE.md).

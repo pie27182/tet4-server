@@ -102,8 +102,12 @@ account name (`test`), `k8e` the ticket.
 ## 5. Live run
 
 ```
-python3 tools/live_check.py
+TET4_TRACE_UNKNOWN=1 python3 tools/live_check.py
 ```
+
+Set `TET4_TRACE_UNKNOWN=1` to include complete decrypted payloads for unknown
+channel messages in the log. Keep this diagnostic output local and redact any
+credentials or session-specific values before sharing it.
 
 The default client is `client-patched/`, and the output goes to `live-runs/<time>/`
 (both git-ignored). Wine uses its default prefix, `~/.wine`; the repository does not

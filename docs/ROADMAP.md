@@ -62,7 +62,12 @@ serializer test proves layout, not that the client accepts the message.
 
 ## Milestone 3 — initialize a playable Tetris game
 
-- [ ] Trace the room/game controller path from successful auto-enter to game start.
+- [ ] Confirm the dispatch from `Cmd_Room_OrderTypeStartNewGameTetrisToC`
+      (`0x06FE5D0A`, `vector<XDR::IMessage> | string | u32`) to
+      `CGameLobbyController::Net_StartNewGame` and identify every nested message type.
+- [ ] Decode and implement the nested start-game message vector and the
+      `Cmd_Room_OrderTypeSingleModeGameReportTetrisToC` (`0x0EE1D56A`) payload,
+      including `_TetrisMemberInfo` and `_SingleModeInfo`.
 - [ ] Decode the initial board/map, dimensions, score/level/speed state, hold state,
       and next-piece queue from the client handlers and serializers.
 - [ ] Implement the minimum server-to-client initialization needed to render the

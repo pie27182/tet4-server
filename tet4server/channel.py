@@ -188,10 +188,22 @@ def handle(conn) -> None:
                     "sent Cmd_Channel_EnterChannelToC probe for user_id=%d",
                     request.user_id,
                 )
+            else:
+                # Unknown requests must not receive guessed replies. Preserve the
+                # decrypted bytes so their Serialize/Deserialize layout can be found.
+                log.warning("%s", _unhandled_frame_log(msg_id, payload))
     except (ProtocolError, OSError) as exc:
         log.info("channel closed: %s", exc)
     finally:
         conn.close()
+
+
+def _unhandled_frame_log(msg_id: int, payload: bytes) -> str:
+    """Return a diagnostic line including the complete decrypted message bytes."""
+    return (
+        f"unhandled channel frame id=0x{msg_id:08x} "
+        f"payload_hex={payload.hex()}"
+    )
 
 
 def serve(host: str, port: int) -> None:

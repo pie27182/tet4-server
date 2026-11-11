@@ -47,9 +47,10 @@ tools/        client check and patch, live run, Ghidra export, function lookup,
 
 ## Requirements
 
-- Python 3 (standard library only). Tested with Python 3.14.
-- A legal copy of the original client folder (version 1.3.4). It is not included.
-  Only needed to run the client itself, not the tests. `tools/check_client.py` checks it.
+Python 3 (standard library only) for the servers and tests. Running the real client
+needs your own copy of the client folder (version 1.3.4, not included), Wine, `wf-recorder`,
+`ffmpeg`, `grim` and a Wayland session. Decompiling needs Ghidra 12.2. Versions and
+disk notes: [`docs/REPRODUCE.md`](docs/REPRODUCE.md), section 0.
 
 ## Running the tests
 

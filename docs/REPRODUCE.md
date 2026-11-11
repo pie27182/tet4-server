@@ -46,7 +46,7 @@ cause.
 python3 -m unittest discover -s tests -t .
 ```
 
-Expected: `OK`, 44 tests. The protocol-layout and game-engine tests do not need the client.
+Expected: `OK`, 45 tests. The protocol-layout and game-engine tests do not need the client.
 
 ## 2. Client files
 

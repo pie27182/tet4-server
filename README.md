@@ -55,6 +55,27 @@ live-runs/        recordings and frames from tools/live_check.py
 .venv/            Python packages for tools/disasm.py
 ```
 
+## Getting the code
+
+From a bundle file (`tet4-server.bundle`):
+
+```
+git bundle verify tet4-server.bundle      # checks the bundle is complete
+git clone tet4-server.bundle tet4-server
+cd tet4-server
+python3 -m unittest discover -s tests -t .  # should print OK; needs no client
+```
+
+The bundle has only tracked files. The client, the decompiled output and the recordings
+are not in it; you add them yourself (below). Then:
+
+1. Copy your client folder into `client/` (see "What you need").
+2. `python3 -m venv .venv && .venv/bin/pip install pefile capstone` (only for `tools/disasm.py`).
+3. Unzip Ghidra 12.2 into `work/` and run `tools/export_all.sh` (only for decompiling).
+4. Follow `docs/REPRODUCE.md` for the live run.
+
+From the git hosting service, use `git clone <url>` instead of the first command.
+
 ## What you need
 
 **Client files (not included).** Copy the whole contents of your official client folder,

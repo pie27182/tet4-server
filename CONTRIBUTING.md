@@ -1,7 +1,19 @@
 # Contributing
 
-This project reverse engineers an existing client. Every change must be backed by
-evidence: a captured byte sequence or decompiled code. Read `docs/METHOD.md` first.
+This project reverse engineers an existing client. Every protocol change must be
+supported by captured traffic or decompiled code. Read `docs/METHOD.md` first.
+
+## Project tracking
+
+- **GitHub Issues are for problems**, not implementation tasks: defects, unexpected
+  client behavior, protocol contradictions, or unresolved blockers. Include expected
+  vs actual behavior, reproduction steps, evidence, hypotheses clearly marked as
+  unverified, and what would prove the problem fixed.
+- **`docs/ROADMAP.md` is the implementation plan.** Keep ordered milestones, tasks,
+  dependencies, and completion criteria there. Do not create an Issue merely because
+  a development task remains to be done.
+- Do not maintain a second issue list in Markdown. The GitHub Issues tab is the only
+  defect tracker.
 
 ## Ground rules
 
@@ -11,53 +23,36 @@ evidence: a captured byte sequence or decompiled code. Read `docs/METHOD.md` fir
 - **Test accounts only.** No real passwords, cookies, tickets or session tokens, in
   code, docs, tests or commit messages.
 - **No guessed protocol.** Send a reply only when a capture or decompiled code supports
-  it. Unknown requests get no reply and are logged.
-- **Mark facts.** In docs, say whether something was seen on the wire, read from code,
-  or is a hypothesis.
-
-## Reporting a problem
-
-Add an entry to `docs/ISSUES.md` with the next free number. Each entry has: status, area,
-expected, actual, evidence, hypotheses (marked as not verified), fix criteria, and
-`Fixed by`. Write how to reproduce in `docs/REPRODUCE.md`.
-
-When a git hosting service is used, open one issue per entry with the same ID in the
-title, and link it back to `docs/ISSUES.md`. The file in the repository stays the source
-of truth.
+  its wire layout. Unknown requests get no reply and are logged.
+- **Mark facts.** In docs, distinguish wire observations, static findings, and hypotheses.
 
 ## Making a change
 
-1. Work on a branch: `fix/ISSUE-001-short-name`, `feat/cds-columns`, `docs/...`.
-2. Write the test first when the change is in `tet4server/`. Tests use byte vectors and
-   do not need the client:
+1. Work on a focused branch, e.g. `feat/channel-member-list` or `fix/issue-2-crash`.
+2. Write byte-layout tests for protocol changes in `tests/`:
    `python3 -m unittest discover -s tests -t .` must pass.
-3. Make a live run when the change affects the client's behaviour, and describe what it
-   showed (not the recording itself).
-4. Update the docs in the same commit as the change: `docs/CLIENT.md` for verified
-   facts, `docs/ROADMAP.md` for progress, `docs/ISSUES.md` for issues.
+3. Make a live run when a change affects client behavior. Record the exact next message
+   and visible state; static serialization tests do not prove client acceptance.
+4. Update `docs/CLIENT.md` for protocol facts and `docs/ROADMAP.md` for implementation
+   progress. Add or update a GitHub Issue only when there is a problem to track.
 
 ## Commit messages
 
 - Short imperative subject (under 72 characters): `Channel: reply to GetUserIdToS`.
-- A body that says what changed and why, with the evidence (a test name, a function
-  address, a file in `docs/`).
-- Name the issue when it applies: `Refs ISSUE-002`, or `Fixes ISSUE-002` for a fix.
-- One logical change per commit. Keep docs and code changes that belong together in
-  one commit; keep unrelated ones apart.
+- Explain what changed and why, with evidence (test name, function address, or doc).
+- Reference the GitHub Issue when addressing a defect; use `Fixes #N` only when the
+  commit actually fixes that issue. Use `Refs #N` for work that is related but incomplete.
+- One logical change per commit. Keep related code and docs together.
 
-## Closing an issue
+## Closing a problem
 
-1. The fix commit says `Fixes ISSUE-NNN` in its message.
-2. A follow-up commit in `docs/ISSUES.md` sets `Status: fixed` and fills `Fixed by:`
-   with the commit hash. The hash cannot be in the same commit it names.
-3. Close the matching hosting issue, if one exists, with a link to the commit.
-
-Do not delete entries. A closed issue stays in the file with its ID, so old commit
-messages still point to something.
+Close a GitHub Issue only after the fix is implemented and verified against its stated
+criteria. Link the fixing PR or commit in the Issue. A task merely being implemented,
+a static layout test passing, or a client moving to the next request is not sufficient
+to close an unrelated defect.
 
 ## Before you push or share
 
 - `python3 -m unittest discover -s tests -t .` passes.
 - `git status` shows no client, log or capture file.
-- The bundle or archive is made from `git bundle create ... --all`, which contains only
-  tracked files.
+- Bundles contain tracked files only.

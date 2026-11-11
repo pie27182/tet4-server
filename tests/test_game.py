@@ -31,7 +31,7 @@ class SingleModeGameRequestTest(unittest.TestCase):
             + b"".join(pack_string(value) for value in strings)
             + pack_u32(counters[0])
             + pack_u32(counters[1])
-            + b"\\x01"
+            + b"\x01"
             + b"".join(pack_u32(value) for value in counters[2:])
         )
         request = game.parse_game_report_request(payload)
@@ -43,9 +43,9 @@ class SingleModeGameRequestTest(unittest.TestCase):
         payload = (
             pack_u32(game.GAME_REPORT_TOS)
             + b"".join(pack_string(b"") for _ in range(4))
-            + pack_u32(0) + pack_u32(0) + b"\\x00"
+            + pack_u32(0) + pack_u32(0) + b"\x00"
             + pack_u32(0) + pack_u32(0) + pack_u32(0)
-            + b"\\x00"
+            + b"\x00"
         )
         with self.assertRaises(ProtocolError):
             game.parse_game_report_request(payload)
@@ -58,7 +58,7 @@ class SingleModeGameRequestTest(unittest.TestCase):
         self.assertEqual(game.parse_poly_mino_put_request(payload).values, values)
 
     def test_poly_mino_put_rejects_trailing_bytes(self):
-        payload = pack_u32(game.POLY_MINO_PUT_TOS) + b"\\x00" * 17
+        payload = pack_u32(game.POLY_MINO_PUT_TOS) + b"\x00" * 17
         with self.assertRaises(ProtocolError):
             game.parse_poly_mino_put_request(payload)
 

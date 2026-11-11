@@ -269,3 +269,26 @@ validation.
 `Cmd_ChannelOrderTypeSingleModeRoomInfoTetrisToC` (`0x04B61A2A`) has a smaller
 layout: `u32 id | string | u32 | u8` (`Serialize FUN_00443D90`). Its role in the
 transition still needs to be confirmed from the live message sequence.
+
+### Single Mode game client-to-server messages [static]
+
+The client sends game input/report messages over the separate `game` connection:
+- `Cmd_Room_OrderTypeSingleModePolyMinoPutTetrisToS` (`0x0CC4004A`):
+  `u32 id | u32 × 4`. Constructor `FUN_00461A50` initializes four uint32 values
+  and forwards the supplied values unchanged to `FUN_00456160(...,"game",3)`.
+  Its GetSize method `FUN_004616F0` sums four 4-byte values.
+- `Cmd_Room_OrderTypeSingleModeGameReportTetrisToS` (`0x05BCDF3A`):
+  `u32 id | string × 4 | u32 × 2 | u8 | u32 × 3`.
+  Constructor `FUN_00461470` and GetSize `FUN_00461AC0` establish four strings
+  at offsets `+0x0c,+0x28,+0x44,+0x60`, two uint32s at `+0x7c,+0x80`,
+  a one-byte bool at `+0x84` (size helper `FUN_0042B4A0` returns 1), then
+  uint32s at `+0x88,+0x8c,+0x90`. Builder `FUN_00461770` fills the strings
+  from `FUN_004e0ab0()`, `k23e`, `k24e`, `k42e`, and numeric fields from
+  the current game state.
+  
+The game listener parses these two message layouts and records their original
+wire bodies as local binary fixtures. It does not yet compute piece movement,
+collision, line clears, score, or send authoritative updates. The four PolyMinoPut
+integers and five GameReport counters are now available in server logs for diagnosis;
+the GameReport strings are not printed because they may contain session data.
+

@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+*.log
+*.pcap
+*.bin
+/captures/
+/game/
+*.exe
+*.dll

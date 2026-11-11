@@ -23,6 +23,7 @@ Strings are uint32be length + bytes, with no padding. i64 is big-endian.
 """
 from dataclasses import dataclass
 import logging
+import os
 import socket
 import struct
 import threading
@@ -189,9 +190,16 @@ def handle(conn) -> None:
                     request.user_id,
                 )
             else:
-                # Unknown requests must not receive guessed replies. Preserve the
-                # decrypted bytes so their Serialize/Deserialize layout can be found.
-                log.warning("%s", _unhandled_frame_log(msg_id, payload))
+                # Unknown requests must not receive guessed replies. Full decrypted
+                # bytes can contain session data, so dump them only on explicit opt-in.
+                if os.environ.get("TET4_TRACE_UNKNOWN") == "1":
+                    log.warning("%s", _unhandled_frame_log(msg_id, payload))
+                else:
+                    log.warning(
+                        "unhandled channel frame id=0x%08x payload_length=%d "
+                        "(set TET4_TRACE_UNKNOWN=1 for hex dump)",
+                        msg_id, len(payload),
+                    )
     except (ProtocolError, OSError) as exc:
         log.info("channel closed: %s", exc)
     finally:

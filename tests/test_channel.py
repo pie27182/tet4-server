@@ -128,6 +128,64 @@ class EnterChannelToCLayoutTest(unittest.TestCase):
         self.assertEqual(r.remaining(), 0)
 
 
+
+class GetMemberListTest(unittest.TestCase):
+    def test_request_has_three_strings(self):
+        values = (b"TET4", b"01D0A", b"1")
+        payload = channel.pack_u32(channel.GET_MEMBER_LIST_TOS) + b"".join(
+            channel.pack_string(v) for v in values
+        )
+        self.assertEqual(channel.parse_get_member_list_request(payload).strings, values)
+
+    def test_request_rejects_trailing_bytes(self):
+        payload = channel.pack_u32(channel.GET_MEMBER_LIST_TOS) + b"".join(
+            channel.pack_string(b"") for _ in range(3)
+        ) + b"\\x00"
+        with self.assertRaises(ProtocolError):
+            channel.parse_get_member_list_request(payload)
+
+    def test_empty_response_layout(self):
+        values = (b"a", b"b", b"c")
+        r = Reader(channel.get_member_list_to_c(values, b"tail"))
+        self.assertEqual(r.u32(), channel.GET_MEMBER_LIST_TOC)
+        self.assertEqual(tuple(r.string() for _ in range(3)), values)
+        self.assertEqual(r.u32(), 0)  # empty vector of member records
+        self.assertEqual(r.string(), b"tail")
+        self.assertEqual(r.remaining(), 0)
+
+
+class GetRoomListTest(unittest.TestCase):
+    def test_request_has_three_strings_and_u8(self):
+        values = (b"TET4", b"01D0A", b"1")
+        payload = (
+            channel.pack_u32(channel.GET_ROOM_LIST_TOS)
+            + b"".join(channel.pack_string(v) for v in values)
+            + b"\\x07"
+        )
+        request = channel.parse_get_room_list_request(payload)
+        self.assertEqual(request.strings, values)
+        self.assertEqual(request.option, 7)
+
+    def test_request_rejects_trailing_bytes(self):
+        payload = (
+            channel.pack_u32(channel.GET_ROOM_LIST_TOS)
+            + b"".join(channel.pack_string(b"") for _ in range(3))
+            + b"\\x00\\x00"
+        )
+        with self.assertRaises(ProtocolError):
+            channel.parse_get_room_list_request(payload)
+
+    def test_empty_response_layout(self):
+        values = (b"a", b"b", b"c")
+        r = Reader(channel.get_room_list_to_c(values, option=9, final=b"tail"))
+        self.assertEqual(r.u32(), channel.GET_ROOM_LIST_TOC)
+        self.assertEqual(tuple(r.string() for _ in range(3)), values)
+        self.assertEqual(r.u32(), 9)
+        self.assertEqual(r.string(), b"tail")
+        self.assertEqual(r.u32(), 0)  # empty vector of room records
+        self.assertEqual(r.remaining(), 0)
+
+
 class SessionTest(unittest.TestCase):
     def test_client_frame_is_read_by_server_session(self):
         master = master_for_run16()

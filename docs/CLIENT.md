@@ -133,8 +133,9 @@ The 4-byte length counts the body after itself.
 | `Cmd_Channel_GetUserIdByMemberIdToS` | `0x0FAB330A` | client to server | **[wire]** sent after `Cmd_AuthToC`; body `string member_id` |
 | `Cmd_Channel_GetUserIdToC` | `0x0A80E29A` | server to client | **[wire]** our reply accepted (k161e = 0) |
 | `Cmd_Channel_EnterChannelByUserIdToS` | `0x0696068A` | client to server | **[wire]** request observed; request layout decoded from static analysis |
-| `Cmd_Channel_EnterChannelToC` | `0x00C0FC8A` | server to client | **[static]** response layout implemented as an unverified zero/default probe |
+| `Cmd_Channel_EnterChannelToC` | `0x00C0FC8A` | server to client | **[static layout, live transition]** zero/default probe; client proceeds to the next request |
 | `Cmd_LayerAlignment` | `0x09D0057A` | client to server | **[wire]** sent by the client; special id in the dispatcher |
+| `Cmd_Channel_GetMemberListToS` | `0x0AE3BBDA` | client to server | **[wire]** observed immediately after the EnterChannel probe; request fields not decoded |
 
 `Cmd_AuthToS` fields seen in run16, in order: `test` (string), `TET4` (string), 32 bytes
 of `A` (string), `TicketAuthByMemberId` (string), with zero dwords between them. Its
@@ -163,18 +164,26 @@ meaning is not established; the server does not read it.
   Net_Channel_EnterChannel (HgCtr3.dll, 0x60206420) calls fillChannelInfo
   and sendGetMemberList.
 - The server currently sends a probe only: empty strings, zero integers and a zero
-  byte, matching the message constructor's initialized values. This exercises the
-  decoded wire layout and result-key presence; channel metadata values and live
-  client acceptance are not yet verified. [static; probe not live-verified]
+  byte, matching the message constructor's initialized values. The live observation
+  on 2026-11-11 showed the client proceed past this reply and send
+  `LayerAlignment`, then `Cmd_Channel_GetMemberListToS`. This verifies that the
+  response is accepted far enough to trigger the next request; it does not verify
+  channel metadata or a stable lobby.
+- The current tracked `channel.py` does not yet parse or answer
+  `Cmd_Channel_GetMemberListToS`. The complete request payload must be captured,
+  then its message class, converter and handler recovered before implementing a reply.
+  No member-list or room-list response is currently implemented.
 
 The client's dispatcher reads the 4-byte magic `XLBP` (consumed), then peeks the id
 (`+0x0C`, not consumed), so the id is read again by the message's own `Deserialize`.
 The converters are registered with `PC_RegisterX2M` (`FUN_60121A40`) from an init routine
 in `HgCom3.dll`, which maps `0x0A80E29A` to `FUN_6013F9B0` and `0x008500CA` to `FUN_6013F8B0`.
 
-Live run (`tools/live_check.py`): the client reaches the lobby and keeps a "connecting"
-dialog with a cancel button open while it waits for the reply to
-`Cmd_Channel_EnterChannelByUserIdToS`. **[wire]**
+Live observation (2026-11-11): the client sends
+`Cmd_Channel_EnterChannelByUserIdToS`; the server sends the zero/default
+`Cmd_Channel_EnterChannelToC` probe; the client then sends `LayerAlignment` and
+`Cmd_Channel_GetMemberListToS`. **[wire, reported live run]** The member-list request
+is the next unresolved protocol step; a stable lobby has not yet been demonstrated.
 
 ## 8. Single Mode (not yet started)
 
@@ -194,4 +203,7 @@ Message IDs, from RTTI in `Tet4.exe` **[static]**:
 The extractor needs these names passed explicitly for `Tet4.exe` (its default list
 covers exactly these classes): `tools/tet4_rtti_extract.py Tet4.exe --json`.
 
-Their fields and the order in which the client expects them are unknown.
+The IDs above are RTTI leads, not a protocol implementation. Their fields, converter
+registrations, handlers and the order in which the client expects them are still
+unknown. Recover those from `Tet4.exe` and the relevant DLL exports, then confirm them
+with a live capture.

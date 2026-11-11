@@ -17,9 +17,10 @@ Working, verified with the real client (`tools/live_check.py`):
 - Channel authorization (`Cmd_AuthToC`) and the user-id reply (`Cmd_Channel_GetUserIdToC`);
   the client accepts both and continues
 
-The channel-entry response now has a statically derived zero/default probe, but its
-acceptance and channel metadata are not yet verified with the real client. Single Mode
-is not started. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
+A live probe showed that the client accepts the channel-entry response far enough to
+send `LayerAlignment` and request the member list. Structurally decoded empty member-
+and room-list replies are now implemented, but their live acceptance is still to be
+verified. Single Mode is not yet playable. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Documentation
 
@@ -35,7 +36,7 @@ is not started. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
 - [`docs/ADDRESSES.md`](docs/ADDRESSES.md): the addresses used in the documentation.
 - [`docs/ONLINE.md`](docs/ONLINE.md): how the original online service was reached (launcher
   remote gateway: pinned TLS tunnel, JSON hello) and how a local gateway could work.
-- [`docs/ISSUES.md`](docs/ISSUES.md): known open problems, with stable IDs and fix criteria.
+- GitHub Issues: defects and unexpected behavior only; implementation tasks live in the roadmap.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md): ground rules (no client files, test accounts only,
   evidence for every reply), branches, commits, and how an issue is closed.
 

@@ -232,9 +232,9 @@ matters, with `tools/disasm.py`:
 ## 7. Current blockers
 
 - **Channel lists are not implemented.** The client now sends
-  `Cmd_Channel_GetMemberListToS` after the EnterChannel probe. The server currently
-  logs only the message ID; it does not decode the request or send a member-list
-  response. Room-list loading and a stable channel lobby remain unverified.
+  `Cmd_Channel_GetMemberListToS` after the EnterChannel probe. The server logs the
+  complete decrypted payload as hex, but does not yet decode the request or send a
+  member-list response. Room-list loading and a stable channel lobby remain unverified.
   Track progress in [Issue #4](https://github.com/pie27182/tet4-server/issues/4).
 - **The earlier channel-exchange crash still needs a controlled reproduction.**
   The reported access violation occurred after `LayerAlignment` and

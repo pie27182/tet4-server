@@ -183,7 +183,29 @@ class-qualified names:
 r2 -e bin.relocs.apply=true -qc "aaa; s 0x601301d0; pdg" client/HgCom3.dll
 ```
 
-### 6.3 Export every module
+### 6.3 Reconstruct the client-server path
+
+```
+GHIDRA_HEADLESS_MAXMEM=8G tools/reconstruct_all.sh
+```
+
+Runs class recovery, the `names/` and `fields/` maps and writes both the decompiled C
+and a C++ header for every module on the client-server path: `HgSock3`, `HgCom3`,
+`HgModel3`, `HgCtr3`, `CDSClientConnector`, `TPackClientConnector`, `XInNetwork`,
+`XStream` and `Tet4.exe` (last, the largest). Output: `work/reconstructed/`.
+
+`--all` adds the UI toolkit, graphics, animation, audio, string table, ads, messenger
+IPC and `XDebug`; none of them carries protocol messages. A single module can be passed
+by name. Set `GHIDRA_HEADLESS_MAXMEM` for big modules: the default heap is 2 GB, and
+`Tet4.exe` benefits from 8 GB.
+
+Measured on an 8-thread i5: the eight DLLs take about 10 minutes together, `Tet4.exe`
+alone about 25 minutes for a plain export. On `Tet4.exe`, `RecoverClassesFromRTTIScript`
+can spend a very long time creating missing constructors; if that happens, stop it and
+use `tools/export.sh client/Tet4.exe` instead, which keeps the demangled names and RTTI
+classes from auto-analysis but not the typed `this`.
+
+### 6.4 Export every module
 
 ```
 tools/export_all.sh
@@ -198,7 +220,7 @@ This runs `tools/export.sh` for the 29 modules in the list (see the script) and 
 It takes a long time (the 18683 functions of `Tet4.exe` are the largest part) and about
 40 MB of disk. It prints `ok` or `FAIL` for each module and exits non-zero if any failed.
 
-### 6.4 One module
+### 6.5 One module
 
 ```
 tools/export.sh client/HgSock3.dll                 # output: work/decompiled
@@ -208,7 +230,7 @@ tools/export.sh client/HgSock3.dll /some/outdir    # another output folder
 `tools/export.sh` runs Ghidra headless with this command, which is the exact one used:
 
 ```
-work/ghidra_12.2_PUBLIC/support/analyzeHeadless work/ghidra <module> \
+/opt/ghidra/support/analyzeHeadless work/ghidra <module> \
     -import client/<module> -overwrite \
     -scriptPath tools -postScript ExportAllFunctions.java work/decompiled
 ```

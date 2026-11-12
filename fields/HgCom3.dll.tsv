@@ -3,11 +3,11 @@
 # discussed in docs/CLIENT.md. Names are inferred, not original symbols.
 #
 # Cmd_Channel_GetMemberListToC: strings at +0xc/+0x28/+0x44, vector +0x60, string +0x7c
-Cmd_Channel_GetMemberListToC_data	0xc	game_id
-Cmd_Channel_GetMemberListToC_data	0x28	channel_id
-Cmd_Channel_GetMemberListToC_data	0x44	member_id
-Cmd_Channel_GetMemberListToC_data	0x60	members
-Cmd_Channel_GetMemberListToC_data	0x7c	result
+Cmd_Channel_GetMemberListToC_data	0xc	game_id	0x1c
+Cmd_Channel_GetMemberListToC_data	0x28	channel_id	0x1c
+Cmd_Channel_GetMemberListToC_data	0x44	member_id	0x1c
+Cmd_Channel_GetMemberListToC_data	0x60	members	0x1c
+Cmd_Channel_GetMemberListToC_data	0x7c	result	0x1c
 # vtable slot 5 = Serialize (FUN_601301d0), slot 6 = Deserialize (FUN_60130260).
 # The _data structures that RecoverClassesFromRTTIScript creates are placeholder
 # byte fields; the entries below apply if members become typed.
@@ -15,7 +15,8 @@ Cmd_Channel_GetMemberListToC_vftable	0x14	Serialize
 Cmd_Channel_GetMemberListToC_vftable	0x18	Deserialize
 #
 # Cmd_Item_GetItemStateToC: flag byte +0xc, string, vector +0x2c
-Cmd_Item_GetItemStateToC_data	0xc	flag
-Cmd_Item_GetItemStateToC_data	0x2c	items
+Cmd_Item_GetItemStateToC_data	0xc	flag	0x1
+Cmd_Item_GetItemStateToC_data	0x10	text	0x1c
+Cmd_Item_GetItemStateToC_data	0x2c	items	0x1c
 Cmd_Item_GetItemStateToC_vftable	0x14	Serialize
 Cmd_Item_GetItemStateToC_vftable	0x18	Deserialize

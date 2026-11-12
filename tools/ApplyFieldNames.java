@@ -3,10 +3,12 @@
 // Map format: <struct name> <TAB> <offset hex> <TAB> <field name>
 // Works on structures created by RecoverClassesFromRTTIScript (name_data, name_vftable).
 import ghidra.app.script.GhidraScript;
+import ghidra.program.model.data.ArrayDataType;
 import ghidra.program.model.data.DataType;
 import ghidra.program.model.data.DataTypeComponent;
 import ghidra.program.model.data.DataTypeManager;
 import ghidra.program.model.data.Structure;
+import ghidra.program.model.data.Undefined1DataType;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.HashMap;
@@ -60,6 +62,33 @@ public class ApplyFieldNames extends GhidraScript {
                 } catch (NumberFormatException e) {
                     continue;
                 }
+                int size = 0;
+                if (parts.length > 3) {
+                    String sizeText = parts[3].trim();
+                    if (sizeText.startsWith("0x") || sizeText.startsWith("0X")) {
+                        sizeText = sizeText.substring(2);
+                    }
+                    try {
+                        size = Integer.parseInt(sizeText, 16);
+                    } catch (NumberFormatException e) {
+                        size = 0;
+                    }
+                }
+                try {
+                if (size > 0) {
+                    if (structure.getLength() < offset + size) {
+                        int oldLength = structure.getLength();
+                        int need = offset + size - oldLength;
+                        structure.growStructure(need);
+                        structure.insertAtOffset(oldLength,
+                            new ArrayDataType(Undefined1DataType.dataType, need, 1),
+                            need, "pad", null);
+                    }
+                    DataType array = new ArrayDataType(Undefined1DataType.dataType, size, 1);
+                    structure.replaceAtOffset(offset, array, size, parts[2].trim(), null);
+                    renamed++;
+                    continue;
+                }
                 DataTypeComponent component = structure.getComponentAt(offset);
                 if (component == null) {
                     println("no component at " + structure.getName() + "+0x"
@@ -70,6 +99,11 @@ public class ApplyFieldNames extends GhidraScript {
                 structure.replaceAtOffset(offset, component.getDataType(),
                     component.getLength(), parts[2].trim(), component.getComment());
                 renamed++;
+                } catch (Exception e) {
+                    println("skip " + structure.getName() + "+0x"
+                        + Integer.toHexString(offset) + ": " + e.getMessage());
+                    missing++;
+                }
             }
         } finally {
             currentProgram.endTransaction(tx, true);

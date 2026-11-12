@@ -302,6 +302,20 @@ class DiscoveryOnlyChannelTest(unittest.TestCase):
                 worker.join(timeout=1)
 
 
+class ItemStateTest(unittest.TestCase):
+    def test_empty_response_layout(self):
+        r = Reader(channel.item_state_to_c(flag=0, text=b"t"))
+        self.assertEqual(r.u32(), channel.ITEM_STATE_TOC)
+        self.assertEqual(r.take(1), b"\x00")
+        self.assertEqual(r.string(), b"t")
+        self.assertEqual(r.u32(), 0)
+        self.assertEqual(r.remaining(), 0)
+
+    def test_rejects_bad_flag(self):
+        with self.assertRaises(ValueError):
+            channel.item_state_to_c(flag=300)
+
+
 class SessionTest(unittest.TestCase):
     def test_client_frame_is_read_by_server_session(self):
         master = master_for_run16()

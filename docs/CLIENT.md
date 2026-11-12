@@ -135,9 +135,11 @@ The 4-byte length counts the body after itself.
 | `Cmd_Channel_EnterChannelByUserIdToS` | `0x0696068A` | client to server | **[wire]** request observed; request layout decoded from static analysis |
 | `Cmd_Channel_EnterChannelToC` | `0x00C0FC8A` | server to client | **[wire]** zero/default probe accepted far enough for the client to request the member list |
 | `Cmd_Channel_GetMemberListToS` | `0x0AE3BBDA` | client to server | **[wire]** observed after EnterChannelToC; request layout [static] |
-| `Cmd_Channel_GetMemberListToC` | `0x06B816EA` | server to client | **[static]** serializer recovered; empty-vector response implemented, live acceptance pending |
-| `Cmd_Channel_GetRoomListToS` | `0x0DDA299A` | client to server | **[static]** request is three strings and a uint32 |
-| `Cmd_Channel_GetRoomListToC` | `0x0226968A` | server to client | **[static]** serializer recovered; empty-vector response implemented, live acceptance pending |
+| `Cmd_Channel_GetMemberListToC` | `0x06B816EA` | server to client | **[wire]** empty-vector reply accepted; the client then requests the room list |
+| `Cmd_Channel_GetRoomListToS` | `0x0DDA299A` | client to server | **[wire]** `u32 id | string × 3`; no trailing integer |
+| `Cmd_Channel_GetRoomListToC` | `0x0226968A` | server to client | **[wire]** empty-vector reply accepted; the client then requests the item state |
+| `Cmd_Item_GetItemStateToS` | `0x075BAC2A` | client to server | **[wire]** `u32 id | string | u8`; sent after the room list |
+| `Cmd_Item_GetItemStateToC` | `0x0C446ADA` | server to client | **[wire]** empty-vector reply accepted; the client stays in the channel |
 | `Cmd_LayerAlignment` | `0x09D0057A` | client to server | **[wire]** sent by the client; special id in the dispatcher |
 
 `Cmd_AuthToS` fields seen in run16, in order: `test` (string), `TET4` (string), 32 bytes
@@ -171,13 +173,28 @@ meaning is not established; the server does not read it.
   response is accepted far enough to advance into the channel model, but does not
   prove the metadata is correct or that the lobby is stable. **[wire]**
 
+The item-state path is decoded from HgCom3.dll:
+- `Cmd_Item_GetItemStateToS` (`0x075BAC2A`): observed payload
+  `075bac2a 00000004 "test" 01`, that is `u32 id | string | u8`.
+- `Cmd_Item_GetItemStateToC` (`0x0C446ADA`): `u32 id | u8 | string | vector<Item>`.
+  Constructor `FUN_60130A90`, Serialize `FUN_60130CF0` (vtable slot 5 of vtable
+  `0x60177140`), Deserialize `FUN_60130D70`, converter `FUN_6013BCD0` with header
+  `s1e/c48e`. The converter uses keys `failcode`, `k127e`, `k200e`.
+  The empty-vector reply is accepted: without it the client sends
+  `Cmd_Channel_ExitChannelToS` about 3 s later; with it the client stays in the
+  channel for at least 2 minutes. **[wire]** Whether `Evt_ChannelView_OnGetItemState`
+  (`HgCtr3.dll`, `0x60204500`) runs was not confirmed by a breakpoint.
+
 The member-list path is decoded from HgCom3.dll:
 - `Cmd_Channel_GetMemberListToS` (`0x0AE3BBDA`): `u32 id | string × 3`.
 - `Cmd_Channel_GetMemberListToC` (`0x06B816EA`): `u32 id | string × 3 | vector<Member> | string`.
+  The client accepts the empty-vector reply and immediately sends the room-list request. **[wire]**
   Serialize `FUN_601301D0`, Deserialize `FUN_60130260`, converter
   `FUN_6013A4E0`; the client controller's `Net_GetMemberList` fills the member list
   and then sends the room-list request.
-- `Cmd_Channel_GetRoomListToS` (`0x0DDA299A`): `u32 id | string × 3 | u32`.
+- `Cmd_Channel_GetRoomListToS` (`0x0DDA299A`): `u32 id | string × 3`. The wire capture
+  (`0dda299a 00000004 TET4 00000000 00000000`) has no trailing integer although
+  Serialize `FUN_60129450` writes one byte; a single trailing byte is accepted.
 - `Cmd_Channel_GetRoomListToC` (`0x0226968A`): `u32 id | string × 3 | u32 | string | vector<Room>`.
   Serialize `FUN_60130630`, Deserialize `FUN_601306D0`, converter
   `FUN_6013B1D0`.

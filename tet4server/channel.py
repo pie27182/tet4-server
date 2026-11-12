@@ -39,6 +39,8 @@ ENTER_CHANNEL_BY_USER_ID_TOS = 0x0696068A
 ENTER_CHANNEL_TOC = 0x00C0FC8A
 GET_MEMBER_LIST_TOS = 0x0AE3BBDA
 GET_MEMBER_LIST_TOC = 0x06B816EA
+ITEM_STATE_TOS = 0x075BAC2A
+ITEM_STATE_TOC = 0x0C446ADA
 GET_ROOM_LIST_TOS = 0x0DDA299A
 GET_ROOM_LIST_TOC = 0x0226968A
 AUTO_ENTER_SINGLE_MODE_TOS = 0x031AC76A
@@ -315,6 +317,21 @@ def auto_enter_single_mode_to_c(
     )
 
 
+def item_state_to_c(flag: int = 0, text: bytes = b"") -> bytes:
+    """Serialize an empty Cmd_Item_GetItemStateToC response.
+
+    HgCom3.dll Serialize FUN_60130CF0 (vtable slot 5 of the class whose
+    constructor is FUN_60130A90): uint32 id | u8 flag | string | vector.
+    The vector is a uint32 count followed by records; this probe returns zero
+    records until the item record layout is recovered.
+    """
+    if not isinstance(flag, int) or not 0 <= flag <= 0xFF:
+        raise ValueError("item-state flag must fit in one byte")
+    if not isinstance(text, bytes):
+        raise ValueError("item-state text field must be bytes")
+    return pack_u32(ITEM_STATE_TOC) + bytes([flag]) + pack_string(text) + pack_u32(0)
+
+
 def frame(body: bytes) -> bytes:
     """Length-prefixed frame: uint32be length, then MAGIC + message."""
     payload = MAGIC + body
@@ -432,6 +449,10 @@ def _dispatch(session, conn, msg_id: int, payload: bytes) -> None:
                 request.strings,
                 request.option,
             )
+        elif msg_id == ITEM_STATE_TOS:
+            log.info("received Cmd_Item_GetItemStateToS payload_hex=%s", payload.hex())
+            session.send(conn, item_state_to_c())
+            log.info("sent empty Cmd_Item_GetItemStateToC")
         elif msg_id == AUTO_ENTER_SINGLE_MODE_TOS:
             request = parse_auto_enter_single_mode_request(payload)
             log.info(

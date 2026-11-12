@@ -36,6 +36,20 @@ tools/build_name_map.py HgCom3.dll
 tools/recover_classes.sh client/HgCom3.dll
 ```
 
+## Current state of the reconstruction
+
+`tools/recover_classes.sh` run on each protocol module, into
+`work/decompiled-named/`:
+
+| Module | Named functions | Unnamed | Typed `this` example |
+|---|---|---|---|
+| `HgCom3.dll` | 3007 | 1222 | `Cmd_Channel_GetMemberListToC::Serialize(Cmd_Channel_GetMemberListToC *this, ...)` |
+| `HgCtr3.dll` | 327 | 28 | `Net_GetMemberList(CChannelLobbyController *this, IParam *param_1)` |
+| `HgModel3.dll` | 697 | 107 | `Msg_FillMemberList(CChannelLobbyModel *this, IParam *param_1)` |
+
+Unnamed entries are static helpers whose names never existed in the binary; they
+become candidates for `names/<module>.tsv` as their role is understood.
+
 ## Where the code lives
 
 | Module | What it contains | Start reading at |

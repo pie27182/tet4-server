@@ -53,16 +53,32 @@ Protocol messages are named the same way as in the client: `Cmd_<Area>_<Name>ToS
 (client to server) and `...ToC` (server to client). Handlers on the client side are
 `Net_*` (controller entry), `Msg_*` (model update) and `Evt_*` (view event).
 
+## MFC metadata (implemented)
+
+`tools/scan_mfc.py client/Tet4.exe` scans the PE file directly and writes
+`names/<module>.tsv` entries:
+
+- **CRuntimeClass** records: pointer to a class name, object size, schema. In this
+  client only two are present (`TypeLib`, `CTetFrame` size 0x4c8); the DLLs do not
+  use MFC dynamic creation, so RTTI is the main source of class names.
+- **AFX_MSGMAP** entries: a handler pointer plus the window message. Known messages
+  become `OnPaint`, `OnCreate`, `OnEraseBkgnd`, `OnLButtonDown`, `OnKeyDown` and so
+  on. The scanner only accepts entries that form a real contiguous map, which keeps
+  random data out (9 handlers in `Tet4.exe`).
+
+`tools/ExportHeaders.java` writes the recovered classes as a C++ header
+(`work/reconstructed/<module>.h`) using Ghidra's `CppExporter`, headless:
+
+```
+/opt/ghidra/support/analyzeHeadless work/ghidra <project> -process <module> \
+    -noanalysis -scriptPath tools -postScript ExportHeaders.java "$PWD/work/reconstructed/<module>.h"
+```
+
 ## What can still be improved, and how
 
-- **MFC class names and sizes.** Every `CObject`-derived class has a `CRuntimeClass`
-  record: pointer to an ASCII class name, object size, schema, factory. Scanning for
-  pointers to class-name strings in `.data` recovers names that RTTI alone may miss.
-- **Message handlers.** `AFX_MSGMAP` entries contain `nMessage` (`WM_PAINT`, `WM_TIMER`,
-  ...) and a function pointer. Their targets can be named `OnPaint`, `OnTimer`, which
-  makes the UI modules readable.
 - **MFC imports are by ordinal.** `mfc90.dll` imports have no names; mapping them
-  requires the ordinal export list of that exact MFC build.
+  requires the ordinal export list of that exact MFC build. Not implemented.
+- **Local names in the recovered structures.** Fields are `field_0x10` until named.
 - **Local variables.** Only by hand, per function, where it matters.
 
 ## Practical rules

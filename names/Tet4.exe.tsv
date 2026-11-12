@@ -1,0 +1,12 @@
+# Reconstructed names for Tet4.exe.
+# Includes MFC message handlers inferred from AFX_MSGMAP entries
+# (pfn + nMessage -> OnPaint/OnTimer/...). Not original symbols.
+0x4d1360	OnPaint
+0x4d19c0	OnCreate
+0x4d1b10	OnEraseBkgnd
+0x4f4b40	OnCreate
+0x4f54b0	OnLButtonDown
+0x4f5500	OnLButtonUp
+0x4f5590	OnMouseWheel
+0x4f55d0	OnKeyDown
+0x4f6630	OnDestroy

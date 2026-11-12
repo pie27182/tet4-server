@@ -54,7 +54,7 @@ tools/        client check and patch, live run, Ghidra export, function lookup,
 Local data, all git-ignored and never in the bundle (created by you or the tools):
 client/           your copy of the client folder (you put it here)
 client-patched/   patched copy made by tools/patch_client.py
-work/             Ghidra (unzipped here), decompiled output, Ghidra project, logs
+work/             decompiled output, Ghidra project and logs
 live-runs/        recordings and frames from tools/live_check.py
 .venv/            Python packages for tools/disasm.py
 ```
@@ -75,9 +75,10 @@ are not in it; you add them yourself (below). Then:
 
 1. Copy your client folder into `client/` (see "What you need").
 2. `python3 -m venv .venv && .venv/bin/pip install pefile capstone` (only for `tools/disasm.py`).
-3. Download Ghidra 12.2 PUBLIC from <https://github.com/NationalSecurityAgency/ghidra/releases>,
-   unzip it into `work/` (so `work/ghidra_12.2_PUBLIC/` exists) and run `tools/export_all.sh`
-   (only for decompiling).
+3. Install Ghidra 12.2 (package `ghidra`, which puts it in `/opt/ghidra`, or the release zip
+   from <https://github.com/NationalSecurityAgency/ghidra/releases>) and run
+   `tools/export_all.sh` (only for decompiling). `tools/export.sh` finds `/opt/ghidra`
+   automatically; set `GHIDRA` for another location.
 4. Follow `docs/REPRODUCE.md` for the live run.
 
 From the git hosting service, use `git clone <url>` instead of the first command.
@@ -95,7 +96,8 @@ flow does not use it. For the experiments make a patched copy with
 **Tools.**
 - Python 3 (standard library only) for the servers and tests.
 - Wine, `wf-recorder`, `ffmpeg`, `grim` and a Wayland session, for live runs.
-- Ghidra 12.2 PUBLIC (unzipped in `work/`) with OpenJDK, for decompiling the client (`tools/export.sh`).
+- Ghidra 12.2 with OpenJDK, for decompiling the client (`tools/export.sh`); found in
+  `/opt/ghidra` or through `GHIDRA`.
 - `pefile` and `capstone` in `.venv` for `tools/disasm.py`.
 
 Versions, disk space and the decompilation list: [`docs/REPRODUCE.md`](docs/REPRODUCE.md).

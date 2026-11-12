@@ -17,7 +17,7 @@ Versions are the ones this work was done with. Other versions were not tested.
 | `wf-recorder` | screen recording in `live_check.py` | 0.6.0 |
 | `ffmpeg` | frame extraction, scene detection | n9.0.2 |
 | `grim` | screenshots (`tools/` and ad-hoc checks) | any recent version |
-| Ghidra 12.2 PUBLIC, unzipped in `work/` | decompilation (`tools/export_all.sh`) | 12.2 PUBLIC |
+| Ghidra 12.2 (package or zip) | decompilation (`tools/export_all.sh`) | 12.2, package `ghidra` in `/opt/ghidra` |
 | OpenJDK (for Ghidra) | Ghidra runtime | 27.0.1 |
 | `pefile`, `capstone` (in `.venv`) | `tools/disasm.py` | pefile 2024.8.26, capstone 5.0.7 |
 
@@ -34,8 +34,8 @@ python3 -m venv .venv
 Use `.venv/bin/python` for `tools/disasm.py`. Other tools use plain `python3`.
 
 Disk space, all inside the repository (git-ignored): the client folder about 190 MB, a
-patched copy another 190 MB, Ghidra itself about 900 MB, the decompiled output about
-40 MB, and Ghidra projects several hundred MB while an export runs. The export tools
+patched copy another 190 MB, the decompiled output about 40 MB, and Ghidra projects
+several hundred MB while an export runs (Ghidra itself is installed outside). The export tools
 write only inside `work/`. The live run uses Wine's default prefix, `~/.wine`, which is
 outside the repository (section 5). Section 8 explains the quota errors that `/tmp` can
 cause.
@@ -170,15 +170,17 @@ and that no Wine process is still running (`wineserver -k`).
 
 Every address in `docs/CLIENT.md` and `docs/ADDRESSES.md` comes from these exports.
 
-### 6.1 Ghidra inside the repository
+### 6.1 Ghidra
 
-Download Ghidra 12.2 PUBLIC (the release zip from the Ghidra releases page), and unzip it
-into `work/` so the folder is `work/ghidra_12.2_PUBLIC/`. The work was done with OpenJDK
-27.0.1; other versions were not tested. Nothing is installed outside the repository:
-`tools/export.sh` keeps Ghidra's settings and cache in `work/xdg/`, and the Ghidra
-projects in `work/ghidra/`. Both are git-ignored.
+Install Ghidra 12.2 with your package manager (Arch: `pacman -S ghidra`, which puts it in
+`/opt/ghidra`) or unzip the release from
+<https://github.com/NationalSecurityAgency/ghidra/releases> into `work/`. The work was
+done with OpenJDK 27.0.1; other versions were not tested.
 
-To use a Ghidra installed elsewhere, set `GHIDRA` to its `support/analyzeHeadless`.
+`tools/export.sh` looks for `$GHIDRA`, then `/opt/ghidra/support/analyzeHeadless`, then
+`work/ghidra_12.2_PUBLIC/support/analyzeHeadless`. Nothing is installed by the
+repository: Ghidra's settings and cache go to `work/xdg/`, and the Ghidra projects to
+`work/ghidra/` (both git-ignored).
 
 ### 6.2 Export every module
 

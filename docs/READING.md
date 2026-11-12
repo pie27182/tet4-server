@@ -88,6 +88,19 @@ Protocol messages are named the same way as in the client: `Cmd_<Area>_<Name>ToS
     -noanalysis -scriptPath tools -postScript ExportHeaders.java "$PWD/work/reconstructed/<module>.h"
 ```
 
+## Field and vtable names
+
+`fields/<module>.tsv` (`struct <TAB> offset <TAB> name`) is applied by
+`tools/ApplyFieldNames.java`. It works on the structures created by the RTTI
+recovery. Vtable slots are the useful part: the recovered classes now show
+`Serialize` and `Deserialize` instead of `vfunction6`/`vfunction7`, which also
+appears at indirect call sites.
+
+The `*_data` structures are a different story: the recovery creates them as
+placeholder byte fields (`offset_0x0`, `field9_0xc`), not as typed members, because
+the real members are `std::string`/`std::vector` objects. Naming those placeholders
+changes nothing readable; they become useful only after the members are typed.
+
 ## What can still be improved, and how
 
 - **MFC imports are by ordinal.** `mfc90.dll` imports have no names; mapping them

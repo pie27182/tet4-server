@@ -197,6 +197,9 @@ The script runs, headless: `FixUpRttiAnalysisScript` (fills missing MSVC RTTI),
 `ExportAllFunctions`. Example effect: `FUN_601301d0(void *this, ...)` becomes
 `vfunction6(Cmd_Channel_GetMemberListToC *this, ...)`.
 
+`recover_classes.sh` also applies `fields/<module>.tsv` when it exists (structure
+field names) and uses the script directories of the installed Ghidra.
+
 Names that did not survive in the binary are reconstructed in `names/<module>.tsv`
 (`<image address> <TAB> <name>`), and `recover_classes.sh` applies them when the file
 exists. `names/HgCom3.dll.tsv` covers the serializers, deserializers and converters of

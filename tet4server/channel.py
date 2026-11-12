@@ -154,13 +154,20 @@ def parse_get_member_list_request(payload: bytes) -> StringListRequest:
 
 
 def parse_get_room_list_request(payload: bytes) -> StringListRequest:
-    """Parse Cmd_Channel_GetRoomListToS: u32 id | string × 3 | u32."""
+    """Parse Cmd_Channel_GetRoomListToS: u32 id | string × 3 [| u8].
+
+    The wire capture shows `id | "TET4" | "" | ""` with no trailing integer.
+    Serialize FUN_60129450 writes one byte after the strings, so a single
+    trailing byte is accepted and kept as `option`; longer tails are rejected.
+    """
     r = Reader(payload)
     if r.u32() != GET_ROOM_LIST_TOS:
         raise ProtocolError("not Cmd_Channel_GetRoomListToS")
     strings = tuple(r.string() for _ in range(3))
-    option = r.u32()
-    if r.remaining():
+    option = 0
+    if r.remaining() == 1:
+        option = r.take(1)[0]
+    elif r.remaining():
         raise ProtocolError(f"unexpected {r.remaining()} trailing room-list request bytes")
     return StringListRequest(strings, option)  # type: ignore[arg-type]
 
@@ -375,58 +382,71 @@ def handle(conn, discovery_only: bool = False) -> None:
         while True:
             msg_id, payload = session.read_frame(conn)
             log.info("channel frame id=0x%08x", msg_id)
-            if msg_id == AUTH_TO_S:
-                session.send(conn, auth_to_c())
-                log.info("sent Cmd_AuthToC")
-            elif msg_id == GET_USER_ID_BY_MEMBER_TOS:
-                r = Reader(payload)
-                r.u32()
-                member = r.string()
-                session.send(conn, get_user_id_to_c(member))
-                log.info("sent Cmd_Channel_GetUserIdToC for member %r", member)
-            elif msg_id == ENTER_CHANNEL_BY_USER_ID_TOS:
-                request = parse_enter_channel_request(payload)
-                session.send(conn, enter_channel_to_c())
-                log.info(
-                    "sent Cmd_Channel_EnterChannelToC probe for user_id=%d",
-                    request.user_id,
-                )
-            elif msg_id == GET_MEMBER_LIST_TOS:
-                request = parse_get_member_list_request(payload)
-                session.send(conn, get_member_list_to_c())
-                log.info(
-                    "sent empty Cmd_Channel_GetMemberListToC "
-                    "for keys=%r (0 members)",
-                    request.strings,
-                )
-            elif msg_id == GET_ROOM_LIST_TOS:
-                request = parse_get_room_list_request(payload)
-                session.send(conn, get_room_list_to_c())
-                log.info(
-                    "sent empty Cmd_Channel_GetRoomListToC "
-                    "for keys=%r option=%d (0 rooms)",
-                    request.strings,
-                    request.option,
-                )
-            elif msg_id == AUTO_ENTER_SINGLE_MODE_TOS:
-                request = parse_auto_enter_single_mode_request(payload)
-                log.info(
-                    "received Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToS "
-                    "strings=%r integers=%r",
-                    request.strings,
-                    request.integers,
-                )
-                session.send(conn, auto_enter_single_mode_to_c())
-                log.info(
-                    "sent Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToC "
-                    "with local game endpoint %s:%d",
-                    GAME_SERVER_HOST.decode("ascii"),
-                    GAME_SERVER_PORT,
+            try:
+                _dispatch(session, conn, msg_id, payload)
+            except ProtocolError as exc:
+                # One malformed request must not take the whole channel down.
+                log.warning(
+                    "unhandled channel frame id=0x%08x payload_hex=%s (%s)",
+                    msg_id,
+                    payload.hex(),
+                    exc,
                 )
     except (ProtocolError, OSError) as exc:
         log.info("channel closed: %s", exc)
     finally:
         conn.close()
+
+
+def _dispatch(session, conn, msg_id: int, payload: bytes) -> None:
+        if msg_id == AUTH_TO_S:
+            session.send(conn, auth_to_c())
+            log.info("sent Cmd_AuthToC")
+        elif msg_id == GET_USER_ID_BY_MEMBER_TOS:
+            r = Reader(payload)
+            r.u32()
+            member = r.string()
+            session.send(conn, get_user_id_to_c(member))
+            log.info("sent Cmd_Channel_GetUserIdToC for member %r", member)
+        elif msg_id == ENTER_CHANNEL_BY_USER_ID_TOS:
+            request = parse_enter_channel_request(payload)
+            session.send(conn, enter_channel_to_c())
+            log.info(
+                "sent Cmd_Channel_EnterChannelToC probe for user_id=%d",
+                request.user_id,
+            )
+        elif msg_id == GET_MEMBER_LIST_TOS:
+            request = parse_get_member_list_request(payload)
+            session.send(conn, get_member_list_to_c())
+            log.info(
+                "sent empty Cmd_Channel_GetMemberListToC "
+                "for keys=%r (0 members)",
+                request.strings,
+            )
+        elif msg_id == GET_ROOM_LIST_TOS:
+            request = parse_get_room_list_request(payload)
+            session.send(conn, get_room_list_to_c())
+            log.info(
+                "sent empty Cmd_Channel_GetRoomListToC "
+                "for keys=%r option=%d (0 rooms)",
+                request.strings,
+                request.option,
+            )
+        elif msg_id == AUTO_ENTER_SINGLE_MODE_TOS:
+            request = parse_auto_enter_single_mode_request(payload)
+            log.info(
+                "received Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToS "
+                "strings=%r integers=%r",
+                request.strings,
+                request.integers,
+            )
+            session.send(conn, auto_enter_single_mode_to_c())
+            log.info(
+                "sent Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToC "
+                "with local game endpoint %s:%d",
+                GAME_SERVER_HOST.decode("ascii"),
+                GAME_SERVER_PORT,
+            )
 
 
 def serve(host: str, port: int, discovery_only: bool = False) -> None:
@@ -440,5 +460,5 @@ def serve(host: str, port: int, discovery_only: bool = False) -> None:
     while True:
         conn, _ = srv.accept()
         threading.Thread(
-            target=handle, args=(conn, discovery_only), daemon=True
+        target=handle, args=(conn, discovery_only), daemon=True
         ).start()

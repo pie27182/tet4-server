@@ -24,14 +24,16 @@ serializer test proves layout, not that the client accepts the message.
 - [x] Channel-entry request decoder and `Cmd_Channel_EnterChannelToC` serializer.
 - [x] Live probe accepted: after the EnterChannel reply the client sends
       `Cmd_LayerAlignment` and then `Cmd_Channel_GetMemberListToS`.
-- [ ] Reply to `Cmd_Channel_GetMemberListToS` with a structurally valid member list.
-      First probe uses an empty vector; next criterion is a live run where the client
-      accepts it and requests the room list.
-- [ ] Reply to `Cmd_Channel_GetRoomListToS` with a structurally valid room list.
-      First probe uses an empty vector; verify the lobby remains usable and identify
-      whether Single Mode entry is available without public rooms.
-- [ ] Implement any follow-up channel messages that the real client requests before
-      it can invoke Single Mode (for example item-state or refresh messages).
+- [x] Reply to `Cmd_Channel_GetMemberListToS` with a structurally valid empty
+      vector. A live run accepted it and the client requested the room list. Member
+      record serialization is still missing.
+- [x] Reply to `Cmd_Channel_GetRoomListToS` with a structurally valid empty vector.
+      A live run accepted it far enough for the client to request
+      `Cmd_Item_GetItemStateToS`; this does not yet prove a stable, usable lobby.
+- [ ] Decode and answer `Cmd_Item_GetItemStateToS`. Recover its RTTI ID, request
+      layout and a valid response before treating the lobby as complete.
+- [ ] Implement any further channel messages that the real client requests before it
+      can invoke Single Mode (for example item-state or refresh messages).
 - [ ] Resolve the lobby row/state defect and the post-channel crash if either remains
       reproducible after the member/room responses. Track those defects in GitHub Issues.
 
@@ -115,7 +117,7 @@ serializer test proves layout, not that the client accepts the message.
 - [x] GitHub Actions passed all 44 tests on commit
       `328ade223cc133c7d6a16d14878a5b3b3370f151`; subsequent commits in this branch
       only update documentation.
-- [ ] Add a top-level `python -m tet4server` runner with orderly startup/shutdown.
+- [x] Add a top-level `python -m tet4server` runner to start the four local listeners. Ctrl+C/SIGTERM exits the foreground process.
 - [ ] Make the protocol sequence reproducible from a clean checkout using only
       documented local client files and a test account.
 - [ ] Keep captured byte fixtures and regression tests for every implemented message.

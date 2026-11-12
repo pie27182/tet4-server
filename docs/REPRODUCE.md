@@ -182,7 +182,29 @@ done with OpenJDK 27.0.1; other versions were not tested.
 repository: Ghidra's settings and cache go to `work/xdg/`, and the Ghidra projects to
 `work/ghidra/` (both git-ignored).
 
-### 6.2 Export every module
+### 6.2 Readable C++: class recovery
+
+Ghidra can restore C++ classes, vtables and `this` types from the MSVC RTTI that
+survives in these binaries:
+
+```
+tools/recover_classes.sh client/HgCom3.dll
+```
+
+Output goes to `work/decompiled-classes/` in the same `.c` + `.index.tsv` format.
+The script runs, headless: `FixUpRttiAnalysisScript` (fills missing MSVC RTTI),
+`RecoverClassesFromRTTIScript` (classes, vtables, member structs, typed `this`) and
+`ExportAllFunctions`. Example effect: `FUN_601301d0(void *this, ...)` becomes
+`vfunction6(Cmd_Channel_GetMemberListToC *this, ...)`.
+
+For quick spot reads, `r2` with the r2ghidra plugin prints the same functions with
+class-qualified names:
+
+```
+r2 -e bin.relocs.apply=true -qc "aaa; s 0x601301d0; pdg" client/HgCom3.dll
+```
+
+### 6.3 Export every module
 
 ```
 tools/export_all.sh
@@ -197,7 +219,7 @@ This runs `tools/export.sh` for the 29 modules in the list (see the script) and 
 It takes a long time (the 18683 functions of `Tet4.exe` are the largest part) and about
 40 MB of disk. It prints `ok` or `FAIL` for each module and exits non-zero if any failed.
 
-### 6.3 One module
+### 6.4 One module
 
 ```
 tools/export.sh client/HgSock3.dll                 # output: work/decompiled

@@ -7,6 +7,7 @@
 #   FixUpRttiAnalysisScript      - fills in missing MSVC RTTI structures
 #   RecoverClassesFromRTTIScript - class names, vtables, this-types, member structs
 #   ExportAllFunctions           - decompiled C + index, same format as tools/export.sh
+#   ExportHeaders                - C++ header with the recovered classes
 set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MODULE="${1:?usage: $0 <module.dll> [outdir]}"
@@ -45,6 +46,7 @@ export XDG_CONFIG_HOME="$ROOT/work/xdg/config" XDG_CACHE_HOME="$ROOT/work/xdg/ca
     -postScript RecoverClassesFromRTTIScript.java \
     ${NAMEMAP:+-postScript ApplyNameMap.java "$NAMEMAP"} \
     ${FIELDS:+-postScript ApplyFieldNames.java "$FIELDS"} \
-    -postScript ExportAllFunctions.java "$OUT"
+    -postScript ExportAllFunctions.java "$OUT" \
+    -postScript ExportHeaders.java "$OUT/$NAME.h"
 test -s "$OUT/$NAME.c" || { echo "EXPORT_FAILED: no output in $OUT" >&2; exit 1; }
 echo EXPORT_DONE

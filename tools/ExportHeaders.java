@@ -15,7 +15,7 @@ public class ExportHeaders extends GhidraScript {
         }
         File out = new File(args[0]);
         DecompileOptions options = new DecompileOptions();
-        // header only, C++ comments, emit type definitions, skip referenced globals
+        // header only, C++ comments, emit type definitions, include referenced globals
         CppExporter exporter = new CppExporter(options, true, false, true, true, false, "");
         boolean ok = exporter.export(out, currentProgram, null, monitor);
         println("ExportHeaders: " + (ok ? "wrote " : "failed ") + out);

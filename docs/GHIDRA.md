@@ -56,6 +56,37 @@ repository rely on. Grouped by the question each source answers.
   virtual methods such as `method.Cmd_Channel_GetMemberListToC.virtual_20`.
 - [radare2 book](https://book.rada.re/) — `aaa`, `s`, `pdf`, `pdg`, scripting.
 
+## Ordinal imports (checked)
+
+Ghidra 12.2 already ships ordinal maps in
+`Ghidra/Features/Base/data/symbols/win32/` (`mfc90.exports`, `mfc90u.exports`, ...) and
+applies them when a module is imported. In `HgCom3.dll` the 56 `mfc90.dll` imports are
+therefore already readable: the export contains `CStringT`, `AfxMessageBox`, `CWnd::*`
+and similar names (1130 `CStringT` occurrences).
+
+`tools/ApplyOrdinalExports.java` exists for the remaining cases: a runtime whose
+`.exports` file is missing or whose DLL timestamp does not match, so every import still
+shows as `Ordinal_N`. It reads the same XML and renames `Ordinal_<n>` symbols, demangling
+the result:
+
+```
+analyzeHeadless <proj> <name> -process <module> -noanalysis -scriptPath tools \
+    -postScript ApplyOrdinalExports.java mfc90.dll \
+    /opt/ghidra/Ghidra/Features/Base/data/symbols/win32/mfc90.exports [dry]
+```
+
+A dry run on `HgCom3.dll` reports 6566 ordinals in the map and zero `Ordinal_N` symbols
+left for `mfc90.dll`, which confirms the built-in mapping is active. The 12 remaining
+`Ordinal_N` names in that module do not belong to `mfc90.dll` (no matching import
+ordinal in any client module), so they are left as is.
+
+## Function ID databases
+
+`ghidra-data` publishes `vsOlder_x86.fidb` (Visual Studio up to 2008) and newer ones.
+They let Function ID recognise statically linked CRT/STL code. Installing one means
+copying the `.fidb` into the Ghidra installation's `Features/FunctionID/data`, which is
+root-owned with the package; on Arch this is a manual step, not a pacman package.
+
 ## How this repository uses them
 
 | Tool | Documentation | Our script |

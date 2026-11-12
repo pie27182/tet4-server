@@ -45,4 +45,4 @@ captured bytes.
 
 - Multiplayer rooms, chat, friends, shop, and other channel features.
 - Other game modes.
-- Replacing the client with a browser or custom implementation.
+- Full implementation of [Hangame Tetris](https://harddrop.com/wiki/Tetris_Hangame) online multiplayer server that functions just like the original one, which shut down in 2013

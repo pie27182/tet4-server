@@ -98,14 +98,20 @@ appears at indirect call sites.
 
 Ghidra keeps several structures with the same name: empty placeholders created by the
 demangler and the real ones under `/ClassDataTypes`. `ApplyFieldNames` prefers the
-`/ClassDataTypes` copy for that reason. Even then, extending a structure can fail with
-`Not enough undefined bytes to fit`, because the recovered structure contains
-single-byte `undefined` components and the API refuses a larger component in their
-place. The upstream discussion
-(<https://github.com/NationalSecurityAgency/ghidra/discussions/3431>) confirms that
-the duplicates are a known prototype issue and that there is no automatic merge; the
-workaround there is manual dragging between types in the GUI. We stay headless, so the
-remaining fields are left unnamed.
+`/ClassDataTypes` copy for that reason.
+
+Extending a recovered structure in place fails with `Not enough undefined bytes to
+fit`, because it is built from single-byte `undefined` components. The fix is not to
+patch the structure but to rebuild it: `ApplyFieldNames` now creates a new
+`StructureDataType` with the requested members and gaps as `undefined` arrays, then
+swaps it in with `DataTypeManager.replaceDataType(old, new, updateSymbols=true)`, which
+updates every use. All five `Cmd_Channel_GetMemberListToC` fields and the three
+`Cmd_Item_GetItemStateToC` fields are applied this way (12 names, no misses).
+
+The duplicate types themselves remain (upstream discussion
+<https://github.com/NationalSecurityAgency/ghidra/discussions/3431> describes them as a
+prototype issue with only a manual GUI merge); the rebuild avoids them instead of
+merging.
 
 The `*_data` structures are a different story: the recovery creates them as
 placeholder byte fields (`offset_0x0`, `field9_0xc`), not as typed members, because

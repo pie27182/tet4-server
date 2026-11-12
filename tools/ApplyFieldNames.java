@@ -6,7 +6,9 @@ import ghidra.app.script.GhidraScript;
 import ghidra.program.model.data.ArrayDataType;
 import ghidra.program.model.data.DataType;
 import ghidra.program.model.data.DataTypeComponent;
+import ghidra.program.model.data.CategoryPath;
 import ghidra.program.model.data.DataTypeManager;
+import ghidra.program.model.data.StructureDataType;
 import ghidra.program.model.data.Structure;
 import ghidra.program.model.data.Undefined1DataType;
 import java.nio.file.Files;
@@ -43,10 +45,60 @@ public class ApplyFieldNames extends GhidraScript {
             }
         }
         List<String> lines = Files.readAllLines(Paths.get(args[0]));
+        Map<String, java.util.List<String[]>> sized = new HashMap<>();
+        for (String raw : lines) {
+            String line = raw.trim();
+            if (line.isEmpty() || line.startsWith("#")) continue;
+            String[] parts = line.split("\t");
+            if (parts.length > 3) {
+                sized.computeIfAbsent(parts[0].trim(), k -> new java.util.ArrayList<>()).add(parts);
+            }
+        }
         int renamed = 0;
         int missing = 0;
         int tx = currentProgram.startTransaction("apply field names");
         try {
+            for (Map.Entry<String, java.util.List<String[]>> entry : sized.entrySet()) {
+                Structure old = structures.get(entry.getKey());
+                if (old == null) continue;
+                int length = old.getLength();
+                java.util.List<int[]> ranges = new java.util.ArrayList<>();
+                java.util.List<String> names = new java.util.ArrayList<>();
+                for (String[] parts : entry.getValue()) {
+                    int off = Integer.parseInt(parts[1].trim().replace("0x", ""), 16);
+                    int size = Integer.parseInt(parts[3].trim().replace("0x", ""), 16);
+                    length = Math.max(length, off + size);
+                    ranges.add(new int[]{off, size});
+                    names.add(parts[2].trim());
+                }
+                StructureDataType rebuilt = new StructureDataType(old.getCategoryPath(),
+                    old.getName() + "_typed", length, dtm);
+                int position = 0;
+                java.util.List<Integer> order = new java.util.ArrayList<>();
+                for (int i = 0; i < ranges.size(); i++) order.add(i);
+                order.sort((a, b) -> Integer.compare(ranges.get(a)[0], ranges.get(b)[0]));
+                for (int i : order) {
+                    int off = ranges.get(i)[0];
+                    int size = ranges.get(i)[1];
+                    if (off > position) {
+                        rebuilt.add(new ArrayDataType(Undefined1DataType.dataType, off - position, 1),
+                            off - position, "pad", null);
+                    }
+                    rebuilt.add(new ArrayDataType(Undefined1DataType.dataType, size, 1), size,
+                        names.get(i), null);
+                    position = off + size;
+                }
+                if (position < length) {
+                    rebuilt.add(new ArrayDataType(Undefined1DataType.dataType, length - position, 1),
+                        length - position, "pad", null);
+                }
+                DataType added = dtm.addDataType(rebuilt, ghidra.program.model.data.DataTypeConflictHandler.REPLACE_EMPTY_STRUCTS_OR_RENAME_AND_ADD_HANDLER);
+                DataType swapped = dtm.replaceDataType(old, added, true);
+                if (swapped != null) {
+                    try { swapped.setName(old.getName()); } catch (Exception ignored) { }
+                    renamed += ranges.size();
+                }
+            }
             for (String raw : lines) {
                 String line = raw.trim();
                 if (line.isEmpty() || line.startsWith("#")) {
@@ -86,6 +138,9 @@ public class ApplyFieldNames extends GhidraScript {
                 }
                 try {
                 if (size > 0) {
+                    continue;
+                }
+                if (false) {
                     if (structure.getLength() < offset + size) {
                         int oldLength = structure.getLength();
                         int need = offset + size - oldLength;

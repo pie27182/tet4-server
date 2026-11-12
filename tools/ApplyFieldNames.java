@@ -23,13 +23,23 @@ public class ApplyFieldNames extends GhidraScript {
             println("usage: ApplyFieldNames.java <fields.tsv>");
             return;
         }
+        // Ghidra keeps several structures with the same name: empty placeholders
+        // from the Demangler and the real ones under /ClassDataTypes. Prefer the
+        // /ClassDataTypes copy, otherwise the demo-placed first one is wrong.
         Map<String, Structure> structures = new HashMap<>();
         DataTypeManager dtm = currentProgram.getDataTypeManager();
         java.util.Iterator<DataType> all = dtm.getAllDataTypes();
         while (all.hasNext()) {
             DataType type = all.next();
-            if (type instanceof Structure) {
-                structures.putIfAbsent(type.getName(), (Structure) type);
+            if (!(type instanceof Structure)) {
+                continue;
+            }
+            String name = type.getName();
+            String path = type.getPathName();
+            Structure current = structures.get(name);
+            boolean better = path.contains("ClassDataTypes");
+            if (current == null || (better && !current.getPathName().contains("ClassDataTypes"))) {
+                structures.put(name, (Structure) type);
             }
         }
         List<String> lines = Files.readAllLines(Paths.get(args[0]));

@@ -96,6 +96,17 @@ recovery. Vtable slots are the useful part: the recovered classes now show
 `Serialize` and `Deserialize` instead of `vfunction6`/`vfunction7`, which also
 appears at indirect call sites.
 
+Ghidra keeps several structures with the same name: empty placeholders created by the
+demangler and the real ones under `/ClassDataTypes`. `ApplyFieldNames` prefers the
+`/ClassDataTypes` copy for that reason. Even then, extending a structure can fail with
+`Not enough undefined bytes to fit`, because the recovered structure contains
+single-byte `undefined` components and the API refuses a larger component in their
+place. The upstream discussion
+(<https://github.com/NationalSecurityAgency/ghidra/discussions/3431>) confirms that
+the duplicates are a known prototype issue and that there is no automatic merge; the
+workaround there is manual dragging between types in the GUI. We stay headless, so the
+remaining fields are left unnamed.
+
 The `*_data` structures are a different story: the recovery creates them as
 placeholder byte fields (`offset_0x0`, `field9_0xc`), not as typed members, because
 the real members are `std::string`/`std::vector` objects. Naming those placeholders

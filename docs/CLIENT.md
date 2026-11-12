@@ -182,10 +182,17 @@ The member-list path is decoded from HgCom3.dll:
   Serialize `FUN_60130630`, Deserialize `FUN_601306D0`, converter
   `FUN_6013B1D0`.
 
-The first server implementation returns zero-length member and room vectors. This is
-a deliberate structural probe: the top-level serializers and empty-vector representation
-are recovered, but member and room record layouts are not implemented and acceptance
-of the empty lists has not yet been verified in a live run. **[static]**
+The server currently returns zero-length member and room vectors. The latest live
+probe shows that the client accepted both empty-vector replies far enough to advance
+through this sequence:
+
+`EnterChannelToC -> GetMemberListToS -> GetMemberListToC (0 members) ->
+GetRoomListToS -> GetRoomListToC (0 rooms) -> Cmd_Item_GetItemStateToS`. **[wire]**
+
+This confirms acceptance of the empty-vector encodings, not that the lobby is fully
+usable. Member and room record serialization remains unimplemented. The follow-up
+`Cmd_Item_GetItemStateToS` request is not yet decoded or answered; its message ID,
+layout and successful response still need to be recovered.
 
 The channel model's request builders (`HgModel3.dll`) use `k22e` (GameID), `k23e`,
 and `k24e` for the three string fields. The room-list request adds `k64e = 0`.
@@ -203,7 +210,7 @@ Live run: after `Cmd_Channel_EnterChannelByUserIdToS`, the server's
 client moved into the member-list stage. The updated empty member/room-list replies
 still need a fresh live run. **[wire]****
 
-## 8. Single Mode (not yet started)
+## 8. Single Mode (entry probe implemented; gameplay not yet playable)
 
 Message IDs, from RTTI in `Tet4.exe` **[static]**:
 

@@ -21,19 +21,30 @@ done
     exit 2
 }
 NAME="$(basename "$MODULE")"
+GHIDRA_ROOT="$(cd "$(dirname "$GHIDRA")/.." && pwd)"
+DECOMP_SCRIPTS="$GHIDRA_ROOT/Ghidra/Features/Decompiler/ghidra_scripts"
+MS_SCRIPTS="$GHIDRA_ROOT/Ghidra/Features/MicrosoftCodeAnalyzer/ghidra_scripts"
+[ -d "$DECOMP_SCRIPTS" ] || { echo "missing $DECOMP_SCRIPTS" >&2; exit 2; }
+[ -d "$MS_SCRIPTS" ] || { echo "missing $MS_SCRIPTS" >&2; exit 2; }
 # Optional reconstructed names: names/<module>.tsv (or $NAMEMAP).
 if [ -z "${NAMEMAP:-}" ] && [ -f "$ROOT/names/$NAME.tsv" ]; then
     NAMEMAP="$ROOT/names/$NAME.tsv"
 fi
+# Optional reconstructed field names: fields/<module>.tsv.
+FIELDS=""
+if [ -f "$ROOT/fields/$NAME.tsv" ]; then
+    FIELDS="$ROOT/fields/$NAME.tsv"
+fi
 mkdir -p "$PROJ" "$OUT"
 export XDG_CONFIG_HOME="$ROOT/work/xdg/config" XDG_CACHE_HOME="$ROOT/work/xdg/cache"
 "$GHIDRA" "$PROJ" "classes_${NAME}" -import "$MODULE" -overwrite \
-    -scriptPath /opt/ghidra/Ghidra/Features/Decompiler/ghidra_scripts \
-    -scriptPath /opt/ghidra/Ghidra/Features/MicrosoftCodeAnalyzer/ghidra_scripts \
+    -scriptPath "$DECOMP_SCRIPTS" \
+    -scriptPath "$MS_SCRIPTS" \
     -scriptPath "$ROOT/tools" \
     -postScript FixUpRttiAnalysisScript.java \
     -postScript RecoverClassesFromRTTIScript.java \
     ${NAMEMAP:+-postScript ApplyNameMap.java "$NAMEMAP"} \
+    ${FIELDS:+-postScript ApplyFieldNames.java "$FIELDS"} \
     -postScript ExportAllFunctions.java "$OUT"
 test -s "$OUT/$NAME.c" || { echo "EXPORT_FAILED: no output in $OUT" >&2; exit 1; }
 echo EXPORT_DONE

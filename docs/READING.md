@@ -101,12 +101,18 @@ demangler and the real ones under `/ClassDataTypes`. `ApplyFieldNames` prefers t
 `/ClassDataTypes` copy for that reason.
 
 Extending a recovered structure in place fails with `Not enough undefined bytes to
-fit`, because it is built from single-byte `undefined` components. The fix is not to
-patch the structure but to rebuild it: `ApplyFieldNames` now creates a new
-`StructureDataType` with the requested members and gaps as `undefined` arrays, then
-swaps it in with `DataTypeManager.replaceDataType(old, new, updateSymbols=true)`, which
-updates every use. All five `Cmd_Channel_GetMemberListToC` fields and the three
-`Cmd_Item_GetItemStateToC` fields are applied this way (12 names, no misses).
+fit`, because it is built from single-byte `undefined` components. `ApplyFieldNames`
+rebuilds the structure instead: a new `StructureDataType` with the requested members
+and gaps as `undefined` arrays, swapped in with
+`DataTypeManager.replaceDataType(old, new, updateSymbols=true)`.
+
+This names the structures in the header (all five `Cmd_Channel_GetMemberListToC`
+fields, three for `Cmd_Item_GetItemStateToC`, 12 names, no misses), but **not** the
+field accesses in the decompiled bodies: a class structure embeds its own copy of the
+`_data` type, and the decompiler keeps reading that copy (`field_0x5c`). Rewriting the
+embedding component does not change the result. This is the same duplicate-type
+prototype limitation as above; the visible gain is limited to the header and to
+structures that are used directly.
 
 The duplicate types themselves remain (upstream discussion
 <https://github.com/NationalSecurityAgency/ghidra/discussions/3431> describes them as a

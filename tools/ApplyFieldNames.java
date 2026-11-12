@@ -28,7 +28,7 @@ public class ApplyFieldNames extends GhidraScript {
         // Ghidra keeps several structures with the same name: empty placeholders
         // from the Demangler and the real ones under /ClassDataTypes. Prefer the
         // /ClassDataTypes copy, otherwise the demo-placed first one is wrong.
-        Map<String, Structure> structures = new HashMap<>();
+        Map<String, java.util.List<Structure>> structures = new HashMap<>();
         DataTypeManager dtm = currentProgram.getDataTypeManager();
         java.util.Iterator<DataType> all = dtm.getAllDataTypes();
         while (all.hasNext()) {
@@ -36,15 +36,11 @@ public class ApplyFieldNames extends GhidraScript {
             if (!(type instanceof Structure)) {
                 continue;
             }
-            String name = type.getName();
-            String path = type.getPathName();
-            Structure current = structures.get(name);
-            boolean better = path.contains("ClassDataTypes");
-            if (current == null || (better && !current.getPathName().contains("ClassDataTypes"))) {
-                structures.put(name, (Structure) type);
-            }
+            structures.computeIfAbsent(type.getName(), k -> new java.util.ArrayList<>())
+                .add((Structure) type);
         }
         List<String> lines = Files.readAllLines(Paths.get(args[0]));
+        Map<String, DataType> rebuiltTypes = new HashMap<>();
         Map<String, java.util.List<String[]>> sized = new HashMap<>();
         for (String raw : lines) {
             String line = raw.trim();
@@ -59,8 +55,9 @@ public class ApplyFieldNames extends GhidraScript {
         int tx = currentProgram.startTransaction("apply field names");
         try {
             for (Map.Entry<String, java.util.List<String[]>> entry : sized.entrySet()) {
-                Structure old = structures.get(entry.getKey());
-                if (old == null) continue;
+                java.util.List<Structure> olds = structures.get(entry.getKey());
+                if (olds == null || olds.isEmpty()) continue;
+                for (Structure old : olds) {
                 int length = old.getLength();
                 java.util.List<int[]> ranges = new java.util.ArrayList<>();
                 java.util.List<String> names = new java.util.ArrayList<>();
@@ -93,12 +90,33 @@ public class ApplyFieldNames extends GhidraScript {
                         length - position, "pad", null);
                 }
                 DataType added = dtm.addDataType(rebuilt, ghidra.program.model.data.DataTypeConflictHandler.REPLACE_EMPTY_STRUCTS_OR_RENAME_AND_ADD_HANDLER);
+                rebuiltTypes.put(entry.getKey(), added);
                 DataType swapped = dtm.replaceDataType(old, added, true);
                 if (swapped != null) {
                     try { swapped.setName(old.getName()); } catch (Exception ignored) { }
                     renamed += ranges.size();
                 }
+                }
             }
+            // Structures that embed the old type keep a reference to the copy that
+            // replaceDataType did not touch; rewrite those components explicitly.
+            java.util.Iterator<DataType> scan = dtm.getAllDataTypes();
+            while (scan.hasNext()) {
+                DataType type = scan.next();
+                if (!(type instanceof Structure)) continue;
+                Structure container = (Structure) type;
+                DataTypeComponent[] components = container.getDefinedComponents();
+                for (DataTypeComponent component : components) {
+                    String componentName = component.getDataType().getName();
+                    DataType replacement = rebuiltTypes.get(componentName);
+                    if (replacement == null || component.getDataType() == replacement) continue;
+                    try {
+                        container.replace(component.getOrdinal(), replacement,
+                            component.getLength(), component.getFieldName(), component.getComment());
+                    } catch (Exception ignored) { }
+                }
+            }
+
             for (String raw : lines) {
                 String line = raw.trim();
                 if (line.isEmpty() || line.startsWith("#")) {
@@ -108,12 +126,13 @@ public class ApplyFieldNames extends GhidraScript {
                 if (parts.length < 3) {
                     continue;
                 }
-                Structure structure = structures.get(parts[0].trim());
-                if (structure == null) {
+                java.util.List<Structure> matching = structures.get(parts[0].trim());
+                if (matching == null || matching.isEmpty()) {
                     println("no structure: " + parts[0]);
                     missing++;
                     continue;
                 }
+                Structure structure = matching.get(0);
                 String offsetText = parts[1].trim();
                 if (offsetText.startsWith("0x") || offsetText.startsWith("0X")) {
                     offsetText = offsetText.substring(2);

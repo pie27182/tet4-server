@@ -17,12 +17,12 @@ Working, verified with the real client (`tools/live_check.py`):
 - Channel authorization (`Cmd_AuthToC`) and the user-id reply (`Cmd_Channel_GetUserIdToC`);
   the client accepts both and continues
 
-A live probe showed that the client accepts the channel-entry response far enough to
-send `LayerAlignment` and request the member list. Structurally decoded empty member-
-and room-list replies are now implemented, but their live acceptance is still to be
-verified. Single Mode is not yet playable. A local game socket, inbound message parsers
-and a deterministic Tetris-engine prototype are in place; the server-to-client start
-state and game updates are not yet implemented. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
+The latest live probe accepted the empty member-list and room-list replies and
+advanced to `Cmd_Item_GetItemStateToS`. That item-state request is not yet decoded or
+answered, so a stable lobby is not established. Single Mode is not yet playable. The
+local AutoEnter response routes to a game socket that performs the secure handshake
+and captures known client frames, but does not send game-level replies. Initial game
+state and per-turn updates remain unimplemented. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Documentation
 
@@ -34,6 +34,7 @@ state and game updates are not yet implemented. See [`docs/ROADMAP.md`](docs/ROA
 - [`docs/ROADMAP.md`](docs/ROADMAP.md): ordered checklist of what is done and what remains.
 - [`docs/REPRODUCE.md`](docs/REPRODUCE.md): step by step, from the repository and your own
   client folder to a recorded session. Start here to reproduce the results.
+- [`docs/SERVER.md`](docs/SERVER.md): run the local protocol services without the recording harness, and the current Single Mode limits.
 - [`docs/FILES.md`](docs/FILES.md): what every file of the client folder is.
 - [`docs/ADDRESSES.md`](docs/ADDRESSES.md): the addresses used in the documentation.
 - [`docs/ONLINE.md`](docs/ONLINE.md): how the original online service was reached (launcher
@@ -122,6 +123,18 @@ it. Requests with no known reply get no answer.
 ```
 python3 -m unittest discover -s tests -t .
 ```
+
+## Running the local services
+
+Start the four loopback listeners without launching the client:
+
+```
+python3 -m tet4server
+```
+
+Stop with Ctrl+C. Options and current protocol limitations are documented in
+[`docs/SERVER.md`](docs/SERVER.md). This server is not yet a playable Single Mode
+implementation; the start-game and update replies are still missing.
 
 ## Running the live check
 

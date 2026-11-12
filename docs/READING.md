@@ -114,6 +114,13 @@ embedding component does not change the result. This is the same duplicate-type
 prototype limitation as above; the visible gain is limited to the header and to
 structures that are used directly.
 
+`tools/DumpTypes.java` shows the concrete case: the class structure embeds a
+`Cmd_Channel_GetMemberListToC_data` with length 1440 (0x5a0), while the structure
+rebuilt by `ApplyFieldNames` has length 124 (0x7c). They share a name and path, so
+`replaceDataType` cannot tell them apart by name, and the decompiler keeps the
+embedded copy. Naming fields in bodies would require removing the duplicate from the
+project, which the prototype scripts do not support headlessly.
+
 The duplicate types themselves remain (upstream discussion
 <https://github.com/NationalSecurityAgency/ghidra/discussions/3431> describes them as a
 prototype issue with only a manual GUI merge); the rebuild avoids them instead of

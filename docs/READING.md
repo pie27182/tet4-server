@@ -63,6 +63,9 @@ become candidates for `names/<module>.tsv` as their role is understood.
 | `HgBoard3.dll` | generic Hangame board component (drawing/storage), not Tetris rules | `CHgBoard`, `CHgBoardLogic` |
 | `HgTool3/View3/Dlg3/Frm3/HGF5V` | MFC UI toolkit of Hangame | message maps |
 
+Full inventory of the client folder, including launcher and audio files:
+[`docs/FILES.md`](FILES.md).
+
 Protocol messages are named the same way as in the client: `Cmd_<Area>_<Name>ToS`
 (client to server) and `...ToC` (server to client). Handlers on the client side are
 `Net_*` (controller entry), `Msg_*` (model update) and `Evt_*` (view event).
@@ -137,6 +140,54 @@ changes nothing readable; they become useful only after the members are typed.
   requires the ordinal export list of that exact MFC build. Not implemented.
 - **Local names in the recovered structures.** Fields are `field_0x10` until named.
 - **Local variables.** Only by hand, per function, where it matters.
+
+
+## Reference documentation
+
+Checked links behind the tools and the rules above.
+
+### Ghidra API
+
+- [API index](https://ghidra.re/ghidra_docs/api/) — all classes and scripts.
+- [`HeadlessAnalyzer`](https://ghidra.re/ghidra_docs/api/ghidra/app/util/headless/HeadlessAnalyzer.html),
+  [`HeadlessOptions`](https://ghidra.re/ghidra_docs/api/ghidra/app/util/headless/HeadlessOptions.html)
+  — `analyzeHeadless`, pre/post scripts. Used by `tools/export.sh` and
+  `tools/recover_classes.sh`.
+- [`CppExporter`](https://ghidra.re/ghidra_docs/api/ghidra/app/util/exporter/CppExporter.html)
+  — constructor and `export(...)`. Used by `tools/ExportHeaders.java`.
+- [Demangler package](https://ghidra.re/ghidra_docs/api/ghidra/app/util/demangler/package-summary.html)
+  — MSVC name demangling.
+
+### Ghidra guides and scripts
+
+- [Improving Disassembly and Decompilation](https://ghidra.re/ghidra_docs/GhidraClass/Advanced/improvingDisassemblyAndDecompilation.pdf)
+  — types, vftables, `Auto Fill in Class Structure`.
+- [`RecoverClassesFromRTTIScript`](https://github.com/NationalSecurityAgency/ghidra/blob/master/Ghidra/Features/Decompiler/ghidra_scripts/RecoverClassesFromRTTIScript.java)
+  and [`RTTIWindowsClassRecoverer`](https://github.com/NationalSecurityAgency/ghidra/blob/master/Ghidra/Features/Decompiler/ghidra_scripts/classrecovery/RTTIWindowsClassRecoverer.java)
+  — what class recovery does with MSVC RTTI.
+- [`FixUpRttiAnalysisScript`](https://github.com/NationalSecurityAgency/ghidra/blob/master/Ghidra/Features/MicrosoftCodeAnalyzer/ghidra_scripts/FixUpRttiAnalysisScript.java).
+- [ghidra-data](https://github.com/NationalSecurityAgency/ghidra-data) — type archives and
+  Function ID databases.
+
+### MFC, r2 and prior art
+
+- [Reverse Engineering wiki: MFC](https://reverseengineering.wiki/index.php/Library:MFC) —
+  `CRuntimeClass`, `AFX_MSGMAP`, ordinal imports. Basis for `tools/scan_mfc.py`.
+- [Class Informer](https://github.com/kweatherman/IDA_ClassInformer_PlugIn) — the IDA
+  scanner our Python scanner follows.
+- [OOAnalyzer / Kaiju](https://github.com/CERTCC/kaiju) — fallback when RTTI is absent.
+- [r2ghidra](https://github.com/radareorg/r2ghidra), [radare2 book](https://book.rada.re/).
+
+### Ordinal imports and FID
+
+Ghidra ships `Ghidra/Features/Base/data/symbols/win32/mfc90.exports` and applies it, so
+`mfc90.dll` imports are already named (`CStringT`, `AfxMessageBox`, `CWnd::*`).
+`tools/ApplyOrdinalExports.java` handles a runtime whose map is missing or version
+mismatched: it renames `Ordinal_<n>` from the XML and demangles the result.
+
+Function ID databases (`vsOlder_x86.fidb` for Visual Studio up to 2008) are already
+installed with the package under `Ghidra/Features/FunctionID/data`; adding another is a
+file copy into that root-owned directory.
 
 ## Practical rules
 

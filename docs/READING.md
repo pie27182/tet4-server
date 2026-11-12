@@ -63,6 +63,13 @@ become candidates for `names/<module>.tsv` as their role is understood.
 | `HgBoard3.dll` | generic Hangame board component (drawing/storage), not Tetris rules | `CHgBoard`, `CHgBoardLogic` |
 | `HgTool3/View3/Dlg3/Frm3/HGF5V` | MFC UI toolkit of Hangame | message maps |
 
+Only the modules on the client-server path need reconstruction:
+`HgSock3`, `HgCom3`, `HgModel3`, `HgCtr3`, `CDSClientConnector`,
+`TPackClientConnector`, `XInNetwork`, `XStream` and `Tet4.exe`.
+`tools/reconstruct_all.sh` handles exactly these by default; `--all` adds the UI
+toolkit, graphics, animation, audio, the string table, ads, messenger IPC and XDebug,
+none of which carry protocol messages.
+
 Full inventory of the client folder, including launcher and audio files:
 [`docs/FILES.md`](FILES.md).
 

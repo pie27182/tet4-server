@@ -1,0 +1,19 @@
+# Reconstructed names for HgCom3.dll. Source: analysis in docs/CLIENT.md
+# (serializers, deserializers and converters identified from vtable slots, RTTI and
+# call sites). These are NOT original symbols; the binary only kept class names.
+0x60129060	Cmd_Channel_GetMemberListToS::Serialize
+0x6012cfd0	Cmd_Channel_EnterChannelByUserIdToS::Serialize
+0x6012d0e0	Cmd_Channel_EnterChannelByUserIdToS::Deserialize
+0x6012e4a0	Cmd_Channel_EnterChannelToC::Serialize
+0x6012e600	Cmd_Channel_EnterChannelToC::Deserialize
+0x6012fed0	Cmd_Channel_GetMemberListToC::Constructor
+0x601301d0	Cmd_Channel_GetMemberListToC::Serialize
+0x60130260	Cmd_Channel_GetMemberListToC::Deserialize
+0x60129450	Cmd_Channel_GetRoomListToS::Serialize
+0x60130630	Cmd_Channel_GetRoomListToC::Serialize
+0x60130a90	Cmd_Item_GetItemStateToC::Constructor
+0x60130cf0	Cmd_Item_GetItemStateToC::Serialize
+0x60130d70	Cmd_Item_GetItemStateToC::Deserialize
+0x60139620	Cmd_Channel_EnterChannelToC::Converter
+0x6013a4e0	Cmd_Channel_GetMemberListToC::Converter
+0x6013bcd0	Cmd_Item_GetItemStateToC::Converter

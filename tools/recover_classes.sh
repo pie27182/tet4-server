@@ -21,6 +21,10 @@ done
     exit 2
 }
 NAME="$(basename "$MODULE")"
+# Optional reconstructed names: names/<module>.tsv (or $NAMEMAP).
+if [ -z "${NAMEMAP:-}" ] && [ -f "$ROOT/names/$NAME.tsv" ]; then
+    NAMEMAP="$ROOT/names/$NAME.tsv"
+fi
 mkdir -p "$PROJ" "$OUT"
 export XDG_CONFIG_HOME="$ROOT/work/xdg/config" XDG_CACHE_HOME="$ROOT/work/xdg/cache"
 "$GHIDRA" "$PROJ" "classes_${NAME}" -import "$MODULE" -overwrite \
@@ -29,6 +33,7 @@ export XDG_CONFIG_HOME="$ROOT/work/xdg/config" XDG_CACHE_HOME="$ROOT/work/xdg/ca
     -scriptPath "$ROOT/tools" \
     -postScript FixUpRttiAnalysisScript.java \
     -postScript RecoverClassesFromRTTIScript.java \
+    ${NAMEMAP:+-postScript ApplyNameMap.java "$NAMEMAP"} \
     -postScript ExportAllFunctions.java "$OUT"
 test -s "$OUT/$NAME.c" || { echo "EXPORT_FAILED: no output in $OUT" >&2; exit 1; }
 echo EXPORT_DONE

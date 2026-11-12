@@ -40,6 +40,8 @@ state and game updates are not yet implemented. See [`docs/ROADMAP.md`](docs/ROA
   remote gateway: pinned TLS tunnel, JSON hello) and how a local gateway could work.
 - [`docs/READING.md`](docs/READING.md): how to read the reconstructed code, which names
   are original and which are reconstructed, and where each module starts.
+- [`docs/GHIDRA.md`](docs/GHIDRA.md): checked Ghidra API pages, class-recovery scripts,
+  MFC layout references and r2ghidra docs, with which of our tools uses what.
 - GitHub Issues: defects and unexpected behavior only; implementation tasks live in the roadmap.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md): ground rules (no client files, test accounts only,
   evidence for every reply), branches, commits, and how an issue is closed.

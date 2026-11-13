@@ -199,10 +199,10 @@ The member-list path is decoded from HgCom3.dll:
   Serialize `FUN_60130630`, Deserialize `FUN_601306D0`, converter
   `FUN_6013B1D0`.
 
-The first server implementation returns zero-length member and room vectors. This is
-a deliberate structural probe: the top-level serializers and empty-vector representation
-are recovered, but member and room record layouts are not implemented and acceptance
-of the empty lists has not yet been verified in a live run. **[static]**
+The server returns zero-length member and room vectors. A live run accepted both
+empty-vector replies far enough for the client to request item state. Member and room
+record serialization is still unimplemented; the empty replies are sufficient for the
+observed no-room channel path, not evidence that non-empty records are correct. **[wire]**
 
 The channel model's request builders (`HgModel3.dll`) use `k22e` (GameID), `k23e`,
 and `k24e` for the three string fields. The room-list request adds `k64e = 0`.
@@ -214,13 +214,20 @@ The client's dispatcher reads the 4-byte magic `XLBP` (consumed), then peeks the
 The converters are registered with `PC_RegisterX2M` (`FUN_60121A40`) from an init routine
 in `HgCom3.dll`, which maps `0x0A80E29A` to `FUN_6013F9B0` and `0x008500CA` to `FUN_6013F8B0`.
 
-Live run: after `Cmd_Channel_EnterChannelByUserIdToS`, the server's
-`Cmd_Channel_EnterChannelToC` probe is followed by client messages
-`Cmd_LayerAlignment` and `Cmd_Channel_GetMemberListToS`. The latter proves the
-client moved into the member-list stage. The updated empty member/room-list replies
-still need a fresh live run. **[wire]****
+Live run progression after the EnterChannel probe:
 
-## 8. Single Mode (not yet started)
+`EnterChannelToC -> LayerAlignment -> GetMemberListToS ->
+GetMemberListToC (empty) -> GetRoomListToS -> GetRoomListToC (empty) ->
+GetItemStateToS -> GetItemStateToC (empty)`.
+
+The client requests the room list after the empty member reply, then requests item
+state after the empty room reply. With the empty item-state reply the client stays
+in the channel for more than two minutes; without it the observed client sends
+`Cmd_Channel_ExitChannelToS` about three seconds after the item-state request. This
+confirms acceptance of the empty response shapes and a stable channel interval, but
+does not yet prove that the Single Mode button works. **[wire]**
+
+## 8. Single Mode (AutoEnter static probe; gameplay not yet playable)
 
 Message IDs, from RTTI in `Tet4.exe` **[static]**:
 
@@ -286,6 +293,10 @@ validation.
 `Cmd_ChannelOrderTypeSingleModeRoomInfoTetrisToC` (`0x04B61A2A`) has a smaller
 layout: `u32 id | string | u32 | u8` (`Serialize FUN_00443D90`). Its role in the
 transition still needs to be confirmed from the live message sequence.
+
+A byte-layout serializer for this shape exists as `channel.single_mode_room_info_to_c`,
+but it is not sent automatically. The field semantics and dispatch point have not been
+verified; sending guessed room metadata would not be justified by the current evidence.
 
 ### Start-game message container [static; dispatch relationship pending]
 

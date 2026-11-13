@@ -124,47 +124,47 @@ def get_user_id_to_c(member_id: bytes, text_b: bytes = b"", code: int = 0) -> by
 def get_member_info_to_c(member_key: bytes = b"k601e") -> bytes:
     """Serialize the minimal Cmd_Channel_GetMemberInfoToC profile.
 
-    HgCom3.dll class layout (constructor FUN_6012d850, reset
-    FUN_6012dad0, size FUN_6012dc20 and stream serializer FUN_6012dce0)
-    establishes the wire order:
-      str × 4 | u32 | str | u64 | u32 × 9 | str | u32 × 2 |
-      str | u64 | u32 × 4 | str × 2 | u32 | str | vector | str
+    HgCom3.dll stream serializer FUN_6012dce0 and matching deserializer
+    FUN_6012df00 establish this exact wire order:
+      str × 4 | u32 | str | u64 | u32 × 7 | str | u32 × 2 |
+      str | u64 | u32 × 2 | str × 2 | u32 | str | vector | str
 
-    The first string is k3e. Msg_AddMember copies it into CMemberData's
-    member key; Msg_GetUserId sets GData[k602e] to the literal "k601e".
-    SGlobalInfo::MyData() then finds this record in the member-data list.
-    The dynamic k153e vector is empty and the final k1e result string is
-    present and empty (success-shaped).
+    The converter FUN_601391a0 maps the first string to k3e. Msg_AddMember
+    copies k3e into CMemberData's member key. Msg_GetUserId sets
+    GData[k602e] to the literal "k601e"; SGlobalInfo::MyData() looks up
+    that key in the member-data list. The dynamic k153e vector is empty and
+    the final k1e result string is present and empty (success-shaped).
 
-    The message follows the statically recovered Net_GetMemberInfo ->
-    Msg_GetMemberInfo -> Msg_AddMember path. Sending it after EnterChannelToC
-    remains experimental: correct timing and client acceptance need a live run.
+    The registered Net_GetMemberInfo -> Msg_GetMemberInfo -> Msg_AddMember
+    path is statically recovered. Sending this message after EnterChannelToC
+    remains experimental: timing and live acceptance still need validation.
     """
     if not isinstance(member_key, bytes) or not member_key:
         raise ValueError("member_key must be a non-empty byte string")
 
     return (
         pack_u32(GET_MEMBER_INFO_TOC)
-        + pack_string(member_key)  # +0x0c / k3e
-        + pack_string(b"")         # +0x28 / k7e
-        + pack_string(b"")         # +0x44 / k8e
-        + pack_string(b"")         # +0x60 / k11e
-        + pack_u32(0)              # +0x7c / k10e
-        + pack_string(b"")         # +0x80 / k12e
-        + struct.pack(">Q", 0)     # +0x98 / k13e
-        + b"".join(pack_u32(0) for _ in range(9))  # +0xa0 .. +0xc0
-        + pack_string(b"")         # +0xc4 / k32e
-        + pack_u32(0)              # +0xe0 / k33e
-        + pack_u32(0)              # +0xe4 / k131e
-        + pack_string(b"")         # +0xe8 / k102e
-        + struct.pack(">Q", 0)     # +0x100 / k34e
-        + b"".join(pack_u32(0) for _ in range(4))  # +0x108 .. +0x114
-        + pack_string(b"")         # +0x118 / k37e
-        + pack_string(b"")         # +0x134 / k38e
-        + pack_u32(0)              # +0x150 / k42e
-        + pack_string(b"")         # +0x154 / k201e
-        + pack_u32(0)              # +0x170 / empty k153e vector
-        + pack_string(b"")         # +0x18c / k1e
+        + pack_string(member_key)  # k3e
+        + pack_string(b"")         # k7e
+        + pack_string(b"")         # k8e
+        + pack_string(b"")         # k11e
+        + pack_u32(0)              # k10e
+        + pack_string(b"")         # k12e
+        + struct.pack(">Q", 0)     # k13e
+        + b"".join(pack_u32(0) for _ in range(7))  # k14e, k26e..k31e
+        + pack_string(b"")         # k32e
+        + pack_u32(0)              # k33e
+        + pack_u32(0)              # k131e
+        + pack_string(b"")         # k102e
+        + struct.pack(">Q", 0)     # k34e
+        + pack_u32(0)              # k35e
+        + pack_u32(0)              # k154e
+        + pack_string(b"")         # k37e
+        + pack_string(b"")         # k38e
+        + pack_u32(0)              # k42e
+        + pack_string(b"")         # k201e
+        + pack_u32(0)              # empty k153e vector
+        + pack_string(b"")         # k1e
     )
 
 

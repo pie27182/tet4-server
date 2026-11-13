@@ -17,8 +17,9 @@ Working, verified with the real client (`tools/live_check.py`):
 - Channel authorization, user id, channel entry, member list, room list and item state;
   the client reaches the channel screen with an empty room list
 
-Not yet working: the game socket beyond the item-state reply, and Single Mode gameplay.
-See [`docs/ROADMAP.md`](docs/ROADMAP.md).
+Not yet working: live-verified AutoEnter/game-socket entry and Single Mode gameplay.
+The game listener still captures frames but does not send a start-game state or turn
+updates. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Quick start
 
@@ -28,6 +29,7 @@ git clone tet4-server.bundle tet4-server  # or: git clone <url>
 cd tet4-server
 cp -r /path/to/hangame-client/. client/   # your own client copy, git-ignored
 python3 -m unittest discover -s tests -t .  # OK, needs no client
+python3 -m tet4server                     # start TPack/CDS/channel/game listeners
 python3 tools/check_client.py
 python3 tools/patch_client.py
 python3 tools/live_check.py                # records to live-runs/<time>/
@@ -46,6 +48,7 @@ troubleshooting and every step: [`docs/REPRODUCE.md`](docs/REPRODUCE.md).
   names are original, and the reference documentation behind the tools.
 - [`docs/METHOD.md`](docs/METHOD.md) — the rules and the wrong turns.
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — what is done and what remains.
+- [`docs/SERVER.md`](docs/SERVER.md) — start the local protocol services and current Single Mode boundary.
 - [`docs/FILES.md`](docs/FILES.md) — every file of the client folder.
 - [`docs/ADDRESSES.md`](docs/ADDRESSES.md) — addresses used in the docs.
 - [`docs/ONLINE.md`](docs/ONLINE.md) — the original online gateway (not implemented).

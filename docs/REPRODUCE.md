@@ -17,7 +17,7 @@ Versions are the ones this work was done with. Other versions were not tested.
 | `wf-recorder` | screen recording in `live_check.py` | 0.6.0 |
 | `ffmpeg` | frame extraction, scene detection | n9.0.2 |
 | `grim` | screenshots (`tools/` and ad-hoc checks) | any recent version |
-| Ghidra 12.2 PUBLIC, unzipped in `work/` | decompilation (`tools/export_all.sh`) | 12.2 PUBLIC |
+| Ghidra 12.2 (package or zip) | decompilation (`tools/export_all.sh`) | 12.2, package `ghidra` in `/opt/ghidra` |
 | OpenJDK (for Ghidra) | Ghidra runtime | 27.0.1 |
 | `pefile`, `capstone` (in `.venv`) | `tools/disasm.py` | pefile 2024.8.26, capstone 5.0.7 |
 
@@ -34,8 +34,8 @@ python3 -m venv .venv
 Use `.venv/bin/python` for `tools/disasm.py`. Other tools use plain `python3`.
 
 Disk space, all inside the repository (git-ignored): the client folder about 190 MB, a
-patched copy another 190 MB, Ghidra itself about 900 MB, the decompiled output about
-40 MB, and Ghidra projects several hundred MB while an export runs. The export tools
+patched copy another 190 MB, the decompiled output about 40 MB, and Ghidra projects
+several hundred MB while an export runs (Ghidra itself is installed outside). The export tools
 write only inside `work/`. The live run uses Wine's default prefix, `~/.wine`, which is
 outside the repository (section 5). Section 8 explains the quota errors that `/tmp` can
 cause.
@@ -46,8 +46,7 @@ cause.
 python3 -m unittest discover -s tests -t .
 ```
 
-Expected: `OK`, 17 tests. The tests use byte vectors from captured runs and do not need
-the client.
+Expected: `OK`, 54 tests. The protocol-layout and game-engine tests do not need the client.
 
 ## 2. Client files
 
@@ -109,7 +108,7 @@ The default client is `client-patched/`, and the output goes to `live-runs/<time
 (both git-ignored). Wine uses its default prefix, `~/.wine`; the repository does not
 create or change a prefix of its own.
 
-The script starts the TPack, CDS and channel servers from this repository, starts
+The script starts the TPack, CDS, channel and local game-socket servers from this repository, starts
 `wf-recorder` (region `0,0 1536x864`, 15 fps, 1280x720 output), then starts the client
 under Wine. Close the game when you are done: the recording stops after Wine has
 exited, and the script saves `session.mp4` and `frames/` (one PNG per visual change).
@@ -124,9 +123,11 @@ TPack 0x0b60835a ... LoginTPack ctx=2
 CDS select table=COMMON tid=1
 channel frame id=0x0365c03a          -> sent Cmd_AuthToC
 channel frame id=0x0fab330a          -> sent Cmd_Channel_GetUserIdToC for member b'test'
-channel frame id=0x0696068a          (Cmd_Channel_EnterChannelByUserIdToS, no reply sent)
+channel frame id=0x0696068a          -> sent Cmd_Channel_EnterChannelToC probe
 channel frame id=0x09d0057a          (Cmd_LayerAlignment)
-channel frame id=0x0a75af8a          (Cmd_Channel_ExitChannelToS)
+channel frame id=0x0ae3bbda          -> sent empty Cmd_Channel_GetMemberListToC
+channel frame id=0x0dda299a          -> sent empty Cmd_Channel_GetRoomListToC
+channel frame id=0x075bac2a          -> sent empty Cmd_Item_GetItemStateToC
 ```
 
 Expected on screen: the lobby (buttons 내 아이템, 상점, 싱글모드, the room list) with
@@ -134,24 +135,78 @@ the channel group header "초보~고수 등급 입장 가능". Depending on the 
 channel row "1 (0/100)" with an enter button may appear under it, and a "connecting"
 dialog with a cancel button may cover the lobby. `docs/CLIENT.md` describes both.
 
-If the client never reaches `CDS select`, check that `--client-dir` is the patched copy
-and that no Wine process is still running (`wineserver -k`).
 
 ## 6. Decompilation
 
 Every address in `docs/CLIENT.md` and `docs/ADDRESSES.md` comes from these exports.
 
-### 6.1 Ghidra inside the repository
+### 6.1 Ghidra
 
-Download Ghidra 12.2 PUBLIC (the release zip from the Ghidra releases page), and unzip it
-into `work/` so the folder is `work/ghidra_12.2_PUBLIC/`. The work was done with OpenJDK
-27.0.1; other versions were not tested. Nothing is installed outside the repository:
-`tools/export.sh` keeps Ghidra's settings and cache in `work/xdg/`, and the Ghidra
-projects in `work/ghidra/`. Both are git-ignored.
+Install Ghidra 12.2 with your package manager (Arch: `pacman -S ghidra`, which puts it in
+`/opt/ghidra`) or unzip the release from
+<https://github.com/NationalSecurityAgency/ghidra/releases> into `work/`. The work was
+done with OpenJDK 27.0.1; other versions were not tested.
 
-To use a Ghidra installed elsewhere, set `GHIDRA` to its `support/analyzeHeadless`.
+`tools/export.sh` looks for `$GHIDRA`, then `/opt/ghidra/support/analyzeHeadless`, then
+`work/ghidra_12.2_PUBLIC/support/analyzeHeadless`. Nothing is installed by the
+repository: Ghidra's settings and cache go to `work/xdg/`, and the Ghidra projects to
+`work/ghidra/` (both git-ignored).
 
-### 6.2 Export every module
+### 6.2 Readable C++: class recovery
+
+Ghidra can restore C++ classes, vtables and `this` types from the MSVC RTTI that
+survives in these binaries:
+
+```
+tools/recover_classes.sh client/HgCom3.dll
+```
+
+Output goes to `work/decompiled-classes/` in the same `.c` + `.index.tsv` format.
+The script runs, headless: `FixUpRttiAnalysisScript` (fills missing MSVC RTTI),
+`RecoverClassesFromRTTIScript` (classes, vtables, member structs, typed `this`) and
+`ExportAllFunctions`. Example effect: `FUN_601301d0(void *this, ...)` becomes
+`vfunction6(Cmd_Channel_GetMemberListToC *this, ...)`.
+
+`recover_classes.sh` also applies `fields/<module>.tsv` when it exists (structure
+field names) and uses the script directories of the installed Ghidra.
+
+Names that did not survive in the binary are reconstructed in `names/<module>.tsv`
+(`<image address> <TAB> <name>`), and `recover_classes.sh` applies them when the file
+exists. `names/HgCom3.dll.tsv` covers the serializers, deserializers and converters of
+the protocol messages. These are our names, not original symbols; the header of each
+map says so. Add an entry after identifying a function and the name appears in the
+export and at every call site.
+
+For quick spot reads, `r2` with the r2ghidra plugin prints the same functions with
+class-qualified names:
+
+```
+r2 -e bin.relocs.apply=true -qc "aaa; s 0x601301d0; pdg" client/HgCom3.dll
+```
+
+### 6.3 Reconstruct the client-server path
+
+```
+GHIDRA_HEADLESS_MAXMEM=8G tools/reconstruct_all.sh
+```
+
+Runs class recovery, the `names/` and `fields/` maps and writes both the decompiled C
+and a C++ header for every module on the client-server path: `HgSock3`, `HgCom3`,
+`HgModel3`, `HgCtr3`, `CDSClientConnector`, `TPackClientConnector`, `XInNetwork`,
+`XStream` and `Tet4.exe` (last, the largest). Output: `work/reconstructed/`.
+
+`--all` adds the UI toolkit, graphics, animation, audio, string table, ads, messenger
+IPC and `XDebug`; none of them carries protocol messages. A single module can be passed
+by name. Set `GHIDRA_HEADLESS_MAXMEM` for big modules: the default heap is 2 GB, and
+`Tet4.exe` benefits from 8 GB.
+
+Measured on an 8-thread i5: the eight DLLs take about 10 minutes together, `Tet4.exe`
+alone about 25 minutes for a plain export. On `Tet4.exe`, `RecoverClassesFromRTTIScript`
+can spend a very long time creating missing constructors; if that happens, stop it and
+use `tools/export.sh client/Tet4.exe` instead, which keeps the demangled names and RTTI
+classes from auto-analysis but not the typed `this`.
+
+### 6.4 Export every module
 
 ```
 tools/export_all.sh
@@ -166,7 +221,7 @@ This runs `tools/export.sh` for the 29 modules in the list (see the script) and 
 It takes a long time (the 18683 functions of `Tet4.exe` are the largest part) and about
 40 MB of disk. It prints `ok` or `FAIL` for each module and exits non-zero if any failed.
 
-### 6.3 One module
+### 6.5 One module
 
 ```
 tools/export.sh client/HgSock3.dll                 # output: work/decompiled
@@ -176,7 +231,7 @@ tools/export.sh client/HgSock3.dll /some/outdir    # another output folder
 `tools/export.sh` runs Ghidra headless with this command, which is the exact one used:
 
 ```
-work/ghidra_12.2_PUBLIC/support/analyzeHeadless work/ghidra <module> \
+/opt/ghidra/support/analyzeHeadless work/ghidra <module> \
     -import client/<module> -overwrite \
     -scriptPath tools -postScript ExportAllFunctions.java work/decompiled
 ```
@@ -227,23 +282,24 @@ matters, with `tools/disasm.py`:
 .venv/bin/python tools/disasm.py client/HgSock3.dll 0x606041d0 --count 20
 ```
 
-## 7. Known problems
+## 7. Current protocol boundary
 
-- **The client crashes after the channel exchange.** In the runs we checked in detail
-  (patched and unmodified copies, `docs/CLIENT.md`), `Tet4.exe` ended about 2–3 s
-  after it sent `Cmd_LayerAlignment` and `Cmd_Channel_ExitChannelToS`. Not every run
-  was checked this way. Wine shows "Tet4.exe has
-  stopped working" with `Exception c0000005` (access violation). This happened with
-  both the unmodified and the patched copy. Symbols of the modules are not loaded, so
-  the faulting function is not known. The most likely cause is the missing
-  `Cmd_Channel_EnterChannelByUserIdToS` reply: the client waits for it, gives up, and
-  then crashes. This is a hypothesis.
-- **No reply to `EnterChannelByUserIdToS`.** Nothing answers it, so the client waits.
-- **Single Mode is not implemented.** The online path (the launcher's remote gateway)
-  is described in `docs/ONLINE.md` but not implemented.
-- **Some runs show the channel row and some do not.** The CDS reply is byte-identical
-  in both cases; the difference comes from the client's state (see `docs/CLIENT.md`).
-  The cause is not known.
+- **Channel progression is live-verified through item state.** The client accepts the
+  empty member-list and room-list replies, then accepts the empty item-state reply and
+  stays in the channel for more than two minutes. Without the item-state reply, the
+  observed client exits about three seconds after the request.
+- **Single Mode entry is not yet live-verified.** The AutoEnter request and response
+  layouts are statically recovered and the response points to `127.0.0.1:15002`, but
+  a fresh client run must confirm the client accepts the response and completes the
+  game-socket handshake.
+- **Gameplay is not implemented.** The game listener captures decoded client frames
+  but sends no server-side start-game state or turn updates. The nested
+  `StartNewGameToC` vector, `_SingleModeInfo`, `_TetrisMemberInfo` and board encoding
+  remain to be recovered. A successful handshake or serializer test is not proof
+  that a game can be played.
+- **Channel row refresh is a separate observation.** The historical handshake-only
+  run issued a second CDS request after abandoning the channel socket, and the row
+  appeared after that response. This does not establish the later Single Mode flow.
 
 ## 8. Troubleshooting
 
@@ -253,7 +309,7 @@ matters, with `tools/disasm.py`:
   quota is for the disk the repository is on. Ghidra also rejects project paths with a
   dot-prefixed name, so do not put the repository in such a folder.
 - **Old Wine processes.** If the client does not start, or starts with a stale
-  session, run `wineserver -k` and check that the ports 10454, 15000 and 15001 are free
+  session, run `wineserver -k` and check that the ports 10454, 15000, 15001 and 15002 are free
   (`ss -ltn`).
 - **`live_check.py` stops with `No such file or directory`.** The startup string is
   read from `--bootstrap` (default `tools/bootstrap-sample.txt`). Give a path that

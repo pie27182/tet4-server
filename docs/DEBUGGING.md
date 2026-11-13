@@ -69,9 +69,15 @@ The PCAP contains ciphertext on the secure channel/game sockets. Wireshark can
 reassemble TCP and show packet timing, sequence numbers, retransmissions and
 conversation boundaries, but it will not understand the Tet4 application messages
 until the stream filter is decoded. Use the server-side JSONL tap for live message
-inspection, For an existing PCAP/PCAPNG capture, use Wireshark for transport-level
-reassembly; a standalone offline application-layer PCAP decoder is not yet part
-of this repository.
+inspection. For an existing PCAP/PCAPNG capture, use the standalone offline decoder
+from the companion `tet4-protocol-tools.zip` bundle. It includes
+`tools/decode_capture.py` and `tet4_stream_crypto.py`. Extract it, place the capture
+beside its README, then run:
+
+```sh
+python3 tools/decode_capture.py capture.pcapng --ports 15001,15002
+```
+
 
 ## Wine debugger + Ghidra
 

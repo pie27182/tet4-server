@@ -70,7 +70,7 @@ class PlaintextTraceTest(unittest.TestCase):
                 with patch.dict(os.environ, {"TET4_TRACE_JSONL": str(path)}):
                     session = channel.Session(master, service="channel", peer="local")
                     msg_id, body = session.read_frame(server_sock)
-                self.assertEqual(msg_id, channel.LAYER_ALIGNMENT)
+                self.assertEqual(msg_id, channel.AUTO_ENTER_SINGLE_MODE_TOS)
                 event = json.loads(path.read_text(encoding="utf-8").strip())
             self.assertEqual(event["message_id"], "0x031ac76a")
             self.assertEqual(event["alignment_markers"], 3)

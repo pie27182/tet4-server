@@ -54,22 +54,67 @@ request contains `k23e=b""` and `k24e=b"1"`. The server now echoes those exact
 values into the corresponding response fields instead of returning empty strings.
 The next live run must confirm that `Msg_SendEnterRoom` no longer faults.
 
+The latest no-debug Wine run exits in the same way as the WineDbg run: AutoEnter is
+sent, the channel connection closes, and no TCP packets reach port 15002. The
+debugger is therefore not the cause. WineDbg identified the fault at
+`CMetpParser::AddValue` while `Msg_SendEnterRoom` reads `SGlobalInfo::MyData()`.
+
+Static analysis shows that `MyData()` looks up the current-member key from
+`GData["k602e"]`, which `Msg_GetUserId` fills with the member id returned by
+`GetUserIdToC` (a copy of `GData["k601e"]`), not with a literal.
+`GetMemberListToC` does not initialize this object: `Msg_FillMemberList`
+skips the own row if `MyData()` is still null. The separate
+`Cmd_Channel_GetMemberInfoToC` (`0x060BC39A`) response follows
+`Net_GetMemberInfo -> Msg_GetMemberInfo -> Msg_AddMember` and creates the
+`CMemberData` entry from its first string (`k3e`).
+
+The branch sends a minimal `GetMemberInfoToC` server push after
+`EnterChannelToC`, with `k3e` set to the same member id that
+`EnterChannelByUserIdToS` carries (`"test"` in the current test flow) and other
+fields empty/zero. The original controller has a direct server-response path
+`Net_GetMemberInfo -> channel/getMemInfo -> Msg_GetMemberInfo -> Msg_AddMember`;
+a prior client request is not required. A live run confirmed this path:
+`MyData()` returned a record, `Msg_SendEnterRoom` no longer faulted, and the
+client connected to `127.0.0.1:15002` and completed the 48-byte secure
+handshake. The previous JSONL label `unknown` was only a missing entry in our
+trace-name table.
+`Cmd_Channel_OrderTypeGetDisplayMemberInfoTetrisToS` (`0x0E4772BA`) with
+`member_id=test` is a different feature. Its `0x0C3B49AA` response is converted
+in `Tet4.exe: FUN_00459EF0` into the `dlgMemberInfo` display dialog, not into
+`CMemberDataList`. It must not be confused with `GetMemberInfoToC`.
+
+The self-member push and the XLBP layer-3 framing are both live-verified: the
+client processes the push, `MyData()` becomes non-null, `SendEnterRoom` passes,
+and the game socket reaches 15002. The remaining work is the game protocol
+inside port 15002, not the channel-to-game transition.
+
 This is why `RoomInfoToC` is not currently the right fix for the missing MetpInfo
 keys: its converter does not populate `MetpInfo(4).k23e/k24e`.
 
 The 2026-11-13 PCAP contains the AutoEnter request (`0x031AC76A`) after three
 empty `Cmd_LayerAlignment` slots. The client sends GameID `TET4` in request
-string +0xa8, then receives AutoEnterToC with host `127.0.0.1` and port `15002`.
-The channel trace proves the response was written, but there are no packets to
-15002 and the client closes the channel shortly afterward.
+string +0xa8, then the old server sent AutoEnterToC with host `127.0.0.1` and
+port `15002` **without** alignment markers. The channel trace proves the
+response bytes were written, but there were no packets to 15002 and the client
+closed the channel shortly afterward.
+
+A static registration-table check identified a concrete framing mismatch:
+`Tet4.exe: FUN_0045B410` registers `0x0DF37B3A` to
+`FUN_00445F60` in XLBP layer 3. The observed client request also arrived in
+layer 3 (three `Cmd_LayerAlignment` markers), but the old server's reply was
+layer 0. The branch now prefixes the AutoEnterToC response with three markers
+using `layer_message(response, 3)`. A live trace confirmed the reply carries
+`alignment_markers: 3` and that the client proceeds to the game socket. The
+generic `GetMemberInfoToC` push remains layer 0; HgCom3 registers that generic
+converter at layer 0.
 
 Static analysis of `Tet4.exe:0x00445F60` shows that response fields +0xa8/+0xc4/+0xe0
 populate `k22e`/`k23e`/`k24e`; +0xa8 is additionally passed as `k42e` to
 `fillEnterRoomParameter`. The button's ToS builder places GameID/`k23e`/`k24e`
 at the same offsets. The previous server response left these fields empty. The
 current branch fixes this mismatch by echoing request strings 5..7 into the response.
-A fresh live run must verify that this corrected response reaches the game socket.
-Other room metadata remains unverified.
+A live run confirmed that the corrected response reaches the client and the game
+socket connects; other room metadata remains unverified.
 
 `single_mode_room_info_to_c` serializes the recovered top-level layout
 `u32 id | string | u32 | u8` from `Tet4.exe:0x00443D90`; the role and field

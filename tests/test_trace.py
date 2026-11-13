@@ -46,6 +46,24 @@ class PlaintextTraceTest(unittest.TestCase):
         self.assertEqual(record["payload_hex"], "0000000474657374")
         self.assertEqual(record["message_stream_hex"], message.hex())
 
+    def test_trace_names_server_get_member_info_push(self):
+        body = channel.get_member_info_to_c(b"k601e")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "trace.jsonl"
+            with patch.dict(os.environ, {"TET4_TRACE_JSONL": str(path)}):
+                trace.record_message(
+                    service="channel",
+                    direction="server_to_client",
+                    body=body,
+                    peer="127.0.0.1:12345",
+                    sequence=4,
+                )
+            record = json.loads(path.read_text(encoding="utf-8").strip())
+        self.assertEqual(record["message_id"], "0x060bc39a")
+        self.assertEqual(record["message_name"], "Cmd_Channel_GetMemberInfoToC")
+        self.assertEqual(record["direction"], "server_to_client")
+        self.assertEqual(record["payload_hex"], body[4:].hex())
+
     def test_session_read_frame_records_decrypted_batch(self):
         client_share = bytes.fromhex(
             "d33bdf696bac88168ab62b1761a3cd381b62aabf1a11925193e07fbd57b8d564"

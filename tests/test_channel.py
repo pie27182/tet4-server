@@ -119,7 +119,14 @@ class EnterChannelToCMetpInfoTest(unittest.TestCase):
         channel._dispatch(
             session, object(), channel.ENTER_CHANNEL_BY_USER_ID_TOS, payload
         )
-        self.assertEqual(len(session.sent), 1)
+        self.assertEqual(len(session.sent), 2)
+
+        # The second frame is the recovered self-member info push. Its first
+        # string must match GData["k602e"], which mirrors the member id that
+        # Msg_GetUserId received in GetUserIdToC (here the same "test").
+        self.assertEqual(
+            session.sent[1], channel.get_member_info_to_c(request_strings[0])
+        )
 
         # FUN_60139620 reads ToC string 3 into MetpInfo k23e and
         # ToC string 8 into MetpInfo k24e.
@@ -184,6 +191,37 @@ class EnterChannelToCLayoutTest(unittest.TestCase):
         self.assertEqual(r.string(), b"")  # k1e is present
         self.assertEqual(r.remaining(), 0)
 
+
+
+class GetMemberInfoToCTest(unittest.TestCase):
+    def test_minimal_self_member_record_matches_stream_serializer_order(self):
+        r = Reader(channel.get_member_info_to_c(b"test"))
+        self.assertEqual(r.u32(), channel.GET_MEMBER_INFO_TOC)
+
+        # FUN_6012dce0 writes the fields in this precise order.
+        self.assertEqual(r.string(), b"test")  # k3e
+        self.assertEqual(tuple(r.string() for _ in range(3)), (b"",) * 3)
+        self.assertEqual(r.u32(), 0)              # k10e
+        self.assertEqual(r.string(), b"")         # k12e
+        self.assertEqual(r.take(8), struct.pack(">Q", 0))  # k13e
+        self.assertEqual(tuple(r.u32() for _ in range(7)), (0,) * 7)
+        self.assertEqual(r.string(), b"")         # k32e
+        self.assertEqual(tuple(r.u32() for _ in range(2)), (0, 0))
+        self.assertEqual(r.string(), b"")         # k102e
+        self.assertEqual(r.take(8), struct.pack(">Q", 0))  # k34e
+        self.assertEqual(tuple(r.u32() for _ in range(2)), (0, 0))
+        self.assertEqual(tuple(r.string() for _ in range(2)), (b"", b""))
+        self.assertEqual(r.u32(), 0)              # k42e
+        self.assertEqual(r.string(), b"")         # k201e
+        self.assertEqual(r.u32(), 0)              # empty k153e vector
+        self.assertEqual(r.string(), b"")         # k1e
+        self.assertEqual(r.remaining(), 0)
+
+    def test_rejects_missing_or_non_bytes_member_key(self):
+        for value in (b"", "", None):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    channel.get_member_info_to_c(value)
 
 
 class GetMemberListTest(unittest.TestCase):
@@ -289,6 +327,31 @@ class AutoEnterSingleModeRequestTest(unittest.TestCase):
 
 
 
+class XlbpLayerMessageTest(unittest.TestCase):
+    def test_layer_three_message_has_three_alignment_slots(self):
+        message = channel.pack_u32(channel.AUTO_ENTER_SINGLE_MODE_TOC) + b"payload"
+        wire_body = channel.layer_message(message, 3)
+        self.assertEqual(
+            wire_body,
+            channel.pack_u32(channel.LAYER_ALIGNMENT) * 3 + message,
+        )
+        msg_id, payload = channel.unwrap_layer_alignment(wire_body)
+        self.assertEqual(msg_id, channel.AUTO_ENTER_SINGLE_MODE_TOC)
+        self.assertEqual(payload, message)
+
+    def test_layer_zero_message_has_no_alignment_prefix(self):
+        message = channel.pack_u32(channel.GET_MEMBER_INFO_TOC) + b"payload"
+        self.assertEqual(channel.layer_message(message, 0), message)
+
+    def test_rejects_invalid_layer_or_short_message(self):
+        for layer in (-1, 4):
+            with self.subTest(layer=layer):
+                with self.assertRaises(ValueError):
+                    channel.layer_message(b"\x00\x00\x00\x01", layer)
+        with self.assertRaises(ValueError):
+            channel.layer_message(b"\x00", 0)
+
+
 class AutoEnterSingleModeResponseTest(unittest.TestCase):
     def test_response_layout_routes_to_local_game_socket(self):
         strings = tuple(f"s{i}".encode("ascii") for i in range(12))
@@ -357,18 +420,24 @@ class AutoEnterDispatchTest(unittest.TestCase):
         )
         response_strings = [b""] * 12
         response_strings[5:8] = strings[5:8]
-        self.assertEqual(
-            session.sent,
-            [channel.auto_enter_single_mode_to_c(
-                game_host=b"127.0.0.1",
-                game_port=15002,
-                strings=tuple(response_strings),
-            )],
+        response = channel.auto_enter_single_mode_to_c(
+            game_host=b"127.0.0.1",
+            game_port=15002,
+            strings=tuple(response_strings),
         )
+        expected_wire_body = channel.layer_message(response, 3)
+        self.assertEqual(session.sent, [expected_wire_body])
+        self.assertEqual(
+            expected_wire_body[:12],
+            channel.pack_u32(channel.LAYER_ALIGNMENT) * 3,
+        )
+        msg_id, unwrapped = channel.unwrap_layer_alignment(expected_wire_body)
+        self.assertEqual(msg_id, channel.AUTO_ENTER_SINGLE_MODE_TOC)
+        self.assertEqual(unwrapped, response)
 
         # These three response fields feed k22e/k23e/k24e in the client
         # converter; k22e is then passed to fillEnterRoomParameter as k42e.
-        r = Reader(session.sent[0])
+        r = Reader(unwrapped)
         self.assertEqual(r.u32(), channel.AUTO_ENTER_SINGLE_MODE_TOC)
         r.string()  # +0x0c
         r.u32()     # +0x28

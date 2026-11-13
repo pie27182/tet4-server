@@ -47,6 +47,7 @@ GET_ROOM_LIST_TOC = 0x0226968A
 LAYER_ALIGNMENT = 0x09D0057A
 GET_DISPLAY_MEMBER_INFO_TOS = 0x0E4772BA
 GET_DISPLAY_MEMBER_INFO_TOC = 0x0C3B49AA
+GET_MEMBER_INFO_TOC = 0x060BC39A
 AUTO_ENTER_SINGLE_MODE_TOS = 0x031AC76A
 AUTO_ENTER_SINGLE_MODE_TOC = 0x0DF37B3A
 GAME_SERVER_HOST = b"127.0.0.1"
@@ -57,6 +58,21 @@ HANDSHAKE_PLAIN = struct.pack("<24H", *range(24))
 log = logging.getLogger("tet4.channel")
 
 
+def layer_message(body: bytes, layer: int) -> bytes:
+    """Place one populated message in the requested XLBP layer slot.
+
+    PC_ConvertX2M dispatches four ordered layer slots (0..3). Empty slots
+    before a populated slot are represented by Cmd_LayerAlignment markers.
+    For example, Tetris-specific channel messages registered with
+    PC_RegisterX2M(..., NLayer=3, ...) require three leading markers.
+    """
+    if not isinstance(body, bytes) or len(body) < 4:
+        raise ValueError("layer message body must contain a 4-byte message ID")
+    if not isinstance(layer, int) or not 0 <= layer <= 3:
+        raise ValueError("XLBP layer must be in 0..3")
+    return pack_u32(LAYER_ALIGNMENT) * layer + body
+
+
 def unwrap_layer_alignment(message_stream: bytes) -> tuple[int, bytes]:
     """Skip leading empty Cmd_LayerAlignment slots in one XLBP message batch.
 
@@ -64,7 +80,7 @@ def unwrap_layer_alignment(message_stream: bytes) -> tuple[int, bytes]:
     Cmd_LayerAlignment (0x09D0057A) for each null IMessage slot before the
     next populated slot. PC_ConvertX2M (FUN_601206e0) consumes those markers
     and continues dispatching the next message. The live Single Mode capture
-    contains two such markers before AutoEnterSingleModeToS.
+    contains three such markers before AutoEnterSingleModeToS.
 
     This server currently handles one populated application message per XLBP
     batch. It strips any leading alignment markers, but does not yet split
@@ -118,6 +134,56 @@ def get_user_id_to_c(member_id: bytes, text_b: bytes = b"", code: int = 0) -> by
     return (pack_u32(GET_USER_ID_TOC)
             + struct.pack(">q", 0) + pack_string(member_id) + pack_string(text_b)
             + struct.pack(">i", code))
+
+
+def get_member_info_to_c(member_key: bytes) -> bytes:
+    """Serialize the minimal Cmd_Channel_GetMemberInfoToC profile.
+
+    HgCom3.dll stream serializer FUN_6012dce0 and matching deserializer
+    FUN_6012df00 establish this exact wire order:
+      str × 4 | u32 | str | u64 | u32 × 7 | str | u32 × 2 |
+      str | u64 | u32 × 2 | str × 2 | u32 | str | vector | str
+
+    The converter FUN_601391a0 maps the first string to k3e. Msg_AddMember
+    copies k3e into CMemberData's member key. Msg_GetUserId stores the member
+    id from Cmd_Channel_GetUserIdToC under GData["k601e"] and mirrors it into
+    GData["k602e"] (GData vtable +0x70 copies the value of the source key);
+    SGlobalInfo::MyData() looks that value up in the member list. Live
+    breakpoints show the lookup key is the member id itself, so member_key
+    must be that same string, not the literal "k601e".
+
+    The dynamic k153e vector is empty and the final k1e result string is
+    present and empty (success-shaped). The push is live-validated: with
+    member_key equal to the session member id, MyData() finds the record and
+    Msg_SendEnterRoom proceeds to the game socket on port 15002.
+    """
+    if not isinstance(member_key, bytes) or not member_key:
+        raise ValueError("member_key must be a non-empty byte string")
+
+    return (
+        pack_u32(GET_MEMBER_INFO_TOC)
+        + pack_string(member_key)  # k3e
+        + pack_string(b"")         # k7e
+        + pack_string(b"")         # k8e
+        + pack_string(b"")         # k11e
+        + pack_u32(0)              # k10e
+        + pack_string(b"")         # k12e
+        + struct.pack(">Q", 0)     # k13e
+        + b"".join(pack_u32(0) for _ in range(7))  # k14e, k26e..k31e
+        + pack_string(b"")         # k32e
+        + pack_u32(0)              # k33e
+        + pack_u32(0)              # k131e
+        + pack_string(b"")         # k102e
+        + struct.pack(">Q", 0)     # k34e
+        + pack_u32(0)              # k35e
+        + pack_u32(0)              # k154e
+        + pack_string(b"")         # k37e
+        + pack_string(b"")         # k38e
+        + pack_u32(0)              # k42e
+        + pack_string(b"")         # k201e
+        + pack_u32(0)              # empty k153e vector
+        + pack_string(b"")         # k1e
+    )
 
 
 @dataclass(frozen=True)
@@ -595,8 +661,21 @@ def _dispatch(session, conn, msg_id: int, payload: bytes) -> None:
             response_strings[2] = request.channel_metp_k23e
             response_strings[7] = request.channel_metp_k24e
             session.send(conn, enter_channel_to_c(strings=tuple(response_strings)))
+            # Seed the local CMemberData object before Msg_SendEnterRoom calls
+            # SGlobalInfo::MyData(). MyData searches for the member id that
+            # GetUserIdToC placed in GData["k601e"]/["k602e"], and the client
+            # repeats that same id as k3e in this request.
+            member_key = request.strings[0]
+            if member_key:
+                session.send(conn, get_member_info_to_c(member_key))
+                log.info(
+                    "sent experimental Cmd_Channel_GetMemberInfoToC "
+                    "(member_key=%r)",
+                    member_key,
+                )
             log.info(
                 "sent Cmd_Channel_EnterChannelToC with channel metadata "
+
                 "(k23e_len=%d, k24e_len=%d) for user_id=%d",
                 len(request.channel_metp_k23e),
                 len(request.channel_metp_k24e),
@@ -650,10 +729,12 @@ def _dispatch(session, conn, msg_id: int, payload: bytes) -> None:
             # fillEnterRoomParameter. Preserve these identity fields in the reply.
             response_strings = [b""] * 12
             response_strings[5:8] = request.strings[5:8]
-            session.send(
-                conn,
-                auto_enter_single_mode_to_c(strings=tuple(response_strings)),
-            )
+            # Tet4.exe registers AutoEnterSingleModeToC (0x0DF37B3A)
+            # with PC_RegisterX2M(..., NLayer=3, ...). The captured ToS
+            # arrived after three LayerAlignment markers, so its ToC must
+            # occupy the same layer slot rather than defaulting to layer 0.
+            response = auto_enter_single_mode_to_c(strings=tuple(response_strings))
+            session.send(conn, layer_message(response, 3))
             log.info(
                 "sent Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToC "
                 "game_id=%r endpoint=%s:%d",

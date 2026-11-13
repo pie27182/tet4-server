@@ -144,6 +144,7 @@ these markers and continues dispatching the next message. Thus the first ID afte
 | `Cmd_Channel_GetUserIdToC` | `0x0A80E29A` | server to client | **[wire]** our reply accepted (k161e = 0) |
 | `Cmd_Channel_EnterChannelByUserIdToS` | `0x0696068A` | client to server | **[wire]** request observed; request layout decoded from static analysis |
 | `Cmd_Channel_EnterChannelToC` | `0x00C0FC8A` | server to client | **[wire, static]** accepted to member-list request; response strings 3 and 8 populate `MetpInfo(4).k23e/k24e` |
+| `Cmd_Channel_GetMemberInfoToC` | `0x060BC39A` | server to client | **[static, experimental]** push path to seed local `CMemberData`; not yet live-verified |
 | `Cmd_Channel_GetMemberListToS` | `0x0AE3BBDA` | client to server | **[wire]** observed after EnterChannelToC; request layout [static] |
 | `Cmd_Channel_GetMemberListToC` | `0x06B816EA` | server to client | **[wire]** empty-vector reply accepted; the client then requests the room list |
 | `Cmd_Channel_GetRoomListToS` | `0x0DDA299A` | client to server | **[wire]** `u32 id | string × 3`; no trailing integer |
@@ -152,6 +153,7 @@ these markers and continues dispatching the next message. Thus the first ID afte
 | `Cmd_Item_GetItemStateToC` | `0x0C446ADA` | server to client | **[wire]** empty-vector reply accepted; the client stays in the channel |
 | `Cmd_LayerAlignment` | `0x09D0057A` | client to server | **[wire, static]** empty batch marker; skip it to reach the next populated message |
 | `Cmd_Channel_OrderTypeGetDisplayMemberInfoTetrisToS` | `0x0E4772BA` | client to server | **[wire, static]** body `u32 id | string member_id | u32 option`; response structure not yet implemented |
+| `Cmd_Channel_OrderTypeGetDisplayMemberInfoTetrisToC` | `0x0C3B49AA` | server to client | **[static]** composite `TT_XDR` response; converter opens/fills `dlgMemberInfo`, distinct from `GetMemberInfoToC` |
 | `Cmd_Channel_TicketReissueToS` | `0x0A101CBA` | client to server | **[wire, static]** periodic ticket refresh observed |
 | `Cmd_Channel_TicketReissueToC` | `0x0C6600AA` | server to client | **[static]** response ID; payload handling not yet implemented |
 
@@ -190,6 +192,56 @@ meaning is not established; the server does not read it.
   into `SGlobalInfo::MetpInfo(4)` under `k23e` and `k24e`. Later,
   `Msg_SendEnterRoom` (HgModel3.dll, `0x6090B480`) reads both keys from
   `MetpInfo(4)`. The RoomInfoToC converter does not write these keys.
+
+The wire layout for the separate `Cmd_Channel_GetMemberInfoToC`
+(`0x060BC39A`) is:
+`u32 id | str × 4 | u32 | str | u64 | u32 × 7 | str | u32 × 2 |
+str | u64 | u32 × 2 | str × 2 | u32 | str | vector | str`.
+This order is from HgCom3.dll serializer `FUN_6012dce0` and matching
+deserializer `FUN_6012df00`; converter `FUN_601391a0` supplies the Metp
+keys. Its first string maps to `k3e`.
+
+The live WineDbg stop at `Msg_SendEnterRoom` was not caused by reading those
+MetpInfo keys. The faulting expression is `AddValue("k3e", MyData()+0x10)`:
+`SGlobalInfo::MyData()` looks up `GData["k602e"]` in the local
+`CMemberDataList`. `Msg_GetUserId` stores the member id from `GetUserIdToC`
+under `GData["k601e"]` and then copies that value into `GData["k602e"]`
+(the GData vtable slot `+0x70` copies by source key). The lookup key is
+therefore the member id itself, not the literal string `"k601e"`. A live stop
+at `MyData`'s inner `FindMemberData` showed the key `"test"` and a null result
+while the member list held `"k601e"`. `Msg_FillMemberList` compares the self
+row against this key, but skips it when `MyData()` is still null; adding only
+the self row to the ordinary member vector therefore does not seed the object.
+
+The statically recovered server-to-client message `Cmd_Channel_GetMemberInfoToC`
+(`0x060BC39A`) is registered to converter `FUN_601391A0`. Its controller path is
+`Net_GetMemberInfo -> channel/getMemInfo -> Msg_GetMemberInfo -> Msg_AddMember`;
+there is no prerequisite client request in this path. Its first wire string maps
+to `k3e`, which `Msg_AddMember` copies into `CMemberData`'s member key. The
+server sends this push after `EnterChannelToC` with `k3e` equal to the member id
+from `EnterChannelByUserIdToS`, other fields zero/empty and a present empty
+`k1e` result string. A live run with `k3e="test"` completed the whole path:
+`Msg_GetMemberInfo` and `Msg_AddMember` ran, `MyData()` returned a non-null
+record, `Msg_SendEnterRoom` passed, and the client connected to port 15002 and
+completed the 48-byte secure handshake. The earlier `unknown` trace label was
+only a missing entry in the decoder's message-name table.
+
+The generic HgCom3 `Cmd_Channel_GetMemberInfoToC` is registered in
+layer 0 as converter `FUN_601391A0`. Tet4.exe additionally registers the same
+outer message ID `0x060BC39A` in layer 3 to a different converter
+`FUN_00459E20` for a Tetris-specific class. The XLBP layer is therefore part
+of message identity here: the experimental self-member record is intentionally
+sent in layer 0, while layer-3 Tetris messages require three alignment markers.
+
+The separate `Cmd_Channel_OrderTypeGetDisplayMemberInfoTetrisToS`
+(`0x0E4772BA`) request is not the trigger for this model path. It is itself
+a layer-3 message and has a different layer-3 response,
+`Cmd_Channel_OrderTypeGetDisplayMemberInfoTetrisToC` (`0x0C3B49AA`),
+implemented in `Tet4.exe`. Its converter `FUN_00459EF0` applies a
+`TT_XDR` header and obtains the `dlgMemberInfo` dialog; the response object
+contains several nested containers and strings. This is a display/profile
+dialog flow, not the `Net_GetMemberInfo -> Msg_GetMemberInfo -> Msg_AddMember`
+path which creates `CMemberData`.
 - The previous server sent empty strings in both response positions. It now echoes
   request strings 3/4 into response strings 3/8. This is grounded by the request
   converter, response converter and the actual trace values; live confirmation that
@@ -302,6 +354,15 @@ Serialize/Deserialize methods are `FUN_00442E90` / `FUN_00443080`; converter:
 str | str | str | str | u32 | str | str | u32 | str`.
 
 The converter applies the `TT_XDR` header and maps the fields into MetpInfo(5).
+In `Tet4.exe: FUN_0045B410` it is registered with
+`PC_RegisterX2M(0x0DF37B3A, 3, FUN_00445F60, ...)`: **the response belongs
+to XLBP layer 3** and must be preceded by three `Cmd_LayerAlignment` markers.
+The observed request has those three markers. The earlier local server sent the
+reply without them (layer 0), so the client's layer-3 AutoEnter converter could
+not receive it. `tet4server.channel.layer_message(response, 3)` now preserves
+the layer on the response. This is a statically established routing fix; live
+acceptance is still pending.
+
 It treats status string at offset `+0xfc` equal to `v2e` as failure; any other value
 takes the success path. In particular:
 - response string `+0xa8` becomes `k22e` and is also passed as `k42e` to

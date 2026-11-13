@@ -1,0 +1,39 @@
+# Catch the MyData() call made inside Msg_SendEnterRoom and print the key it
+# searches plus the returned pointer. Also watch Add and ClearMemberList.
+# Run with: env TIMEOUT=300 tools/debug/winedbg_batch.sh tools/debug/inspect-mydata-key.wdbg
+break *0x6011c500
+break *0x6011c6d0
+break *0x6090b480
+break *0x60113af7
+break *0x60113afc
+c
+info reg
+bt
+print (char*)(*(int*)($esp+4)+0x10)
+print *(char**)($ebp-0x14)
+print $eax
+c
+info reg
+bt
+print (char*)(*(int*)($esp+4)+0x10)
+print *(char**)($ebp-0x14)
+print $eax
+c
+info reg
+bt
+print (char*)(*(int*)($esp+4)+0x10)
+print *(char**)($ebp-0x14)
+print $eax
+c
+info reg
+bt
+print *(char**)($ebp-0x14)
+print $ecx
+print $eax
+c
+info reg
+bt
+print *(char**)($ebp-0x14)
+print $ecx
+print $eax
+quit

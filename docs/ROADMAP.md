@@ -25,8 +25,16 @@ serializer test proves layout, not that the client accepts the message.
 - [x] Recover the EnterChannel request/response mapping for required lobby metadata:
       ToS strings 3/4 are `k23e`/`k24e`; ToC strings 3/8 populate
       `MetpInfo(4).k23e/k24e`. The server now echoes these values.
-- [ ] Live-verify that `Msg_SendEnterRoom` no longer faults while reading
-      `MetpInfo(4).k23e/k24e`.
+- [x] Recover the separate `Cmd_Channel_GetMemberInfoToC` push path:
+      `Msg_GetUserId` copies the `GetUserIdToC` member id into `GData["k601e"]`
+      and then `GData["k602e"]`; `MyData()` looks up that member id;
+      `Msg_GetMemberInfo -> Msg_AddMember` creates the local record.
+- [x] Live-test the `GetMemberInfoToC` push after `EnterChannelToC`.
+      Sending `k3e=<member id>` (the same value as `EnterChannelByUserIdToS`)
+      makes `SGlobalInfo::MyData()` return a non-null record.
+- [x] Live-verify that `Msg_SendEnterRoom` passes its `MyData()+0x10` read
+      and that the client opens a TCP connection to `127.0.0.1:15002`; the
+      48-byte secure handshake and the first two game frames were captured.
 - [x] Live probe accepted: after the EnterChannel reply the client sends
       `Cmd_LayerAlignment` and then `Cmd_Channel_GetMemberListToS`.
 - [x] Reply to `Cmd_Channel_GetMemberListToS` with an empty member vector.
@@ -65,6 +73,12 @@ serializer test proves layout, not that the client accepts the message.
 - [x] Implement the XLBP batch handling needed for the observed three leading
       `Cmd_LayerAlignment` markers. The old reader treated the first marker as the
       command ID and silently skipped the actual AutoEnter request.
+- [x] Recover AutoEnterToC's XLBP response layer from
+      `Tet4.exe: FUN_0045B410`: ID `0x0DF37B3A` is registered in layer 3.
+      The server now sends three leading `Cmd_LayerAlignment` markers on this
+      response too; previously it incorrectly sent the response in layer 0.
+- [ ] Live-verify that the layer-3 AutoEnterToC converter runs, the client passes
+      `Msg_SendEnterRoom`, and a connection attempt reaches `127.0.0.1:15002`.
 - [x] Match the AutoEnter response's identity fields to the request: ToS strings
       5..7 (GameID, `k23e`, `k24e`) are copied into ToC offsets +0xa8/+0xc4/+0xe0.
       Ghidra shows these become `k22e`, `k23e`, `k24e`; +0xa8 is also passed

@@ -1,0 +1,15 @@
+# Prove that MyData() returns non-null inside Msg_SendEnterRoom and that the
+# client reaches Msg_ConnectGameServer. The Single Mode request is automatic
+# in this build after the channel lobby finishes loading.
+# Run with: env TIMEOUT=300 tools/debug/winedbg_batch.sh tools/debug/break-mydata-result.wdbg
+break *0x6090b480
+break *0x60914950
+c
+info reg
+bt
+break *0x60113afc
+c
+print $eax
+c
+bt
+quit

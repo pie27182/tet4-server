@@ -1,0 +1,21 @@
+# Follow the server-initiated member-info response into the model, then
+# follow Single Mode room entry. Run with tools/debug/winedbg_batch.sh.
+break *0x602039f0
+break *0x6090b0d0
+break *0x6090aaf0
+break *0x6090b480
+break *0x6090b560
+break *0x60914950
+c
+bt
+c
+bt
+c
+bt
+c
+bt
+c
+bt
+c
+bt
+quit

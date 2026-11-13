@@ -119,7 +119,11 @@ class EnterChannelToCMetpInfoTest(unittest.TestCase):
         channel._dispatch(
             session, object(), channel.ENTER_CHANNEL_BY_USER_ID_TOS, payload
         )
-        self.assertEqual(len(session.sent), 1)
+        self.assertEqual(len(session.sent), 2)
+
+        # The second frame is the experimental self-member info push. Its
+        # first string must match GData["k602e"] set by Msg_GetUserId.
+        self.assertEqual(session.sent[1], channel.get_member_info_to_c(b"k601e"))
 
         # FUN_60139620 reads ToC string 3 into MetpInfo k23e and
         # ToC string 8 into MetpInfo k24e.
@@ -184,6 +188,35 @@ class EnterChannelToCLayoutTest(unittest.TestCase):
         self.assertEqual(r.string(), b"")  # k1e is present
         self.assertEqual(r.remaining(), 0)
 
+
+
+class GetMemberInfoToCTest(unittest.TestCase):
+    def test_minimal_self_member_record_uses_exact_xdr_field_order(self):
+        r = Reader(channel.get_member_info_to_c())
+        self.assertEqual(r.u32(), channel.GET_MEMBER_INFO_TOC)
+        self.assertEqual(r.string(), b"k601e")  # k3e: GData["k602e"]
+        self.assertEqual(tuple(r.string() for _ in range(3)), (b"",) * 3)
+        self.assertEqual(r.u32(), 0)             # k10e
+        self.assertEqual(r.string(), b"")        # k12e
+        self.assertEqual(r.take(8), struct.pack(">Q", 0))  # k13e
+        self.assertEqual(tuple(r.u32() for _ in range(7)), (0,) * 7)
+        self.assertEqual(r.string(), b"")        # k32e
+        self.assertEqual(tuple(r.u32() for _ in range(2)), (0, 0))
+        self.assertEqual(r.string(), b"")        # k102e
+        self.assertEqual(r.take(8), struct.pack(">Q", 0))  # k34e
+        self.assertEqual(tuple(r.u32() for _ in range(2)), (0, 0))
+        self.assertEqual(tuple(r.string() for _ in range(2)), (b"", b""))
+        self.assertEqual(r.u32(), 0)             # k42e
+        self.assertEqual(r.string(), b"")        # k201e
+        self.assertEqual(r.u32(), 0)             # empty k153e vector
+        self.assertEqual(r.string(), b"")        # k1e success-shaped result
+        self.assertEqual(r.remaining(), 0)
+
+    def test_rejects_missing_or_non_bytes_member_key(self):
+        for value in (b"", "", None):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    channel.get_member_info_to_c(value)
 
 
 class GetMemberListTest(unittest.TestCase):

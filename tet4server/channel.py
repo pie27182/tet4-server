@@ -47,6 +47,7 @@ GET_ROOM_LIST_TOC = 0x0226968A
 LAYER_ALIGNMENT = 0x09D0057A
 GET_DISPLAY_MEMBER_INFO_TOS = 0x0E4772BA
 GET_DISPLAY_MEMBER_INFO_TOC = 0x0C3B49AA
+GET_MEMBER_INFO_TOC = 0x060BC39A
 AUTO_ENTER_SINGLE_MODE_TOS = 0x031AC76A
 AUTO_ENTER_SINGLE_MODE_TOC = 0x0DF37B3A
 GAME_SERVER_HOST = b"127.0.0.1"
@@ -118,6 +119,49 @@ def get_user_id_to_c(member_id: bytes, text_b: bytes = b"", code: int = 0) -> by
     return (pack_u32(GET_USER_ID_TOC)
             + struct.pack(">q", 0) + pack_string(member_id) + pack_string(text_b)
             + struct.pack(">i", code))
+
+
+def get_member_info_to_c(member_key: bytes = b"k601e") -> bytes:
+    """Serialize the minimal Cmd_Channel_GetMemberInfoToC profile.
+
+    Static recovery of HgCom3.dll FUN_6012dce0 / converter FUN_601391a0:
+    the first string is k3e, copied by Msg_AddMember into CMemberData's
+    member key. Msg_GetUserId sets GData[k602e] to the literal "k601e";
+    SGlobalInfo::MyData() looks up that key in CMemberDataList. All other
+    profile fields are left at constructor defaults and the dynamic k153e
+    vector is empty. k1e is present and empty (success-shaped result key).
+
+    Sending this push immediately after EnterChannelToC is an experiment:
+    the client has a registered Net_GetMemberInfo -> Msg_GetMemberInfo path,
+    but the correct server-side timing still needs a live-client check.
+    """
+    if not isinstance(member_key, bytes) or not member_key:
+        raise ValueError("member_key must be a non-empty byte string")
+
+    return (
+        pack_u32(GET_MEMBER_INFO_TOC)
+        + pack_string(member_key)  # k3e
+        + pack_string(b"")         # k7e
+        + pack_string(b"")         # k8e
+        + pack_string(b"")         # k11e
+        + pack_u32(0)              # k10e
+        + pack_string(b"")         # k12e
+        + struct.pack(">Q", 0)     # k13e
+        + b"".join(pack_u32(0) for _ in range(7))  # k14e..k31e
+        + pack_string(b"")         # k32e
+        + pack_u32(0)              # k33e
+        + pack_u32(0)              # k131e
+        + pack_string(b"")         # k102e
+        + struct.pack(">Q", 0)     # k34e
+        + pack_u32(0)              # k35e
+        + pack_u32(0)              # k154e
+        + pack_string(b"")         # k37e
+        + pack_string(b"")         # k38e
+        + pack_u32(0)              # k42e
+        + pack_string(b"")         # k201e
+        + pack_u32(0)              # count for k153e vector
+        + pack_string(b"")         # k1e (success-shaped result)
+    )
 
 
 @dataclass(frozen=True)
@@ -595,6 +639,10 @@ def _dispatch(session, conn, msg_id: int, payload: bytes) -> None:
             response_strings[2] = request.channel_metp_k23e
             response_strings[7] = request.channel_metp_k24e
             session.send(conn, enter_channel_to_c(strings=tuple(response_strings)))
+            # Seed the local CMemberData object before Msg_SendEnterRoom calls
+            # SGlobalInfo::MyData(). This is a statically recovered push path;
+            # its placement here is experimental and requires live validation.
+            session.send(conn, get_member_info_to_c())
             log.info(
                 "sent Cmd_Channel_EnterChannelToC with channel metadata "
                 "(k23e_len=%d, k24e_len=%d) for user_id=%d",

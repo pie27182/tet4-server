@@ -46,7 +46,7 @@ serializer test proves layout, not that the client accepts the message.
       it on the channel connection. Its serializer at `0x004A18F0` is decoded;
       `tet4server.channel` now parses and logs the eight strings and four uint32 fields.
 - [x] Capture the request in the 2026-11-13 PCAP after the empty member/room-list
-      probes. It is inside an XLBP batch with two leading `Cmd_LayerAlignment`
+      probes. It is inside an XLBP batch with three leading `Cmd_LayerAlignment`
       markers; decoded values are member `test`, room type `N000S`, GameID `TET4`,
       and zero/empty defaults for the remaining fields.
 - [x] Recover the AutoEnter response's full top-level field order from

@@ -23,6 +23,7 @@ Strings are uint32be length + bytes, with no padding. i64 is big-endian.
 """
 from dataclasses import dataclass
 import logging
+import os
 import socket
 import struct
 import threading
@@ -135,6 +136,53 @@ def enter_channel_to_c(
         + pack_string(strings[8])
     )
 
+
+
+@dataclass(frozen=True)
+class ItemStateRequest:
+    """Observed Cmd_Item_GetItemStateToS request fields."""
+    member_key: bytes
+    option: int
+
+
+def parse_item_state_request(payload: bytes) -> ItemStateRequest:
+    """Parse the captured request: u32 id | string | u8.
+
+    The 2026-11-12 live capture contained the key "test" and option 1.
+    The key is returned to the caller but should not be written verbatim to logs.
+    """
+    r = Reader(payload)
+    if r.u32() != ITEM_STATE_TOS:
+        raise ProtocolError("not Cmd_Item_GetItemStateToS")
+    member_key = r.string()
+    option = r.take(1)[0]
+    if r.remaining():
+        raise ProtocolError(f"unexpected {r.remaining()} trailing item-state request bytes")
+    return ItemStateRequest(member_key, option)
+
+
+def single_mode_room_info_to_c(text: bytes = b"", value: int = 0, flag: int = 0) -> bytes:
+    """Serialize the statically recovered RoomInfo message; not dispatched yet.
+
+    Tet4.exe Serialize FUN_00443D90 establishes:
+        u32 id | string | u32 | u8
+
+    The message's role and field semantics are not confirmed by a live exchange,
+    so this serializer is a byte-layout primitive only. It is deliberately not sent
+    automatically during AutoEnter.
+    """
+    if not isinstance(text, bytes):
+        raise ValueError("room-info text field must be bytes")
+    if not isinstance(value, int) or not 0 <= value <= 0xFFFFFFFF:
+        raise ValueError("room-info value must fit in uint32")
+    if not isinstance(flag, int) or not 0 <= flag <= 0xFF:
+        raise ValueError("room-info flag must fit in one byte")
+    return (
+        pack_u32(SINGLE_MODE_ROOM_INFO_TOC)
+        + pack_string(text)
+        + pack_u32(value)
+        + bytes([flag])
+    )
 
 
 @dataclass(frozen=True)
@@ -403,12 +451,21 @@ def handle(conn, discovery_only: bool = False) -> None:
                 _dispatch(session, conn, msg_id, payload)
             except ProtocolError as exc:
                 # One malformed request must not take the whole channel down.
-                log.warning(
-                    "unhandled channel frame id=0x%08x payload_hex=%s (%s)",
-                    msg_id,
-                    payload.hex(),
-                    exc,
-                )
+                if os.environ.get("TET4_TRACE_UNKNOWN") == "1":
+                    log.warning(
+                        "unhandled channel frame id=0x%08x payload_hex=%s (%s)",
+                        msg_id,
+                        payload.hex(),
+                        exc,
+                    )
+                else:
+                    log.warning(
+                        "unhandled/malformed channel frame id=0x%08x payload_len=%d (%s); "
+                        "set TET4_TRACE_UNKNOWN=1 for a raw hex dump",
+                        msg_id,
+                        len(payload),
+                        exc,
+                    )
     except (ProtocolError, OSError) as exc:
         log.info("channel closed: %s", exc)
     finally:
@@ -450,9 +507,14 @@ def _dispatch(session, conn, msg_id: int, payload: bytes) -> None:
                 request.option,
             )
         elif msg_id == ITEM_STATE_TOS:
-            log.info("received Cmd_Item_GetItemStateToS payload_hex=%s", payload.hex())
+            request = parse_item_state_request(payload)
+            log.info(
+                "received Cmd_Item_GetItemStateToS key_len=%d option=%d",
+                len(request.member_key),
+                request.option,
+            )
             session.send(conn, item_state_to_c())
-            log.info("sent empty Cmd_Item_GetItemStateToC")
+            log.info("sent empty Cmd_Item_GetItemStateToC (0 items)")
         elif msg_id == AUTO_ENTER_SINGLE_MODE_TOS:
             request = parse_auto_enter_single_mode_request(payload)
             log.info(

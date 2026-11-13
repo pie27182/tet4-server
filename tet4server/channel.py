@@ -368,11 +368,15 @@ def auto_enter_single_mode_to_c(
       str, u32, str, str, str, u32, u32, str, u32,
       str, str, str, str, u32, str, str, u32, str.
 
-    The success converter rejects status string "v2e" at +0xfc. The game server
-    endpoint is read from k52e (string +0x138) and k53e (uint32 +0x154).
-    Remaining constructor-default fields are empty/zero until the client confirms
-    which room metadata is mandatory. This is a controlled local probe, not yet a
-    verified successful room transition.
+    The success converter rejects status string "v2e" at +0xfc. It maps the
+    strings at +0xa8, +0xc4 and +0xe0 to k22e, k23e and k24e; +0xa8 is also
+    passed as k42e to channel/fillEnterRoomParameter. The button request carries
+    GameID, k23e and k24e at those same three offsets, so callers should echo
+    those values rather than leaving them blank.
+    
+    The game server endpoint is read from k52e (string +0x138) and k53e (uint32
+    +0x154). Other room metadata remains unverified. The response shape and its
+    acceptance still require live-client validation.
     """
     if not isinstance(game_host, bytes) or not game_host:
         raise ValueError("game_host must be a non-empty byte string")
@@ -613,10 +617,20 @@ def _dispatch(session, conn, msg_id: int, payload: bytes) -> None:
                 request.strings,
                 request.integers,
             )
-            session.send(conn, auto_enter_single_mode_to_c())
+            # The button request copies GameID/k23e/k24e into strings
+            # 5..7 (+0xa8/+0xc4/+0xe0). The ToC converter maps those response
+            # fields to k22e/k23e/k24e and forwards k22e as k42e to
+            # fillEnterRoomParameter. Preserve these identity fields in the reply.
+            response_strings = [b""] * 12
+            response_strings[5:8] = request.strings[5:8]
+            session.send(
+                conn,
+                auto_enter_single_mode_to_c(strings=tuple(response_strings)),
+            )
             log.info(
                 "sent Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToC "
-                "with local game endpoint %s:%d",
+                "game_id=%r endpoint=%s:%d",
+                request.strings[5],
                 GAME_SERVER_HOST.decode("ascii"),
                 GAME_SERVER_PORT,
             )

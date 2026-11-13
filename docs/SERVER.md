@@ -89,9 +89,21 @@ keys: its converter does not populate `MetpInfo(4).k23e/k24e`.
 
 The 2026-11-13 PCAP contains the AutoEnter request (`0x031AC76A`) after three
 empty `Cmd_LayerAlignment` slots. The client sends GameID `TET4` in request
-string +0xa8, then receives AutoEnterToC with host `127.0.0.1` and port `15002`.
-The channel trace proves the response was written, but there are no packets to
-15002 and the client closes the channel shortly afterward.
+string +0xa8, then the old server sent AutoEnterToC with host `127.0.0.1` and
+port `15002` **without** alignment markers. The channel trace proves the
+response bytes were written, but there were no packets to 15002 and the client
+closed the channel shortly afterward.
+
+A static registration-table check identified a concrete framing mismatch:
+`Tet4.exe: FUN_0045B410` registers `0x0DF37B3A` to
+`FUN_00445F60` in XLBP layer 3. The observed client request also arrived in
+layer 3 (three `Cmd_LayerAlignment` markers), but the old server's reply was
+layer 0. The branch now prefixes the AutoEnterToC response with three markers
+using `layer_message(response, 3)`. This is the best-supported explanation
+for the lack of client-side response handling so far, but it still needs a fresh
+real-client run to prove that the converter executes and the game connection
+is attempted. The generic `GetMemberInfoToC` push remains layer 0; HgCom3
+registers that generic converter at layer 0.
 
 Static analysis of `Tet4.exe:0x00445F60` shows that response fields +0xa8/+0xc4/+0xe0
 populate `k22e`/`k23e`/`k24e`; +0xa8 is additionally passed as `k42e` to

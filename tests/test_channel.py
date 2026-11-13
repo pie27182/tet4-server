@@ -324,6 +324,31 @@ class AutoEnterSingleModeRequestTest(unittest.TestCase):
 
 
 
+class XlbpLayerMessageTest(unittest.TestCase):
+    def test_layer_three_message_has_three_alignment_slots(self):
+        message = channel.pack_u32(channel.AUTO_ENTER_SINGLE_MODE_TOC) + b"payload"
+        wire_body = channel.layer_message(message, 3)
+        self.assertEqual(
+            wire_body,
+            channel.pack_u32(channel.LAYER_ALIGNMENT) * 3 + message,
+        )
+        msg_id, payload = channel.unwrap_layer_alignment(wire_body)
+        self.assertEqual(msg_id, channel.AUTO_ENTER_SINGLE_MODE_TOC)
+        self.assertEqual(payload, message)
+
+    def test_layer_zero_message_has_no_alignment_prefix(self):
+        message = channel.pack_u32(channel.GET_MEMBER_INFO_TOC) + b"payload"
+        self.assertEqual(channel.layer_message(message, 0), message)
+
+    def test_rejects_invalid_layer_or_short_message(self):
+        for layer in (-1, 4):
+            with self.subTest(layer=layer):
+                with self.assertRaises(ValueError):
+                    channel.layer_message(b"\x00\x00\x00\x01", layer)
+        with self.assertRaises(ValueError):
+            channel.layer_message(b"\x00", 0)
+
+
 class AutoEnterSingleModeResponseTest(unittest.TestCase):
     def test_response_layout_routes_to_local_game_socket(self):
         strings = tuple(f"s{i}".encode("ascii") for i in range(12))
@@ -392,18 +417,24 @@ class AutoEnterDispatchTest(unittest.TestCase):
         )
         response_strings = [b""] * 12
         response_strings[5:8] = strings[5:8]
-        self.assertEqual(
-            session.sent,
-            [channel.auto_enter_single_mode_to_c(
-                game_host=b"127.0.0.1",
-                game_port=15002,
-                strings=tuple(response_strings),
-            )],
+        response = channel.auto_enter_single_mode_to_c(
+            game_host=b"127.0.0.1",
+            game_port=15002,
+            strings=tuple(response_strings),
         )
+        expected_wire_body = channel.layer_message(response, 3)
+        self.assertEqual(session.sent, [expected_wire_body])
+        self.assertEqual(
+            expected_wire_body[:12],
+            channel.pack_u32(channel.LAYER_ALIGNMENT) * 3,
+        )
+        msg_id, unwrapped = channel.unwrap_layer_alignment(expected_wire_body)
+        self.assertEqual(msg_id, channel.AUTO_ENTER_SINGLE_MODE_TOC)
+        self.assertEqual(unwrapped, response)
 
         # These three response fields feed k22e/k23e/k24e in the client
         # converter; k22e is then passed to fillEnterRoomParameter as k42e.
-        r = Reader(session.sent[0])
+        r = Reader(unwrapped)
         self.assertEqual(r.u32(), channel.AUTO_ENTER_SINGLE_MODE_TOC)
         r.string()  # +0x0c
         r.u32()     # +0x28

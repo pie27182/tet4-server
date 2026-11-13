@@ -18,8 +18,8 @@ library. The command starts listeners; it does not launch Wine or the game clien
 
 Options:
 
-- `--channel-mode full` (default): answer the implemented channel messages,
-  including the live-accepted empty member, room and item-state replies.
+- `--channel-mode full` (default): answer implemented channel messages, including
+  the live-accepted empty member, room and item-state replies.
 - `--channel-mode discovery-only`: perform only the secure channel handshake and
   deliberately send no application-level reply.
 - `--capture-dir PATH`: save decoded game-socket frame bodies as binary files.
@@ -31,27 +31,34 @@ in [`REPRODUCE.md`](REPRODUCE.md).
 
 ## Current Single Mode boundary
 
-The client has been observed accepting:
-- channel authorization and user-id replies;
-- the zero/default channel-entry probe, advancing to the member list;
-- empty member and room lists;
-- the empty item-state response. The client stayed in the channel for more than
-  two minutes with this response, whereas without it the observed client exited
-  about three seconds after requesting item state.
+Live-client evidence confirms these channel steps:
 
-The channel also has a statically recovered AutoEnter response that points at the
-local game socket. Its successful live acceptance and the subsequent game handshake
-have not yet been established. The game listener currently captures known inbound
-frames and does not send the start-game or per-turn messages.
+- channel authorization and user-id replies are accepted;
+- the zero/default channel-entry reply advances to the member-list request;
+- empty member and room lists are accepted;
+- the empty item-state response is accepted. With it the client stayed in the channel
+  for more than two minutes; without it the observed client exited about three seconds
+  after requesting item state.
 
-`single_mode_room_info_to_c` is a byte-layout serializer based on
-`Tet4.exe:0x00443D90`; it is deliberately not dispatched because the role and field
-semantics have not been confirmed in a live exchange.
+The AutoEnter request is statically decoded and the response serializer is implemented.
+The response sets a local game endpoint `127.0.0.1:15002`. However, there is no fresh
+live-client evidence in the repository that the client accepts that response or
+completes the game-socket handshake. The room metadata fields other than host/port
+remain constructor defaults.
 
-The independent Tetris engine remains disconnected from the network protocol. The
-nested `StartNewGameToC` messages, `_SingleModeInfo`, `_TetrisMemberInfo`,
-board encoding and authoritative update messages are still unknown. Therefore this
-is a runnable local protocol server, not yet a playable Single Mode implementation.
+`single_mode_room_info_to_c` serializes the recovered top-level layout
+`u32 id | string | u32 | u8` from `Tet4.exe:0x00443D90`; the role and field
+semantics are not yet confirmed. It is deliberately not sent automatically.
 
-See [`ROADMAP.md`](ROADMAP.md) for live acceptance criteria. Serializer tests and a
-successful socket handshake alone do not establish gameplay.
+The game listener completes the secure handshake, parses known client-to-server
+`PolyMinoPutToS` and `GameReportToS` request layouts, and can save decoded frame
+bodies. It does not send the nested start-game state or per-turn updates.
+
+The independent Tetris engine is not connected to the wire protocol. The nested
+`StartNewGameToC` messages, `_SingleModeInfo`, `_TetrisMemberInfo`, board
+encoding, authoritative updates and game-end flow remain to be recovered. This is a
+runnable protocol server with a verified channel path, not a playable Single Mode
+implementation.
+
+See [`ROADMAP.md`](ROADMAP.md) for the live acceptance criteria. Serializer tests and
+a successful socket handshake alone do not establish gameplay.

@@ -192,6 +192,14 @@ meaning is not established; the server does not read it.
   `Msg_SendEnterRoom` (HgModel3.dll, `0x6090B480`) reads both keys from
   `MetpInfo(4)`. The RoomInfoToC converter does not write these keys.
 
+The wire layout for the separate `Cmd_Channel_GetMemberInfoToC`
+(`0x060BC39A`) is:
+`u32 id | str × 4 | u32 | str | u64 | u32 × 7 | str | u32 × 2 |
+str | u64 | u32 × 2 | str × 2 | u32 | str | vector | str`.
+This order is from HgCom3.dll serializer `FUN_6012dce0` and matching
+deserializer `FUN_6012df00`; converter `FUN_601391a0` supplies the Metp
+keys. Its first string maps to `k3e`.
+
 The live WineDbg stop at `Msg_SendEnterRoom` was not caused by reading those
 MetpInfo keys. The faulting expression is `AddValue("k3e", MyData()+0x10)`:
 `SGlobalInfo::MyData()` looks up `GData["k602e"]` in the local

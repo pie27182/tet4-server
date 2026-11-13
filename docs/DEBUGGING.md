@@ -12,6 +12,7 @@ message after decryption and each outbound message before encryption. It does no
 change the bytes sent over TCP.
 
 ```sh
+umask 077
 mkdir -p live-runs/traces
 TET4_TRACE_JSONL=live-runs/traces/single-mode.jsonl python3 -m tet4server
 ```
@@ -24,8 +25,10 @@ the first non-alignment message ID. This makes it possible to see whether a requ
 arrived, whether the server replied, and which service handled it without decrypting
 the PCAP separately.
 
-The trace can contain authentication tickets and other session data. Keep it under
-`live-runs/` (already ignored by Git) and do not commit or publish it.
+The trace can contain authentication tickets and other session data. The tap creates
+the JSONL file with owner-only permissions (`0600`); `umask 077` also protects the
+new trace directory. Keep it under `live-runs/` (already ignored by Git) and do not
+commit or publish it.
 
 ## Arch packages
 

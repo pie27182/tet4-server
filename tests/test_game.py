@@ -61,7 +61,7 @@ class GameRoomRequestTest(unittest.TestCase):
             + pack_u32(0)
             + pack_string(b"") + pack_string(b"")
             + pack_u32(0) + pack_u32(0)
-            + b"\\x00"
+            + b"\x00"
         )
         with self.assertRaises(ProtocolError):
             game.parse_enter_room_request(payload)

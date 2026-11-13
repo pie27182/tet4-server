@@ -22,6 +22,11 @@ serializer test proves layout, not that the client accepts the message.
 - [x] Channel authorization reply: client accepts `Cmd_AuthToC`.
 - [x] User-id lookup reply: client accepts `Cmd_Channel_GetUserIdToC`.
 - [x] Channel-entry request decoder and `Cmd_Channel_EnterChannelToC` serializer.
+- [x] Recover the EnterChannel request/response mapping for required lobby metadata:
+      ToS strings 3/4 are `k23e`/`k24e`; ToC strings 3/8 populate
+      `MetpInfo(4).k23e/k24e`. The server now echoes these values.
+- [ ] Live-verify that `Msg_SendEnterRoom` no longer faults while reading
+      `MetpInfo(4).k23e/k24e`.
 - [x] Live probe accepted: after the EnterChannel reply the client sends
       `Cmd_LayerAlignment` and then `Cmd_Channel_GetMemberListToS`.
 - [x] Reply to `Cmd_Channel_GetMemberListToS` with an empty member vector.

@@ -45,6 +45,18 @@ Live-client evidence confirms these channel steps:
   for more than two minutes; without it the observed client exited about three seconds
   after requesting item state.
 
+Static analysis then explained the later `Msg_SendEnterRoom` crash. The request
+converter `HgCom3.dll:0x60138E50` maps EnterChannelToS request strings 3/4 to
+`k23e`/`k24e`; the response converter `HgCom3.dll:0x60139620` maps response
+strings 3/8 back to those keys. `CChannelLobbyController::Net_Channel_EnterChannel`
+calls `Msg_FillChannelInfo`, which stores them in `MetpInfo(4)`. The captured
+request contains `k23e=b""` and `k24e=b"1"`. The server now echoes those exact
+values into the corresponding response fields instead of returning empty strings.
+The next live run must confirm that `Msg_SendEnterRoom` no longer faults.
+
+This is why `RoomInfoToC` is not currently the right fix for the missing MetpInfo
+keys: its converter does not populate `MetpInfo(4).k23e/k24e`.
+
 The 2026-11-13 PCAP contains the AutoEnter request (`0x031AC76A`) after three
 empty `Cmd_LayerAlignment` slots. The client sends GameID `TET4` in request
 string +0xa8, then receives AutoEnterToC with host `127.0.0.1` and port `15002`.

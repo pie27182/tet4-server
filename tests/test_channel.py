@@ -69,6 +69,8 @@ class EnterChannelRequestTest(unittest.TestCase):
         request = channel.parse_enter_channel_request(payload)
         self.assertEqual(request.user_id, 0x0102030405060708)
         self.assertEqual(request.strings, strings[:5])
+        self.assertEqual(request.channel_metp_k23e, strings[2])
+        self.assertEqual(request.channel_metp_k24e, strings[3])
         self.assertEqual(request.option, 0x10203040)
         self.assertEqual(request.trailing_strings, strings[5:])
         self.assertEqual(request.trailing_u64, 0x8877665544332211)
@@ -86,6 +88,61 @@ class EnterChannelRequestTest(unittest.TestCase):
         )
         with self.assertRaises(ProtocolError):
             channel.parse_enter_channel_request(payload)
+
+
+class EnterChannelToCMetpInfoTest(unittest.TestCase):
+    def test_request_and_reply_round_trip_required_metpinfo4_keys(self):
+        class RecordingSession:
+            def __init__(self):
+                self.sent = []
+
+            def send(self, conn, body):
+                self.sent.append(body)
+
+        # FUN_60138E50 maps the five ToS strings to:
+        # k3e, k22e, k23e, k24e, k149e.
+        request_strings = (b"test", b"TET4", b"", b"1", b"7.8")
+        payload = (
+            channel.pack_u32(channel.ENTER_CHANNEL_BY_USER_ID_TOS)
+            + struct.pack(">Q", 0)  # k601e
+            + b"".join(channel.pack_string(v) for v in request_strings)
+            + channel.pack_u32(0)  # k167e
+            + channel.pack_string(b"")  # k442e
+            + channel.pack_string(b"")  # k441e
+            + struct.pack(">Q", 0)  # reserved trailing qword
+        )
+        request = channel.parse_enter_channel_request(payload)
+        self.assertEqual(request.channel_metp_k23e, b"")
+        self.assertEqual(request.channel_metp_k24e, b"1")
+
+        session = RecordingSession()
+        channel._dispatch(
+            session, object(), channel.ENTER_CHANNEL_BY_USER_ID_TOS, payload
+        )
+        self.assertEqual(len(session.sent), 1)
+
+        # FUN_60139620 reads ToC string 3 into MetpInfo k23e and
+        # ToC string 8 into MetpInfo k24e.
+        r = Reader(session.sent[0])
+        self.assertEqual(r.u32(), channel.ENTER_CHANNEL_TOC)
+        response_strings = [r.string() for _ in range(5)]
+        for _ in range(3):
+            self.assertEqual(r.u32(), 0)
+        self.assertEqual(r.take(1), b"\x00")
+        response_strings.append(r.string())  # string 6
+        self.assertEqual(r.u32(), 0)
+        self.assertEqual(r.u32(), 0)
+        response_strings.append(r.string())  # string 7
+        response_strings.append(r.string())  # string 8 -> k24e
+        for _ in range(3):
+            self.assertEqual(r.u32(), 0)
+        response_strings.append(r.string())  # string 9
+        self.assertEqual(r.remaining(), 0)
+
+        self.assertEqual(response_strings[2], request.channel_metp_k23e)
+        self.assertEqual(response_strings[7], request.channel_metp_k24e)
+        self.assertEqual(response_strings[2], b"")
+        self.assertEqual(response_strings[7], b"1")
 
 
 class EnterChannelToCLayoutTest(unittest.TestCase):

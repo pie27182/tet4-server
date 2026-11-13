@@ -122,12 +122,25 @@ def get_user_id_to_c(member_id: bytes, text_b: bytes = b"", code: int = 0) -> by
 
 @dataclass(frozen=True)
 class EnterChannelRequest:
-    """Wire fields of Cmd_Channel_EnterChannelByUserIdToS."""
+    """Wire fields of Cmd_Channel_EnterChannelByUserIdToS.
+
+    HgCom3.dll FUN_60138E50 maps the first five strings as:
+      k3e, k22e, k23e, k24e, k149e
+    followed by k167e (u32), k442e and k441e (strings).
+    """
     user_id: int
     strings: tuple[bytes, ...]
     option: int
     trailing_strings: tuple[bytes, ...]
     trailing_u64: int
+
+    @property
+    def channel_metp_k23e(self) -> bytes:
+        return self.strings[2]
+
+    @property
+    def channel_metp_k24e(self) -> bytes:
+        return self.strings[3]
 
 
 def parse_enter_channel_request(payload: bytes) -> EnterChannelRequest:
@@ -152,12 +165,16 @@ def enter_channel_to_c(
 ) -> bytes:
     """Serialize a success-shaped probe for Cmd_Channel_EnterChannelToC.
 
-    Serialize at 0x6012e4a0 establishes the layout. Until channel-state values
-    are recovered, defaults mirror the message constructor: nine present-but-empty
-    strings, eight zero uint32s and a zero byte. The final string is converted to
-    k1e; an empty value is present and is not the explicit failure value "v2e".
-    The live client advanced to LayerAlignment and then requested the member list
-    after this reply. Metadata correctness and a stable lobby are still unverified.
+    Serialize at 0x6012e4a0 establishes the layout. The converter at
+    HgCom3.dll:0x60139620 maps response string 3 (index 2) to k23e and
+    response string 8 (index 7) to k24e. CChannelLobbyController::Net_Channel_EnterChannel
+    calls Msg_FillChannelInfo, which copies those values into MetpInfo(4).
+
+    The corresponding request converter HgCom3.dll:0x60138e50 maps request
+    strings 3 and 4 (indices 2 and 3) to k23e and k24e. The dispatcher echoes
+    those exact fields into the matching response positions; other fields retain
+    constructor defaults until their semantics are recovered. The final response
+    string is converted to k1e; empty is present and is not the failure value "v2e".
     """
     if strings is None:
         strings = (b"",) * 9
@@ -570,9 +587,19 @@ def _dispatch(session, conn, msg_id: int, payload: bytes) -> None:
             log.info("sent Cmd_Channel_GetUserIdToC for member %r", member)
         elif msg_id == ENTER_CHANNEL_BY_USER_ID_TOS:
             request = parse_enter_channel_request(payload)
-            session.send(conn, enter_channel_to_c())
+            # FUN_60138E50 maps ToS strings 3/4 to k23e/k24e. The
+            # ToC converter FUN_60139620 writes its response strings 3/8
+            # back to those keys, then Msg_FillChannelInfo copies them into
+            # MetpInfo(4) before Msg_SendEnterRoom reads them.
+            response_strings = [b""] * 9
+            response_strings[2] = request.channel_metp_k23e
+            response_strings[7] = request.channel_metp_k24e
+            session.send(conn, enter_channel_to_c(strings=tuple(response_strings)))
             log.info(
-                "sent Cmd_Channel_EnterChannelToC probe for user_id=%d",
+                "sent Cmd_Channel_EnterChannelToC with channel metadata "
+                "(k23e_len=%d, k24e_len=%d) for user_id=%d",
+                len(request.channel_metp_k23e),
+                len(request.channel_metp_k24e),
                 request.user_id,
             )
         elif msg_id == GET_MEMBER_LIST_TOS:

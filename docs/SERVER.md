@@ -29,6 +29,11 @@ Options:
 For a real-client run with screen recording, use `tools/live_check.py` as described
 in [`REPRODUCE.md`](REPRODUCE.md).
 
+For protocol debugging, set `TET4_TRACE_JSONL=live-runs/traces/session.jsonl`
+before starting the server. This records decrypted inbound and outbound channel/game
+message batches without disabling the secure transport. See [`DEBUGGING.md`](DEBUGGING.md)
+for the full workflow and Wine/GDB breakpoints.
+
 ## Current Single Mode boundary
 
 Live-client evidence confirms these channel steps:

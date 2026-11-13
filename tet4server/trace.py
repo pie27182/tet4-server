@@ -27,6 +27,7 @@ _NAMES = {
     0x0A80E29A: "Cmd_Channel_GetUserIdToC",
     0x0696068A: "Cmd_Channel_EnterChannelByUserIdToS",
     0x00C0FC8A: "Cmd_Channel_EnterChannelToC",
+    0x060BC39A: "Cmd_Channel_GetMemberInfoToC",
     0x0AE3BBDA: "Cmd_Channel_GetMemberListToS",
     0x06B816EA: "Cmd_Channel_GetMemberListToC",
     0x0DDA299A: "Cmd_Channel_GetRoomListToS",

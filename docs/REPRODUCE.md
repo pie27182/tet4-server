@@ -46,7 +46,7 @@ cause.
 python3 -m unittest discover -s tests -t .
 ```
 
-Expected: `OK`, 45 tests. The protocol-layout and game-engine tests do not need the client.
+Expected: `OK`, 54 tests. The protocol-layout and game-engine tests do not need the client.
 
 ## 2. Client files
 
@@ -127,6 +127,7 @@ channel frame id=0x0696068a          -> sent Cmd_Channel_EnterChannelToC probe
 channel frame id=0x09d0057a          (Cmd_LayerAlignment)
 channel frame id=0x0ae3bbda          -> sent empty Cmd_Channel_GetMemberListToC
 channel frame id=0x0dda299a          -> sent empty Cmd_Channel_GetRoomListToC
+channel frame id=0x075bac2a          -> sent empty Cmd_Item_GetItemStateToC
 ```
 
 Expected on screen: the lobby (buttons 내 아이템, 상점, 싱글모드, the room list) with
@@ -281,26 +282,24 @@ matters, with `tools/disasm.py`:
 .venv/bin/python tools/disasm.py client/HgSock3.dll 0x606041d0 --count 20
 ```
 
-## 7. Known problems
+## 7. Current protocol boundary
 
-- **The client crash is not yet explained.** Earlier runs of the old server
-  (before the EnterChannelToC reply) ended about 2–3 s after
-  `Cmd_LayerAlignment` and `Cmd_Channel_ExitChannelToS`, with Wine
-  `Exception c0000005`. The updated server progresses to GetMemberListToS, but the
-  full member/room-list response path has not yet been live-verified. Repeat the run
-  with the current branch before deciding whether the crash remains.
-- **Empty member and room lists are probes.** Their top-level serializers and vector
-  counts are recovered, but the client must be run to confirm it accepts the empty
-  vectors and proceeds to Single Mode entry.
-- **Single Mode is not implemented yet.** The roadmap tracks room entry, game-state
-  initialization, gameplay and game-end messages. The remote TLS gateway is not needed
-  for the local protocol path.
-- **Some runs show the channel row and some do not.** The CDS reply is byte-identical
-  in both cases. In the historical handshake-only run, the client issued a second CDS
-  request (`tid=2`) after abandoning the channel socket, and the row appeared after
-  that response. This correlates visibility with the refresh but does not prove the
-  exact UI invalidation mechanism; reproduce it with `--channel-mode discovery-only`
-  as described in section 5.
+- **Channel progression is live-verified through item state.** The client accepts the
+  empty member-list and room-list replies, then accepts the empty item-state reply and
+  stays in the channel for more than two minutes. Without the item-state reply, the
+  observed client exits about three seconds after the request.
+- **Single Mode entry is not yet live-verified.** The AutoEnter request and response
+  layouts are statically recovered and the response points to `127.0.0.1:15002`, but
+  a fresh client run must confirm the client accepts the response and completes the
+  game-socket handshake.
+- **Gameplay is not implemented.** The game listener captures decoded client frames
+  but sends no server-side start-game state or turn updates. The nested
+  `StartNewGameToC` vector, `_SingleModeInfo`, `_TetrisMemberInfo` and board encoding
+  remain to be recovered. A successful handshake or serializer test is not proof
+  that a game can be played.
+- **Channel row refresh is a separate observation.** The historical handshake-only
+  run issued a second CDS request after abandoning the channel socket, and the row
+  appeared after that response. This does not establish the later Single Mode flow.
 
 ## 8. Troubleshooting
 

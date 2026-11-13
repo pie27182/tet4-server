@@ -74,7 +74,7 @@ class PlaintextTraceTest(unittest.TestCase):
                 event = json.loads(path.read_text(encoding="utf-8").strip())
             self.assertEqual(event["message_id"], "0x031ac76a")
             self.assertEqual(event["alignment_markers"], 3)
-            self.assertEqual(event["message_stream_hex"], body.hex())
+            self.assertEqual(event["message_stream_hex"], batch.hex())
         finally:
             client_sock.close()
             server_sock.close()

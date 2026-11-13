@@ -408,6 +408,59 @@ class SingleModeRoomInfoLayoutTest(unittest.TestCase):
             channel.single_mode_room_info_to_c(flag=256)
 
 
+class LayerAlignmentBatchTest(unittest.TestCase):
+    @staticmethod
+    def auto_enter_payload():
+        return (
+            channel.pack_u32(channel.AUTO_ENTER_SINGLE_MODE_TOS)
+            + channel.pack_string(b"test")
+            + channel.pack_u32(0)
+            + channel.pack_string(b"")
+            + channel.pack_string(b"")
+            + channel.pack_string(b"N000S")
+            + channel.pack_u32(0)
+            + channel.pack_u32(0)
+            + channel.pack_string(b"")
+            + channel.pack_u32(0)
+            + channel.pack_string(b"TET4")
+            + channel.pack_string(b"")
+            + channel.pack_string(b"")
+        )
+
+    def test_three_alignment_markers_reveal_auto_enter_message(self):
+        message = self.auto_enter_payload()
+        batch = (
+            channel.pack_u32(channel.LAYER_ALIGNMENT)
+            + channel.pack_u32(channel.LAYER_ALIGNMENT)
+            + channel.pack_u32(channel.LAYER_ALIGNMENT)
+            + message
+        )
+        msg_id, payload = channel.unwrap_layer_alignment(batch)
+        self.assertEqual(msg_id, channel.AUTO_ENTER_SINGLE_MODE_TOS)
+        self.assertEqual(payload, message)
+        request = channel.parse_auto_enter_single_mode_request(payload)
+        self.assertEqual(request.strings, (
+            b"test", b"", b"", b"N000S", b"", b"TET4", b"", b""
+        ))
+        self.assertEqual(request.integers, (0, 0, 0, 0))
+
+    def test_alignment_only_batch_is_not_a_protocol_error(self):
+        batch = channel.pack_u32(channel.LAYER_ALIGNMENT)
+        msg_id, payload = channel.unwrap_layer_alignment(batch)
+        self.assertEqual(msg_id, channel.LAYER_ALIGNMENT)
+        self.assertEqual(payload, batch)
+
+    def test_get_display_member_info_request_layout_from_capture(self):
+        payload = (
+            channel.pack_u32(channel.GET_DISPLAY_MEMBER_INFO_TOS)
+            + channel.pack_string(b"test")
+            + channel.pack_u32(4)
+        )
+        request = channel.parse_get_display_member_info_request(payload)
+        self.assertEqual(request.member_id, b"test")
+        self.assertEqual(request.option, 4)
+
+
 class SessionTest(unittest.TestCase):
     def test_client_frame_is_read_by_server_session(self):
         master = master_for_run16()
@@ -432,6 +485,27 @@ class SessionTest(unittest.TestCase):
             wire = b.recv(4096)
             plain = crypto.Stream.from_master(master, "encrypt_to_client").decrypt(wire)
             self.assertEqual(plain, channel.frame(channel.auth_to_c(b"hi")))
+        finally:
+            a.close()
+            b.close()
+
+    def test_layer_alignment_prefix_is_unwrapped_before_dispatch(self):
+        master = master_for_run16()
+        client_send = crypto.Stream.from_master(master, "decrypt_client")
+        message = LayerAlignmentBatchTest.auto_enter_payload()
+        batch = (
+            channel.pack_u32(channel.LAYER_ALIGNMENT)
+            + channel.pack_u32(channel.LAYER_ALIGNMENT)
+            + channel.pack_u32(channel.LAYER_ALIGNMENT)
+            + message
+        )
+        a, b = socket.socketpair()
+        try:
+            a.sendall(client_send.encrypt(channel.frame(batch)))
+            session = channel.Session(master)
+            msg_id, payload = session.read_frame(b)
+            self.assertEqual(msg_id, channel.AUTO_ENTER_SINGLE_MODE_TOS)
+            self.assertEqual(payload, message)
         finally:
             a.close()
             b.close()

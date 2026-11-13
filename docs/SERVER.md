@@ -29,6 +29,11 @@ Options:
 For a real-client run with screen recording, use `tools/live_check.py` as described
 in [`REPRODUCE.md`](REPRODUCE.md).
 
+For protocol debugging, set `TET4_TRACE_JSONL=live-runs/traces/session.jsonl`
+before starting the server. This records decrypted inbound and outbound channel/game
+message batches without disabling the secure transport. See [`DEBUGGING.md`](DEBUGGING.md)
+for the full workflow and Wine/GDB breakpoints.
+
 ## Current Single Mode boundary
 
 Live-client evidence confirms these channel steps:
@@ -40,11 +45,17 @@ Live-client evidence confirms these channel steps:
   for more than two minutes; without it the observed client exited about three seconds
   after requesting item state.
 
-The AutoEnter request is statically decoded and the response serializer is implemented.
-The response sets a local game endpoint `127.0.0.1:15002`. However, there is no fresh
-live-client evidence in the repository that the client accepts that response or
-completes the game-socket handshake. The room metadata fields other than host/port
-remain constructor defaults.
+The 2026-11-13 PCAP contains the AutoEnter request (`0x031AC76A`) inside an XLBP
+message batch preceded by three empty `Cmd_LayerAlignment` markers
+(`0x09D0057A`). The client protocol converter inserts these markers for null message
+slots; the matching receiver consumes them before dispatching the next message.
+The server now strips leading markers and reaches the existing AutoEnter handler.
+That handler returns a response routing to `127.0.0.1:15002`.
+
+The captured run predates this parser fix, so it correctly has no 15002 connection.
+The next live run must verify that the new response is accepted and that the client
+connects and completes the game-socket handshake. Room metadata beyond host/port
+still defaults to constructor values.
 
 `single_mode_room_info_to_c` serializes the recovered top-level layout
 `u32 id | string | u32 | u8` from `Tet4.exe:0x00443D90`; the role and field

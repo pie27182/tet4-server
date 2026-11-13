@@ -45,9 +45,10 @@ serializer test proves layout, not that the client accepts the message.
       `Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToS` (`0x031AC76A`) and sends
       it on the channel connection. Its serializer at `0x004A18F0` is decoded;
       `tet4server.channel` now parses and logs the eight strings and four uint32 fields.
-- [ ] Capture the request from a fresh live run after the empty member/room-list probes;
-      confirm actual values (the builder sets `k602e`, `N000S`, GameID `TET4`,
-      `k23e` and `k24e`, with remaining fields defaulted).
+- [x] Capture the request in the 2026-11-13 PCAP after the empty member/room-list
+      probes. It is inside an XLBP batch with three leading `Cmd_LayerAlignment`
+      markers; decoded values are member `test`, room type `N000S`, GameID `TET4`,
+      and zero/empty defaults for the remaining fields.
 - [x] Recover the AutoEnter response's full top-level field order from
       `Tet4.exe:0x00442E90` / `0x00443080` and its success converter
       `0x00445F60`. The converter rejects status `v2e`; the game endpoint is
@@ -56,15 +57,25 @@ serializer test proves layout, not that the client accepts the message.
       `127.0.0.1:15002`, plus a game-socket listener using the recovered secure
       handshake. The listener currently captures frames and deliberately sends no
       game-level replies.
-- [ ] Run the client, click Single Mode and verify AutoEnter success, connection to
-      the local game socket, and capture the first game request. The room metadata
-      fields other than host/port are still constructor defaults and may need values.
+- [x] Implement the XLBP batch handling needed for the observed three leading
+      `Cmd_LayerAlignment` markers. The old reader treated the first marker as the
+      command ID and silently skipped the actual AutoEnter request.
+- [ ] Run the client again and verify that the AutoEnter response is accepted, that
+      the client connects to `127.0.0.1:15002`, and capture the first game request.
+      The previous PCAP had zero game-socket packets because it was captured before
+      the LayerAlignment dispatch fix. Room metadata other than host/port remains
+      unverified.
 - [x] Recover the top-level `Cmd_ChannelOrderTypeSingleModeRoomInfoTetrisToC`
       layout (`u32 | string | u32 | u8`) and add a serializer test. Its role and
       values remain unverified; do not send it until the live sequence confirms it.
 - [ ] Recover the nested `_SingleModeInfo` (`0x0071FA1A`) fields.
 - [ ] Verify the real client transitions from the lobby to the Single Mode room screen
       without a crash or indefinite wait.
+
+The channel-side request was confirmed on wire, but the previous server version did
+not dispatch it because it appeared after LayerAlignment markers. The parser fix is
+implemented; a fresh live run is required to establish whether the current AutoEnter
+response is accepted.
 
 ## Milestone 3 — initialize a playable Tetris game
 

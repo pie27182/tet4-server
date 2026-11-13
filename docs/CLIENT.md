@@ -208,13 +208,19 @@ is the literal string `"k601e"`. `Msg_FillMemberList` compares the self row
 against this key, but skips it when `MyData()` is still null; adding only the
 self row to the ordinary member vector therefore does not seed the object.
 
-The statically recovered push message `Cmd_Channel_GetMemberInfoToC`
-(`0x060BC39A`) follows `Net_GetMemberInfo -> channel/getMemInfo ->
-Msg_GetMemberInfo -> Msg_AddMember`. Its first wire string maps to `k3e`,
-which `Msg_AddMember` copies into `CMemberData`'s member key. The experimental
-server path sends this message after `EnterChannelToC`, with `k3e=b"k601e"`,
-other fields zero/empty and a present empty `k1e` result string. This send
-point and the minimal profile values still require live-client validation.
+The statically recovered server-to-client message `Cmd_Channel_GetMemberInfoToC`
+(`0x060BC39A`) is registered to converter `FUN_601391A0`. Its controller path is
+`Net_GetMemberInfo -> channel/getMemInfo -> Msg_GetMemberInfo -> Msg_AddMember`;
+there is no prerequisite client request in this path. Its first wire string maps
+to `k3e`, which `Msg_AddMember` copies into `CMemberData`'s member key. The
+experimental server path sends this push after `EnterChannelToC`, with
+`k3e=b"k601e"`, other fields zero/empty and a present empty `k1e` result
+string. The local trace previously labelled it `unknown` only because its
+message-name table did not yet include ID `0x060BC39A`; that label was not
+evidence that the client ignored the message. Whether the controller actually
+dispatches it, and whether the minimal profile values are sufficient, still
+require a live-client validation with breakpoints on `Net_GetMemberInfo`,
+`Msg_GetMemberInfo` and `Msg_AddMember`.
 
 This message is distinct from `Cmd_Channel_OrderTypeGetDisplayMemberInfoTetrisToS`
 (`0x0E4772BA`), a separate client request for display-member information.

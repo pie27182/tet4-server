@@ -316,6 +316,43 @@ class ItemStateTest(unittest.TestCase):
             channel.item_state_to_c(flag=300)
 
 
+class ItemStateRequestTest(unittest.TestCase):
+    def test_observed_request_layout(self):
+        payload = (
+            channel.pack_u32(channel.ITEM_STATE_TOS)
+            + channel.pack_string(b"test")
+            + b"\x01"
+        )
+        request = channel.parse_item_state_request(payload)
+        self.assertEqual(request.member_key, b"test")
+        self.assertEqual(request.option, 1)
+
+    def test_rejects_trailing_bytes(self):
+        payload = (
+            channel.pack_u32(channel.ITEM_STATE_TOS)
+            + channel.pack_string(b"test")
+            + b"\x01\x00"
+        )
+        with self.assertRaises(ProtocolError):
+            channel.parse_item_state_request(payload)
+
+
+class SingleModeRoomInfoLayoutTest(unittest.TestCase):
+    def test_statically_recovered_field_order(self):
+        r = Reader(channel.single_mode_room_info_to_c(b"room", 0x10203040, 0x7f))
+        self.assertEqual(r.u32(), channel.SINGLE_MODE_ROOM_INFO_TOC)
+        self.assertEqual(r.string(), b"room")
+        self.assertEqual(r.u32(), 0x10203040)
+        self.assertEqual(r.take(1), b"\x7f")
+        self.assertEqual(r.remaining(), 0)
+
+    def test_rejects_out_of_range_values(self):
+        with self.assertRaises(ValueError):
+            channel.single_mode_room_info_to_c(value=0x100000000)
+        with self.assertRaises(ValueError):
+            channel.single_mode_room_info_to_c(flag=256)
+
+
 class SessionTest(unittest.TestCase):
     def test_client_frame_is_read_by_server_session(self):
         master = master_for_run16()

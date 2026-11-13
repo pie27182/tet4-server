@@ -19,6 +19,8 @@ log = logging.getLogger("tet4.game")
 
 GAME_REPORT_TOS = 0x05BCDF3A
 POLY_MINO_PUT_TOS = 0x0CC4004A
+GAME_ENTER_ROOM_TOS = 0x09A5347A
+GAME_ALTER_ROOM_TOS = 0x0D31FDDA
 
 
 @dataclass(frozen=True)
@@ -31,6 +33,29 @@ class GameReportRequest:
 @dataclass(frozen=True)
 class PolyMinoPutRequest:
     values: tuple[int, int, int, int]
+
+
+@dataclass(frozen=True)
+class EnterRoomRequest:
+    """Opaque EnterRoomToS fields, retained in their exact wire order."""
+
+    first_value: int
+    first_strings: tuple[bytes, bytes]
+    middle_values: tuple[int, int]
+    middle_strings: tuple[bytes, bytes, bytes, bytes]
+    next_value: int
+    final_strings: tuple[bytes, bytes]
+    final_values: tuple[int, int]
+
+
+@dataclass(frozen=True)
+class AlterRoomRequest:
+    """Opaque AlterRoomToS fields; meaning of individual fields is not yet known."""
+
+    value: int
+    strings: tuple[bytes, bytes, bytes, bytes]
+
+
 
 
 def parse_game_report_request(payload: bytes) -> GameReportRequest:
@@ -56,6 +81,52 @@ def parse_poly_mino_put_request(payload: bytes) -> PolyMinoPutRequest:
     if r.remaining():
         raise ProtocolError(f"unexpected {r.remaining()} trailing PolyMinoPutToS bytes")
     return PolyMinoPutRequest(values)  # type: ignore[arg-type]
+
+
+def parse_enter_room_request(payload: bytes) -> EnterRoomRequest:
+    """Parse the recovered Cmd_Room_EnterRoomToS stream layout.
+
+    HgCom3.dll FUN_6012aec0 reads:
+      id | u32 | str | str | u32 | u32 | str x4 | u32 | str | str | u32 | u32
+    Field names remain positional because their semantics are not yet established.
+    """
+    r = Reader(payload)
+    if r.u32() != GAME_ENTER_ROOM_TOS:
+        raise ProtocolError("not Cmd_Room_EnterRoomToS")
+    first_value = r.u32()
+    first_strings = (r.string(), r.string())
+    middle_values = (r.u32(), r.u32())
+    middle_strings = tuple(r.string() for _ in range(4))
+    next_value = r.u32()
+    final_strings = (r.string(), r.string())
+    final_values = (r.u32(), r.u32())
+    if r.remaining():
+        raise ProtocolError(
+            f"unexpected {r.remaining()} trailing EnterRoomToS bytes"
+        )
+    return EnterRoomRequest(
+        first_value,
+        first_strings,
+        middle_values,
+        middle_strings,  # type: ignore[arg-type]
+        next_value,
+        final_strings,
+        final_values,
+    )
+
+
+def parse_alter_room_request(payload: bytes) -> AlterRoomRequest:
+    """Parse Cmd_Room_AlterRoomToS: id | u32 | string x4."""
+    r = Reader(payload)
+    if r.u32() != GAME_ALTER_ROOM_TOS:
+        raise ProtocolError("not Cmd_Room_AlterRoomToS")
+    value = r.u32()
+    strings = tuple(r.string() for _ in range(4))
+    if r.remaining():
+        raise ProtocolError(
+            f"unexpected {r.remaining()} trailing AlterRoomToS bytes"
+        )
+    return AlterRoomRequest(value, strings)  # type: ignore[arg-type]
 
 
 def save_frame(
@@ -104,6 +175,41 @@ def handle(conn: socket.socket, capture_dir: Path | None = None) -> None:
                     connection_id,
                     sequence,
                     request.values,
+                    saved is not None,
+                )
+            elif msg_id == GAME_ENTER_ROOM_TOS:
+                request = parse_enter_room_request(payload)
+                string_lengths = tuple(
+                    len(value)
+                    for value in (
+                        *request.first_strings,
+                        *request.middle_strings,
+                        *request.final_strings,
+                    )
+                )
+                log.info(
+                    "game EnterRoomToS connection=%s seq=%d "
+                    "integer_fields=%r string_lengths=%r captured=%s",
+                    connection_id,
+                    sequence,
+                    (
+                        request.first_value,
+                        *request.middle_values,
+                        request.next_value,
+                        *request.final_values,
+                    ),
+                    string_lengths,
+                    saved is not None,
+                )
+            elif msg_id == GAME_ALTER_ROOM_TOS:
+                request = parse_alter_room_request(payload)
+                log.info(
+                    "game AlterRoomToS connection=%s seq=%d "
+                    "value=%d string_lengths=%r captured=%s",
+                    connection_id,
+                    sequence,
+                    request.value,
+                    tuple(map(len, request.strings)),
                     saved is not None,
                 )
             else:

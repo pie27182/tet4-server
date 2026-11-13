@@ -313,10 +313,13 @@ class AutoEnterDispatchTest(unittest.TestCase):
         # converter; k22e is then passed to fillEnterRoomParameter as k42e.
         r = Reader(session.sent[0])
         self.assertEqual(r.u32(), channel.AUTO_ENTER_SINGLE_MODE_TOC)
-        for _ in range(5):
-            r.string()
-        for _ in range(3):
-            r.u32()
+        r.string()  # +0x0c
+        r.u32()     # +0x28
+        r.string()  # +0x2c
+        r.string()  # +0x48
+        r.string()  # +0x64
+        r.u32()     # +0x80
+        r.u32()     # +0x84
         r.string()  # +0x88
         r.u32()     # +0xa4
         self.assertEqual(

@@ -105,10 +105,21 @@ def record_message(
     }
     line = json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n"
     try:
-        target.parent.mkdir(parents=True, exist_ok=True)
+        target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         with _LOCK:
-            with target.open("a", encoding="utf-8") as handle:
-                handle.write(line)
+            fd = os.open(
+                target,
+                os.O_WRONLY | os.O_CREAT | os.O_APPEND,
+                0o600,
+            )
+            try:
+                os.chmod(target, 0o600)
+                with os.fdopen(fd, "a", encoding="utf-8") as handle:
+                    fd = -1  # ownership transferred to the file object
+                    handle.write(line)
+            finally:
+                if fd >= 0:
+                    os.close(fd)
     except OSError:
         # Diagnostics must never break a game session just because the trace
         # path is unwritable or a disk is full.

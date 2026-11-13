@@ -60,10 +60,14 @@ serializer test proves layout, not that the client accepts the message.
 - [x] Implement the XLBP batch handling needed for the observed three leading
       `Cmd_LayerAlignment` markers. The old reader treated the first marker as the
       command ID and silently skipped the actual AutoEnter request.
-- [ ] Run the client again and verify that the AutoEnter response is accepted, that
-      the client connects to `127.0.0.1:15002`, and capture the first game request.
-      The previous PCAP had zero game-socket packets because it was captured before
-      the LayerAlignment dispatch fix. Room metadata other than host/port remains
+- [x] Match the AutoEnter response's identity fields to the request: ToS strings
+      5..7 (GameID, `k23e`, `k24e`) are copied into ToC offsets +0xa8/+0xc4/+0xe0.
+      Ghidra shows these become `k22e`, `k23e`, `k24e`; +0xa8 is also passed
+      to `fillEnterRoomParameter`. A regression test checks the response bytes.
+- [ ] Run the client again and verify that this corrected AutoEnter response is
+      accepted, that the client connects to `127.0.0.1:15002`, and capture the
+      first game request. The 2026-11-13 capture has no game packets and shows
+      the previous response's identity fields empty. Other room metadata remains
       unverified.
 - [x] Recover the top-level `Cmd_ChannelOrderTypeSingleModeRoomInfoTetrisToC`
       layout (`u32 | string | u32 | u8`) and add a serializer test. Its role and

@@ -143,7 +143,7 @@ these markers and continues dispatching the next message. Thus the first ID afte
 | `Cmd_Channel_GetUserIdByMemberIdToS` | `0x0FAB330A` | client to server | **[wire]** sent after `Cmd_AuthToC`; body `string member_id` |
 | `Cmd_Channel_GetUserIdToC` | `0x0A80E29A` | server to client | **[wire]** our reply accepted (k161e = 0) |
 | `Cmd_Channel_EnterChannelByUserIdToS` | `0x0696068A` | client to server | **[wire]** request observed; request layout decoded from static analysis |
-| `Cmd_Channel_EnterChannelToC` | `0x00C0FC8A` | server to client | **[wire]** zero/default probe accepted far enough for the client to request the member list |
+| `Cmd_Channel_EnterChannelToC` | `0x00C0FC8A` | server to client | **[wire, static]** accepted to member-list request; response strings 3 and 8 populate `MetpInfo(4).k23e/k24e` |
 | `Cmd_Channel_GetMemberListToS` | `0x0AE3BBDA` | client to server | **[wire]** observed after EnterChannelToC; request layout [static] |
 | `Cmd_Channel_GetMemberListToC` | `0x06B816EA` | server to client | **[wire]** empty-vector reply accepted; the client then requests the room list |
 | `Cmd_Channel_GetRoomListToS` | `0x0DDA299A` | client to server | **[wire]** `u32 id | string × 3`; no trailing integer |
@@ -173,18 +173,31 @@ meaning is not established; the server does not read it.
 - `Cmd_Channel_EnterChannelByUserIdToS` = u32 id | u64 | str × 5 | u32 | str × 2 | u64.
   Static layout from Serialize FUN_6012cfd0 and Deserialize FUN_6012d0e0 (HgCom3.dll);
   the request is constructed by CChannelLobbyModel::Msg_EnterChannelByUserId
-  (HgModel3.dll, 0x609083C0).
+  (HgModel3.dll, 0x609083C0). The send-side converter `FUN_60138E50` is registered
+  for `s1e::c602e` and maps its fields as `u64 k601e | str k3e | str k22e |
+  str k23e | str k24e | str k149e | u32 k167e | str k442e | str k441e | u64`.
+  Thus request string indices 2 and 3 (zero-based) are exactly `k23e` and `k24e`.
+  In the supplied decrypted trace they are `b""` and `b"1"`, respectively.
 - `Cmd_Channel_EnterChannelToC` = u32 id | str × 5 | u32 × 3 | u8 | str | u32 × 2 |
   str × 2 | u32 × 3 | str. Static layout from Serialize FUN_6012e4a0 and
-  Deserialize FUN_6012e600 (HgCom3.dll). Its converter is FUN_60139620.
-  The final string is exposed as key k1e. GetResultKeyState (HgCom3.dll,
-  0x60111AC0) requires k1e to be present and rejects value v2e; successful
-  Net_Channel_EnterChannel (HgCtr3.dll, 0x60206420) calls fillChannelInfo
-  and sendGetMemberList.
+  Deserialize FUN_6012e600 (HgCom3.dll). Its converter is `FUN_60139620`:
+  response string 3 (index 2) becomes `k23e`, and response string 8 (index 7)
+  becomes `k24e`. The final string is exposed as `k1e`. GetResultKeyState
+  (HgCom3.dll, `0x60111AC0`) requires `k1e` to be present and rejects `v2e`.
+  On success, `Net_Channel_EnterChannel` (HgCtr3.dll, `0x60206420`) calls
+  `fillChannelInfo` and then `sendGetMemberList`.
+- `Msg_FillChannelInfo` (HgModel3.dll, `0x609077E0`) copies those converter values
+  into `SGlobalInfo::MetpInfo(4)` under `k23e` and `k24e`. Later,
+  `Msg_SendEnterRoom` (HgModel3.dll, `0x6090B480`) reads both keys from
+  `MetpInfo(4)`. The RoomInfoToC converter does not write these keys.
+- The previous server sent empty strings in both response positions. It now echoes
+  request strings 3/4 into response strings 3/8. This is grounded by the request
+  converter, response converter and the actual trace values; live confirmation that
+  the null dereference is gone is still pending.
 - The live trace shows that after this response the client sends
   `Cmd_LayerAlignment` and then `Cmd_Channel_GetMemberListToS`. This proves the
   response is accepted far enough to advance into the channel model, but does not
-  prove the metadata is correct or that the lobby is stable. **[wire]**
+  by itself prove all room-entry metadata is correct. **[wire]**
 
 The item-state path is decoded from HgCom3.dll:
 - `Cmd_Item_GetItemStateToS` (`0x075BAC2A`): observed payload

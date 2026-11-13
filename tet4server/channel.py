@@ -49,6 +49,7 @@ AUTO_ENTER_SINGLE_MODE_TOC = 0x0DF37B3A
 GAME_SERVER_HOST = b"127.0.0.1"
 GAME_SERVER_PORT = 15002
 SINGLE_MODE_ROOM_INFO_TOC = 0x04B61A2A
+LAYER_ALIGNMENT = 0x09D0057A
 HANDSHAKE_PLAIN = struct.pack("<24H", *range(24))
 
 log = logging.getLogger("tet4.channel")
@@ -443,7 +444,7 @@ def handshake(conn, service: str = "channel") -> Session:
     try:
         host, port = conn.getpeername()[:2]
         peer = f"{host}:{port}"
-    except OSError:
+    except (OSError, ValueError):
         peer = "unknown"
     return Session(
         crypto.master_words(share, server_wire),

@@ -30,7 +30,11 @@ Client binaries are not part of this repository.
 
 ## 3. Framing
 
-- Every message on every socket: `uint32be length | body`, where `length` is the body size.
+- Every message batch on the secure channel: `uint32be length | "XLBP" | message stream`,
+  where `length` is the body size after the length field.
+- The message stream may contain multiple 32-bit message IDs and their fields.
+  `Cmd_LayerAlignment` (`0x09D0057A`) is an empty marker; it is not necessarily the
+  application command for that batch.
 - Strings: `uint32be length | bytes`. No padding, no terminator.
 - Integers are big-endian. Message IDs are 32-bit values, matching `GetID()` of each
   message class, read from MSVC RTTI with `tools/tet4_rtti_extract.py`: channel
@@ -123,8 +127,14 @@ decrypts our frame, dispatches it by id, and reacts (see section 7).
 
 ## 7. Channel messages
 
-Frame body after decryption: `u32be length | "XLBP" | u32be message ID | fields`.
-The 4-byte length counts the body after itself.
+Frame body after decryption: `u32be length | "XLBP" | serialized IMessage batch`.
+The 4-byte length counts the body after itself. The batch serializer is
+`PC_ConvertM2X` (`HgCom3.dll:0x601203B0`, implementation `FUN_601204A0`).
+When the message collection contains null slots, it serializes one empty
+`Cmd_LayerAlignment` ID (`0x09D0057A`) for each slot before the next populated
+message. The corresponding `PC_ConvertX2M` receiver (`FUN_601206E0`) consumes
+these markers and continues dispatching the next message. Thus the first ID after
+`XLBP` is not always the application command.
 
 | Message | ID | Direction | Status |
 |---|---|---|---|
@@ -140,7 +150,10 @@ The 4-byte length counts the body after itself.
 | `Cmd_Channel_GetRoomListToC` | `0x0226968A` | server to client | **[wire]** empty-vector reply accepted; the client then requests the item state |
 | `Cmd_Item_GetItemStateToS` | `0x075BAC2A` | client to server | **[wire]** `u32 id | string | u8`; sent after the room list |
 | `Cmd_Item_GetItemStateToC` | `0x0C446ADA` | server to client | **[wire]** empty-vector reply accepted; the client stays in the channel |
-| `Cmd_LayerAlignment` | `0x09D0057A` | client to server | **[wire]** sent by the client; special id in the dispatcher |
+| `Cmd_LayerAlignment` | `0x09D0057A` | client to server | **[wire, static]** empty batch marker; skip it to reach the next populated message |
+| `Cmd_Channel_OrderTypeGetDisplayMemberInfoTetrisToS` | `0x0E4772BA` | client to server | **[wire, static]** body `u32 id | string member_id | u32 option`; response structure not yet implemented |
+| `Cmd_Channel_TicketReissueToS` | `0x0A101CBA` | client to server | **[wire, static]** periodic ticket refresh observed |
+| `Cmd_Channel_TicketReissueToC` | `0x0C6600AA` | server to client | **[static]** response ID; payload handling not yet implemented |
 
 `Cmd_AuthToS` fields seen in run16, in order: `test` (string), `TET4` (string), 32 bytes
 of `A` (string), `TicketAuthByMemberId` (string), with zero dwords between them. Its
@@ -227,7 +240,7 @@ in the channel for more than two minutes; without it the observed client sends
 confirms acceptance of the empty response shapes and a stable channel interval, but
 does not yet prove that the Single Mode button works. **[wire]**
 
-## 8. Single Mode (AutoEnter static probe; gameplay not yet playable)
+## 8. Single Mode (AutoEnter request captured; response path under validation)
 
 Message IDs, from RTTI in `Tet4.exe` **[static]**:
 
@@ -263,8 +276,12 @@ The button handler sets these values before serialization:
 - `str(+0xc4)` and `str(+0xe0)` = `k23e` and `k24e` from MetpInfo(4);
 - all other strings and uint32 fields remain constructor defaults (empty / zero).
 
-The server decodes this request and returns a controlled local endpoint in
-`Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToC` (`0x0DF37B3A`). Its
+The 2026-11-13 PCAP contains this request on the channel socket. It is not the first
+ID in the XLBP batch: two `Cmd_LayerAlignment` markers precede
+`0x031AC76A`. The old server reader selected only the first ID and therefore
+silently skipped AutoEnter. The server now strips leading alignment markers and
+dispatches the actual request. Its response serializer for
+`Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToC` (`0x0DF37B3A`) already exists. Its
 Serialize/Deserialize methods are `FUN_00442E90` / `FUN_00443080`; converter:
 `FUN_00445F60`. The top-level field order is:
 
@@ -286,9 +303,11 @@ For the local probe the server sets host `127.0.0.1`, port `15002`, leaves the s
 field empty (not `v2e`), and leaves remaining room metadata at constructor defaults.
 `tet4server/game.py` listens on that port, performs the secure handshake and logs
 the first client frames. It deliberately sends no game-level acknowledgements yet.
-This is a structurally valid route into the local game socket, not a verified playable
-room: the remaining metadata and game-service handshake messages still need live
-validation.
+The 2026-11-13 capture ended without any connection to port 15002 because the old
+server did not dispatch the nested request. After the LayerAlignment fix, the next
+live run must verify that the client accepts this response, connects to 15002, and
+completes the game-socket handshake. This remains a structurally valid route, not a
+verified playable room.
 
 `Cmd_ChannelOrderTypeSingleModeRoomInfoTetrisToC` (`0x04B61A2A`) has a smaller
 layout: `u32 id | string | u32 | u8` (`Serialize FUN_00443D90`). Its role in the

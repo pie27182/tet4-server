@@ -28,7 +28,7 @@ import socket
 import struct
 import threading
 
-from . import crypto
+from . import crypto, trace
 from .xdr import ProtocolError, Reader, pack_string, pack_u32
 
 MAGIC = b"XLBP"
@@ -439,9 +439,13 @@ def frame(body: bytes) -> bytes:
 class Session:
     """Two stream contexts for one connection, built once from the handshake master."""
 
-    def __init__(self, master):
+    def __init__(self, master, service: str = "channel", peer: str = "unknown"):
         self.from_client = crypto.Stream.from_master(master, "decrypt_client")
         self.to_client = crypto.Stream.from_master(master, "encrypt_to_client")
+        self.service = service
+        self.peer = peer
+        self.rx_sequence = 0
+        self.tx_sequence = 0
 
     def read_frame(self, conn) -> tuple:
         head = self.from_client.decrypt(_recv_exact(conn, 4))
@@ -449,9 +453,26 @@ class Session:
         payload = self.from_client.decrypt(_recv_exact(conn, size))
         if payload[:4] != MAGIC:
             raise ProtocolError(f"bad magic {payload[:4]!r}")
-        return unwrap_layer_alignment(payload[4:])
+        body = payload[4:]
+        self.rx_sequence += 1
+        trace.record_message(
+            service=self.service,
+            direction="client_to_server",
+            body=body,
+            peer=self.peer,
+            sequence=self.rx_sequence,
+        )
+        return unwrap_layer_alignment(body)
 
     def send(self, conn, body: bytes) -> None:
+        self.tx_sequence += 1
+        trace.record_message(
+            service=self.service,
+            direction="server_to_client",
+            body=body,
+            peer=self.peer,
+            sequence=self.tx_sequence,
+        )
         conn.sendall(self.to_client.encrypt(frame(body)))
 
 
@@ -465,11 +486,20 @@ def _recv_exact(conn, n: int) -> bytes:
     return buf
 
 
-def handshake(conn) -> Session:
+def handshake(conn, service: str = "channel") -> Session:
     share = _recv_exact(conn, 48)
     server_wire = crypto.encrypt_share(HANDSHAKE_PLAIN)
     conn.sendall(server_wire)
-    return Session(crypto.master_words(share, server_wire))
+    try:
+        host, port = conn.getpeername()[:2]
+        peer = f"{host}:{port}"
+    except (OSError, ValueError):
+        peer = "unknown"
+    return Session(
+        crypto.master_words(share, server_wire),
+        service=service,
+        peer=peer,
+    )
 
 
 def handle(conn, discovery_only: bool = False) -> None:

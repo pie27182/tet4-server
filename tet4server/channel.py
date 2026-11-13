@@ -44,6 +44,9 @@ ITEM_STATE_TOS = 0x075BAC2A
 ITEM_STATE_TOC = 0x0C446ADA
 GET_ROOM_LIST_TOS = 0x0DDA299A
 GET_ROOM_LIST_TOC = 0x0226968A
+LAYER_ALIGNMENT = 0x09D0057A
+GET_DISPLAY_MEMBER_INFO_TOS = 0x0E4772BA
+GET_DISPLAY_MEMBER_INFO_TOC = 0x0C3B49AA
 AUTO_ENTER_SINGLE_MODE_TOS = 0x031AC76A
 AUTO_ENTER_SINGLE_MODE_TOC = 0x0DF37B3A
 GAME_SERVER_HOST = b"127.0.0.1"
@@ -52,6 +55,53 @@ SINGLE_MODE_ROOM_INFO_TOC = 0x04B61A2A
 HANDSHAKE_PLAIN = struct.pack("<24H", *range(24))
 
 log = logging.getLogger("tet4.channel")
+
+
+def unwrap_layer_alignment(message_stream: bytes) -> tuple[int, bytes]:
+    """Skip leading empty Cmd_LayerAlignment slots in one XLBP message batch.
+
+    HgCom3.dll PC_ConvertM2X (FUN_601204a0) inserts an empty
+    Cmd_LayerAlignment (0x09D0057A) for each null IMessage slot before the
+    next populated slot. PC_ConvertX2M (FUN_601206e0) consumes those markers
+    and continues dispatching the next message. The live Single Mode capture
+    contains two such markers before AutoEnterSingleModeToS.
+
+    This server currently handles one populated application message per XLBP
+    batch. It strips any leading alignment markers, but does not yet split
+    multiple populated messages concatenated in the same batch.
+    """
+    reader = Reader(message_stream)
+    marker_count = 0
+    while reader.remaining():
+        start = reader.pos
+        msg_id = reader.u32()
+        if msg_id != LAYER_ALIGNMENT:
+            return msg_id, message_stream[start:]
+        marker_count += 1
+        if marker_count > 4:
+            raise ProtocolError("too many LayerAlignment slots in one XLBP batch")
+    # An alignment-only batch is valid and has no application command to dispatch.
+    return LAYER_ALIGNMENT, message_stream[-4:] if message_stream else b""
+
+
+@dataclass(frozen=True)
+class DisplayMemberInfoRequest:
+    member_id: bytes
+    option: int
+
+
+def parse_get_display_member_info_request(payload: bytes) -> DisplayMemberInfoRequest:
+    """Parse the captured GetDisplayMemberInfoToS request: id | string | u32."""
+    reader = Reader(payload)
+    if reader.u32() != GET_DISPLAY_MEMBER_INFO_TOS:
+        raise ProtocolError("not Cmd_Channel_OrderTypeGetDisplayMemberInfoTetrisToS")
+    member_id = reader.string()
+    option = reader.u32()
+    if reader.remaining():
+        raise ProtocolError(
+            f"unexpected {reader.remaining()} trailing GetDisplayMemberInfoToS bytes"
+        )
+    return DisplayMemberInfoRequest(member_id, option)
 
 
 def auth_to_c(text_a: bytes = b"", text_b: bytes = b"", code: int = 0) -> bytes:
@@ -399,7 +449,7 @@ class Session:
         payload = self.from_client.decrypt(_recv_exact(conn, size))
         if payload[:4] != MAGIC:
             raise ProtocolError(f"bad magic {payload[:4]!r}")
-        return Reader(payload[4:]).u32(), payload[4:]
+        return unwrap_layer_alignment(payload[4:])
 
     def send(self, conn, body: bytes) -> None:
         conn.sendall(self.to_client.encrypt(frame(body)))
@@ -473,7 +523,9 @@ def handle(conn, discovery_only: bool = False) -> None:
 
 
 def _dispatch(session, conn, msg_id: int, payload: bytes) -> None:
-        if msg_id == AUTH_TO_S:
+        if msg_id == LAYER_ALIGNMENT:
+            log.debug("received alignment-only XLBP batch")
+        elif msg_id == AUTH_TO_S:
             session.send(conn, auth_to_c())
             log.info("sent Cmd_AuthToC")
         elif msg_id == GET_USER_ID_BY_MEMBER_TOS:
@@ -515,6 +567,14 @@ def _dispatch(session, conn, msg_id: int, payload: bytes) -> None:
             )
             session.send(conn, item_state_to_c())
             log.info("sent empty Cmd_Item_GetItemStateToC (0 items)")
+        elif msg_id == GET_DISPLAY_MEMBER_INFO_TOS:
+            request = parse_get_display_member_info_request(payload)
+            log.info(
+                "received Cmd_Channel_OrderTypeGetDisplayMemberInfoTetrisToS "
+                "member_id=%r option=%d; response layout not yet implemented",
+                request.member_id,
+                request.option,
+            )
         elif msg_id == AUTO_ENTER_SINGLE_MODE_TOS:
             request = parse_auto_enter_single_mode_request(payload)
             log.info(
@@ -529,6 +589,12 @@ def _dispatch(session, conn, msg_id: int, payload: bytes) -> None:
                 "with local game endpoint %s:%d",
                 GAME_SERVER_HOST.decode("ascii"),
                 GAME_SERVER_PORT,
+            )
+        else:
+            log.warning(
+                "unhandled channel application message id=0x%08x payload_len=%d",
+                msg_id,
+                len(payload),
             )
 
 

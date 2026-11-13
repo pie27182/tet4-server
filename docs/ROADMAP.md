@@ -35,15 +35,6 @@ serializer test proves layout, not that the client accepts the message.
 - [x] Live-verify that `Msg_SendEnterRoom` passes its `MyData()+0x10` read
       and that the client opens a TCP connection to `127.0.0.1:15002`; the
       48-byte secure handshake and the first two game frames were captured.
-- [x] Repeat the live Single Mode click with a held press; confirm
-      `MyData()` is non-null, `Msg_ConnectGameServer` runs, and the client sends
-      `Cmd_Room_EnterRoomToS` (`0x09A5347A`) followed by
-      `Cmd_Room_AlterRoomToS` (`0x0D31FDDA`) over the secure game socket.
-- [x] Recover both request wire layouts from `HgCom3.dll`: EnterRoomToS is
-      `u32 | str | str | u32 | u32 | str x4 | u32 | str | str | u32 | u32`;
-      AlterRoomToS is `u32 | u32 | str x4`. Add strict parsers and tests.
-      Their field semantics and the server's successful room-entry response remain
-      unverified; the game listener still does not reply to either request.
 - [x] Live probe accepted: after the EnterChannel reply the client sends
       `Cmd_LayerAlignment` and then `Cmd_Channel_GetMemberListToS`.
 - [x] Reply to `Cmd_Channel_GetMemberListToS` with an empty member vector.
@@ -86,17 +77,24 @@ serializer test proves layout, not that the client accepts the message.
       `Tet4.exe: FUN_0045B410`: ID `0x0DF37B3A` is registered in layer 3.
       The server now sends three leading `Cmd_LayerAlignment` markers on this
       response too; previously it incorrectly sent the response in layer 0.
-- [ ] Live-verify that the layer-3 AutoEnterToC converter runs, the client passes
-      `Msg_SendEnterRoom`, and a connection attempt reaches `127.0.0.1:15002`.
+- [x] Live-verify that the layer-3 AutoEnterToC converter runs, the client passes
+      `Msg_SendEnterRoom`, `MyData()` returns non-null, and
+      `Msg_ConnectGameServer` opens the local game socket on `127.0.0.1:15002`.
 - [x] Match the AutoEnter response's identity fields to the request: ToS strings
       5..7 (GameID, `k23e`, `k24e`) are copied into ToC offsets +0xa8/+0xc4/+0xe0.
       Ghidra shows these become `k22e`, `k23e`, `k24e`; +0xa8 is also passed
       to `fillEnterRoomParameter`. A regression test checks the response bytes.
-- [ ] Run the client again and verify that this corrected AutoEnter response is
-      accepted, that the client connects to `127.0.0.1:15002`, and capture the
-      first game request. The 2026-11-13 capture has no game packets and shows
-      the previous response's identity fields empty. Other room metadata remains
-      unverified.
+- [x] Repeat the live run with a held Single Mode press. Confirm the 48-byte
+      secure handshake in both directions and capture the first two game requests:
+      `EnterRoomToS` (`0x09A5347A`) and `AlterRoomToS` (`0x0D31FDDA`).
+- [x] Recover both request wire layouts from `HgCom3.dll` and add strict parsers
+      with regression tests: EnterRoomToS is
+      `u32 | str | str | u32 | u32 | str x4 | u32 | str | str | u32 | u32`;
+      AlterRoomToS is `u32 | u32 | str x4`. The parser logs only string lengths
+      and integer fields, not opaque string contents.
+- [ ] Recover and implement the successful room-entry response and the required
+      room-info/member-list sequence. The client currently closes the game socket
+      after the two requests because the server sends no application response.
 - [x] Recover the top-level `Cmd_ChannelOrderTypeSingleModeRoomInfoTetrisToC`
       layout (`u32 | string | u32 | u8`) and add a serializer test. Its role and
       values remain unverified; do not send it until the live sequence confirms it.

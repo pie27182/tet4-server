@@ -1,9 +1,9 @@
 """Minimal Single Mode game-socket endpoint.
 
 The channel's AutoEnter reply directs the original client to this local listener.
-The secure-socket handshake is shared with the channel connection. Until the
-game-service message handlers are recovered, this endpoint captures decoded frames
-as local .bin files and deliberately does not fabricate acknowledgements.
+The secure-socket handshake is shared with the channel connection. Recovered
+client requests are decoded and captured, but the server does not fabricate
+game-service acknowledgements or start-game state.
 """
 import logging
 import socket

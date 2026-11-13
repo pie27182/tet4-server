@@ -71,6 +71,12 @@ serializer test proves layout, not that the client accepts the message.
 - [x] Implement the XLBP batch handling needed for the observed three leading
       `Cmd_LayerAlignment` markers. The old reader treated the first marker as the
       command ID and silently skipped the actual AutoEnter request.
+- [x] Recover AutoEnterToC's XLBP response layer from
+      `Tet4.exe: FUN_0045B410`: ID `0x0DF37B3A` is registered in layer 3.
+      The server now sends three leading `Cmd_LayerAlignment` markers on this
+      response too; previously it incorrectly sent the response in layer 0.
+- [ ] Live-verify that the layer-3 AutoEnterToC converter runs, the client passes
+      `Msg_SendEnterRoom`, and a connection attempt reaches `127.0.0.1:15002`.
 - [x] Match the AutoEnter response's identity fields to the request: ToS strings
       5..7 (GameID, `k23e`, `k24e`) are copied into ToC offsets +0xa8/+0xc4/+0xe0.
       Ghidra shows these become `k22e`, `k23e`, `k24e`; +0xa8 is also passed

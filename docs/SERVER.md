@@ -67,12 +67,17 @@ skips the own row if `MyData()` is still null. The separate
 `Net_GetMemberInfo -> Msg_GetMemberInfo -> Msg_AddMember` and creates the
 `CMemberData` entry from its first string (`k3e`).
 
-The current experimental branch sends a minimal `GetMemberInfoToC` push after
-`EnterChannelToC`, with `k3e="k601e"` and other fields empty/zero. The
-serializer order and model path are statically recovered; whether the client
-expects this push at that time, and whether this minimal profile is sufficient,
-remain unverified. The next live test must show `MyData()` non-null, pass
-`Msg_SendEnterRoom`, and attempt the connection to port 15002.
+The current experimental branch sends a minimal `GetMemberInfoToC` server
+push after `EnterChannelToC`, with `k3e="k601e"` and other fields empty/zero.
+The original controller has a direct server-response path
+`Net_GetMemberInfo -> channel/getMemInfo -> Msg_GetMemberInfo -> Msg_AddMember`;
+a prior client request is not required. The previous JSONL label `unknown` was
+only a missing entry in our trace-name table. The serializer order and model path
+are statically recovered; whether the client actually dispatches this message
+at the selected point and whether this minimal profile is sufficient remain
+unverified. The next live test must break on `Net_GetMemberInfo`,
+`Msg_GetMemberInfo`, and `Msg_AddMember`, then verify `MyData()` is non-null,
+`Msg_SendEnterRoom` passes, and a connection is attempted on port 15002.
 
 This is why `RoomInfoToC` is not currently the right fix for the missing MetpInfo
 keys: its converter does not populate `MetpInfo(4).k23e/k24e`.

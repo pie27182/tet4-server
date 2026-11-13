@@ -128,7 +128,7 @@ class EnterChannelToCMetpInfoTest(unittest.TestCase):
         response_strings = [r.string() for _ in range(5)]
         for _ in range(3):
             self.assertEqual(r.u32(), 0)
-        self.assertEqual(r.take(1), b"\\x00")
+        self.assertEqual(r.take(1), b"\x00")
         response_strings.append(r.string())  # string 6
         self.assertEqual(r.u32(), 0)
         self.assertEqual(r.u32(), 0)

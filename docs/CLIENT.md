@@ -153,6 +153,7 @@ these markers and continues dispatching the next message. Thus the first ID afte
 | `Cmd_Item_GetItemStateToC` | `0x0C446ADA` | server to client | **[wire]** empty-vector reply accepted; the client stays in the channel |
 | `Cmd_LayerAlignment` | `0x09D0057A` | client to server | **[wire, static]** empty batch marker; skip it to reach the next populated message |
 | `Cmd_Channel_OrderTypeGetDisplayMemberInfoTetrisToS` | `0x0E4772BA` | client to server | **[wire, static]** body `u32 id | string member_id | u32 option`; response structure not yet implemented |
+| `Cmd_Channel_OrderTypeGetDisplayMemberInfoTetrisToC` | `0x0C3B49AA` | server to client | **[static]** composite `TT_XDR` response; converter opens/fills `dlgMemberInfo`, distinct from `GetMemberInfoToC` |
 | `Cmd_Channel_TicketReissueToS` | `0x0A101CBA` | client to server | **[wire, static]** periodic ticket refresh observed |
 | `Cmd_Channel_TicketReissueToC` | `0x0C6600AA` | server to client | **[static]** response ID; payload handling not yet implemented |
 
@@ -222,8 +223,14 @@ dispatches it, and whether the minimal profile values are sufficient, still
 require a live-client validation with breakpoints on `Net_GetMemberInfo`,
 `Msg_GetMemberInfo` and `Msg_AddMember`.
 
-This message is distinct from `Cmd_Channel_OrderTypeGetDisplayMemberInfoTetrisToS`
-(`0x0E4772BA`), a separate client request for display-member information.
+The separate `Cmd_Channel_OrderTypeGetDisplayMemberInfoTetrisToS`
+(`0x0E4772BA`) request is not the trigger for this model path. It has a
+different response, `Cmd_Channel_OrderTypeGetDisplayMemberInfoTetrisToC`
+(`0x0C3B49AA`), implemented in `Tet4.exe`. Its converter
+`FUN_00459EF0` applies a `TT_XDR` header and obtains the `dlgMemberInfo`
+dialog; the response object contains several nested containers and strings.
+This is a display/profile dialog flow, not the `Net_GetMemberInfo ->
+Msg_GetMemberInfo -> Msg_AddMember` path which creates `CMemberData`.
 - The previous server sent empty strings in both response positions. It now echoes
   request strings 3/4 into response strings 3/8. This is grounded by the request
   converter, response converter and the actual trace values; live confirmation that

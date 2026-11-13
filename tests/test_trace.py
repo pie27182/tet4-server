@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from tet4server import trace
+from tet4server import channel, crypto, trace
 
 
 class PlaintextTraceTest(unittest.TestCase):
@@ -45,6 +45,39 @@ class PlaintextTraceTest(unittest.TestCase):
         self.assertEqual(record["message_name"], "Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToS")
         self.assertEqual(record["payload_hex"], "0000000474657374")
         self.assertEqual(record["message_stream_hex"], message.hex())
+
+    def test_session_read_frame_records_decrypted_batch(self):
+        client_share = bytes.fromhex(
+            "d33bdf696bac88168ab62b1761a3cd381b62aabf1a11925193e07fbd57b8d564"
+            "f6f24c23084ed3aa5ccdf2c3c964fc4a"
+        )
+        server_share = crypto.encrypt_share(channel.HANDSHAKE_PLAIN)
+        master = crypto.master_words(client_share, server_share)
+        client_filter = crypto.Stream.from_master(master, "decrypt_client")
+        batch = (
+            channel.pack_u32(channel.LAYER_ALIGNMENT)
+            + channel.pack_u32(channel.LAYER_ALIGNMENT)
+            + channel.pack_u32(channel.LAYER_ALIGNMENT)
+            + channel.pack_u32(channel.AUTO_ENTER_SINGLE_MODE_TOS)
+            + channel.pack_string(b"test")
+        )
+        wire = client_filter.encrypt(channel.frame(batch))
+        client_sock, server_sock = __import__("socket").socketpair()
+        try:
+            client_sock.sendall(wire)
+            with tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "session.jsonl"
+                with patch.dict(os.environ, {"TET4_TRACE_JSONL": str(path)}):
+                    session = channel.Session(master, service="channel", peer="local")
+                    msg_id, body = session.read_frame(server_sock)
+                self.assertEqual(msg_id, channel.LAYER_ALIGNMENT)
+                event = json.loads(path.read_text(encoding="utf-8").strip())
+            self.assertEqual(event["message_id"], "0x031ac76a")
+            self.assertEqual(event["alignment_markers"], 3)
+            self.assertEqual(event["message_stream_hex"], body.hex())
+        finally:
+            client_sock.close()
+            server_sock.close()
 
     def test_unwritable_trace_never_raises(self):
         with patch.dict(os.environ, {"TET4_TRACE_JSONL": "/dev/null/not-a-file"}):

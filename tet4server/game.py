@@ -77,7 +77,7 @@ def save_frame(
 def handle(conn: socket.socket, capture_dir: Path | None = None) -> None:
     connection_id = uuid.uuid4().hex[:12]
     try:
-        session = channel.handshake(conn)
+        session = channel.handshake(conn, service="game")
         log.info("game socket %s secure handshake completed", connection_id)
         sequence = 0
         while True:

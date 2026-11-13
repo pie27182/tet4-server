@@ -268,6 +268,43 @@ class AutoEnterSingleModeResponseTest(unittest.TestCase):
             channel.auto_enter_single_mode_to_c(game_host=b"127.0.0.1", game_port=0)
 
 
+class AutoEnterDispatchTest(unittest.TestCase):
+    def test_request_routes_reply_to_the_local_game_socket(self):
+        class RecordingSession:
+            def __init__(self):
+                self.sent = []
+
+            def send(self, conn, body):
+                self.sent.append(body)
+
+        strings = (
+            b"10454", b"", b"", b"N000S", b"", b"TET4", b"sub", b"channel"
+        )
+        integers = (0, 0, 0, 0)
+        payload = (
+            channel.pack_u32(channel.AUTO_ENTER_SINGLE_MODE_TOS)
+            + channel.pack_string(strings[0])
+            + channel.pack_u32(integers[0])
+            + channel.pack_string(strings[1])
+            + channel.pack_string(strings[2])
+            + channel.pack_string(strings[3])
+            + channel.pack_u32(integers[1])
+            + channel.pack_u32(integers[2])
+            + channel.pack_string(strings[4])
+            + channel.pack_u32(integers[3])
+            + b"".join(channel.pack_string(v) for v in strings[5:])
+        )
+        session = RecordingSession()
+        channel._dispatch(
+            session, object(), channel.AUTO_ENTER_SINGLE_MODE_TOS, payload
+        )
+        self.assertEqual(
+            session.sent, [channel.auto_enter_single_mode_to_c(
+                game_host=b"127.0.0.1", game_port=15002
+            )]
+        )
+
+
 class DiscoveryOnlyChannelTest(unittest.TestCase):
     def test_handshake_only_sends_no_application_reply_and_waits_for_close(self):
         client, server = socket.socketpair()
@@ -335,6 +372,24 @@ class ItemStateRequestTest(unittest.TestCase):
         )
         with self.assertRaises(ProtocolError):
             channel.parse_item_state_request(payload)
+
+
+    def test_dispatch_sends_the_live_accepted_empty_item_response(self):
+        class RecordingSession:
+            def __init__(self):
+                self.sent = []
+
+            def send(self, conn, body):
+                self.sent.append(body)
+
+        session = RecordingSession()
+        payload = (
+            channel.pack_u32(channel.ITEM_STATE_TOS)
+            + channel.pack_string(b"test")
+            + bytes([1])
+        )
+        channel._dispatch(session, object(), channel.ITEM_STATE_TOS, payload)
+        self.assertEqual(session.sent, [channel.item_state_to_c()])
 
 
 class SingleModeRoomInfoLayoutTest(unittest.TestCase):

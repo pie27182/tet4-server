@@ -648,7 +648,13 @@ def _dispatch(session, conn, msg_id: int, payload: bytes) -> None:
             # its placement here is experimental and requires live validation.
             session.send(conn, get_member_info_to_c())
             log.info(
+                "sent experimental Cmd_Channel_GetMemberInfoToC "
+                "(member_key_len=%d)",
+                len(b"k601e"),
+            )
+            log.info(
                 "sent Cmd_Channel_EnterChannelToC with channel metadata "
+
                 "(k23e_len=%d, k24e_len=%d) for user_id=%d",
                 len(request.channel_metp_k23e),
                 len(request.channel_metp_k24e),

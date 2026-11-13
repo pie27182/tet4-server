@@ -1,0 +1,5 @@
+break *0x6090a540
+break *0x60203320
+c
+bt
+quit

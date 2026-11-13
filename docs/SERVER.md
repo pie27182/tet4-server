@@ -120,9 +120,23 @@ socket connects; other room metadata remains unverified.
 `u32 id | string | u32 | u8` from `Tet4.exe:0x00443D90`; the role and field
 semantics are not yet confirmed. It is deliberately not sent automatically.
 
-The game listener completes the secure handshake, parses known client-to-server
-`PolyMinoPutToS` and `GameReportToS` request layouts, and can save decoded frame
-bodies. It does not send the nested start-game state or per-turn updates.
+The game listener completes the secure handshake and saves decoded game frame
+bodies. It strictly parses the known `PolyMinoPutToS` and `GameReportToS`
+requests. A repeat live Single Mode run also confirmed that
+`Msg_SendEnterRoom` passes with non-null `MyData()`, `Msg_ConnectGameServer`
+runs, and the client completes the game-socket handshake before sending:
+
+- `Cmd_Room_EnterRoomToS` (`0x09A5347A`):
+  `u32 | str | str | u32 | u32 | str x4 | u32 | str | str | u32 | u32`.
+- `Cmd_Room_AlterRoomToS` (`0x0D31FDDA`):
+  `u32 | u32 | str x4`.
+
+These layouts come from the original `HgCom3.dll` serializer/deserializer pairs
+(`FUN_6012ad90/FUN_6012aec0` and `FUN_6012bfe0/FUN_6012c080`). Their
+individual field meanings are not yet established. The listener now parses these
+two requests and logs only numeric fields and string lengths (not string contents).
+It still sends no game-level response; the successful room-entry reply, initial
+board, and per-turn updates remain to be recovered.
 
 The independent Tetris engine is not connected to the wire protocol. The nested
 `StartNewGameToC` messages, `_SingleModeInfo`, `_TetrisMemberInfo`, board

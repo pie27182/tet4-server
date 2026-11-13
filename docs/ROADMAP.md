@@ -35,6 +35,15 @@ serializer test proves layout, not that the client accepts the message.
 - [x] Live-verify that `Msg_SendEnterRoom` passes its `MyData()+0x10` read
       and that the client opens a TCP connection to `127.0.0.1:15002`; the
       48-byte secure handshake and the first two game frames were captured.
+- [x] Repeat the live Single Mode click with a held press; confirm
+      `MyData()` is non-null, `Msg_ConnectGameServer` runs, and the client sends
+      `Cmd_Room_EnterRoomToS` (`0x09A5347A`) followed by
+      `Cmd_Room_AlterRoomToS` (`0x0D31FDDA`) over the secure game socket.
+- [x] Recover both request wire layouts from `HgCom3.dll`: EnterRoomToS is
+      `u32 | str | str | u32 | u32 | str x4 | u32 | str | str | u32 | u32`;
+      AlterRoomToS is `u32 | u32 | str x4`. Add strict parsers and tests.
+      Their field semantics and the server's successful room-entry response remain
+      unverified; the game listener still does not reply to either request.
 - [x] Live probe accepted: after the EnterChannel reply the client sends
       `Cmd_LayerAlignment` and then `Cmd_Channel_GetMemberListToS`.
 - [x] Reply to `Cmd_Channel_GetMemberListToS` with an empty member vector.

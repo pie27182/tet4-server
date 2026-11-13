@@ -427,10 +427,11 @@ class LayerAlignmentBatchTest(unittest.TestCase):
             + channel.pack_string(b"")
         )
 
-    def test_two_alignment_markers_reveal_auto_enter_message(self):
+    def test_three_alignment_markers_reveal_auto_enter_message(self):
         message = self.auto_enter_payload()
         batch = (
             channel.pack_u32(channel.LAYER_ALIGNMENT)
+            + channel.pack_u32(channel.LAYER_ALIGNMENT)
             + channel.pack_u32(channel.LAYER_ALIGNMENT)
             + message
         )
@@ -494,6 +495,7 @@ class SessionTest(unittest.TestCase):
         message = LayerAlignmentBatchTest.auto_enter_payload()
         batch = (
             channel.pack_u32(channel.LAYER_ALIGNMENT)
+            + channel.pack_u32(channel.LAYER_ALIGNMENT)
             + channel.pack_u32(channel.LAYER_ALIGNMENT)
             + message
         )

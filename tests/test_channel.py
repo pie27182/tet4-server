@@ -121,9 +121,12 @@ class EnterChannelToCMetpInfoTest(unittest.TestCase):
         )
         self.assertEqual(len(session.sent), 2)
 
-        # The second frame is the experimental self-member info push. Its
-        # first string must match GData["k602e"] set by Msg_GetUserId.
-        self.assertEqual(session.sent[1], channel.get_member_info_to_c(b"k601e"))
+        # The second frame is the recovered self-member info push. Its first
+        # string must match GData["k602e"], which mirrors the member id that
+        # Msg_GetUserId received in GetUserIdToC (here the same "test").
+        self.assertEqual(
+            session.sent[1], channel.get_member_info_to_c(request_strings[0])
+        )
 
         # FUN_60139620 reads ToC string 3 into MetpInfo k23e and
         # ToC string 8 into MetpInfo k24e.
@@ -192,11 +195,11 @@ class EnterChannelToCLayoutTest(unittest.TestCase):
 
 class GetMemberInfoToCTest(unittest.TestCase):
     def test_minimal_self_member_record_matches_stream_serializer_order(self):
-        r = Reader(channel.get_member_info_to_c())
+        r = Reader(channel.get_member_info_to_c(b"test"))
         self.assertEqual(r.u32(), channel.GET_MEMBER_INFO_TOC)
 
         # FUN_6012dce0 writes the fields in this precise order.
-        self.assertEqual(r.string(), b"k601e")  # k3e
+        self.assertEqual(r.string(), b"test")  # k3e
         self.assertEqual(tuple(r.string() for _ in range(3)), (b"",) * 3)
         self.assertEqual(r.u32(), 0)              # k10e
         self.assertEqual(r.string(), b"")         # k12e

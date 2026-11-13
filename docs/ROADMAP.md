@@ -26,13 +26,15 @@ serializer test proves layout, not that the client accepts the message.
       ToS strings 3/4 are `k23e`/`k24e`; ToC strings 3/8 populate
       `MetpInfo(4).k23e/k24e`. The server now echoes these values.
 - [x] Recover the separate `Cmd_Channel_GetMemberInfoToC` push path:
-      `Msg_GetUserId` sets `GData["k602e"]="k601e"`; `MyData()` looks up that
-      member key; `Msg_GetMemberInfo -> Msg_AddMember` creates the local record.
-      Static finding only; it does not prove the server push timing.
-- [ ] Live-test the experimental `GetMemberInfoToC` push after `EnterChannelToC`
-      and verify that `SGlobalInfo::MyData()` becomes non-null.
-- [ ] Live-verify that `Msg_SendEnterRoom` passes its `MyData()+0x10` read,
-      then confirm a TCP connection attempt to `127.0.0.1:15002`.
+      `Msg_GetUserId` copies the `GetUserIdToC` member id into `GData["k601e"]`
+      and then `GData["k602e"]`; `MyData()` looks up that member id;
+      `Msg_GetMemberInfo -> Msg_AddMember` creates the local record.
+- [x] Live-test the `GetMemberInfoToC` push after `EnterChannelToC`.
+      Sending `k3e=<member id>` (the same value as `EnterChannelByUserIdToS`)
+      makes `SGlobalInfo::MyData()` return a non-null record.
+- [x] Live-verify that `Msg_SendEnterRoom` passes its `MyData()+0x10` read
+      and that the client opens a TCP connection to `127.0.0.1:15002`; the
+      48-byte secure handshake and the first two game frames were captured.
 - [x] Live probe accepted: after the EnterChannel reply the client sends
       `Cmd_LayerAlignment` and then `Cmd_Channel_GetMemberListToS`.
 - [x] Reply to `Cmd_Channel_GetMemberListToS` with an empty member vector.

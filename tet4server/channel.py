@@ -136,7 +136,7 @@ def get_user_id_to_c(member_id: bytes, text_b: bytes = b"", code: int = 0) -> by
             + struct.pack(">i", code))
 
 
-def get_member_info_to_c(member_key: bytes = b"k601e") -> bytes:
+def get_member_info_to_c(member_key: bytes) -> bytes:
     """Serialize the minimal Cmd_Channel_GetMemberInfoToC profile.
 
     HgCom3.dll stream serializer FUN_6012dce0 and matching deserializer
@@ -145,14 +145,17 @@ def get_member_info_to_c(member_key: bytes = b"k601e") -> bytes:
       str | u64 | u32 × 2 | str × 2 | u32 | str | vector | str
 
     The converter FUN_601391a0 maps the first string to k3e. Msg_AddMember
-    copies k3e into CMemberData's member key. Msg_GetUserId sets
-    GData[k602e] to the literal "k601e"; SGlobalInfo::MyData() looks up
-    that key in the member-data list. The dynamic k153e vector is empty and
-    the final k1e result string is present and empty (success-shaped).
+    copies k3e into CMemberData's member key. Msg_GetUserId stores the member
+    id from Cmd_Channel_GetUserIdToC under GData["k601e"] and mirrors it into
+    GData["k602e"] (GData vtable +0x70 copies the value of the source key);
+    SGlobalInfo::MyData() looks that value up in the member list. Live
+    breakpoints show the lookup key is the member id itself, so member_key
+    must be that same string, not the literal "k601e".
 
-    The registered Net_GetMemberInfo -> Msg_GetMemberInfo -> Msg_AddMember
-    path is statically recovered. Sending this message after EnterChannelToC
-    remains experimental: timing and live acceptance still need validation.
+    The dynamic k153e vector is empty and the final k1e result string is
+    present and empty (success-shaped). The push is live-validated: with
+    member_key equal to the session member id, MyData() finds the record and
+    Msg_SendEnterRoom proceeds to the game socket on port 15002.
     """
     if not isinstance(member_key, bytes) or not member_key:
         raise ValueError("member_key must be a non-empty byte string")
@@ -659,14 +662,17 @@ def _dispatch(session, conn, msg_id: int, payload: bytes) -> None:
             response_strings[7] = request.channel_metp_k24e
             session.send(conn, enter_channel_to_c(strings=tuple(response_strings)))
             # Seed the local CMemberData object before Msg_SendEnterRoom calls
-            # SGlobalInfo::MyData(). This is a statically recovered push path;
-            # its placement here is experimental and requires live validation.
-            session.send(conn, get_member_info_to_c())
-            log.info(
-                "sent experimental Cmd_Channel_GetMemberInfoToC "
-                "(member_key_len=%d)",
-                len(b"k601e"),
-            )
+            # SGlobalInfo::MyData(). MyData searches for the member id that
+            # GetUserIdToC placed in GData["k601e"]/["k602e"], and the client
+            # repeats that same id as k3e in this request.
+            member_key = request.strings[0]
+            if member_key:
+                session.send(conn, get_member_info_to_c(member_key))
+                log.info(
+                    "sent experimental Cmd_Channel_GetMemberInfoToC "
+                    "(member_key=%r)",
+                    member_key,
+                )
             log.info(
                 "sent Cmd_Channel_EnterChannelToC with channel metadata "
 

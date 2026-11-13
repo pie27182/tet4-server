@@ -204,24 +204,27 @@ keys. Its first string maps to `k3e`.
 The live WineDbg stop at `Msg_SendEnterRoom` was not caused by reading those
 MetpInfo keys. The faulting expression is `AddValue("k3e", MyData()+0x10)`:
 `SGlobalInfo::MyData()` looks up `GData["k602e"]` in the local
-`CMemberDataList`. After a successful `Msg_GetUserId`, `GData["k602e"]`
-is the literal string `"k601e"`. `Msg_FillMemberList` compares the self row
-against this key, but skips it when `MyData()` is still null; adding only the
-self row to the ordinary member vector therefore does not seed the object.
+`CMemberDataList`. `Msg_GetUserId` stores the member id from `GetUserIdToC`
+under `GData["k601e"]` and then copies that value into `GData["k602e"]`
+(the GData vtable slot `+0x70` copies by source key). The lookup key is
+therefore the member id itself, not the literal string `"k601e"`. A live stop
+at `MyData`'s inner `FindMemberData` showed the key `"test"` and a null result
+while the member list held `"k601e"`. `Msg_FillMemberList` compares the self
+row against this key, but skips it when `MyData()` is still null; adding only
+the self row to the ordinary member vector therefore does not seed the object.
 
 The statically recovered server-to-client message `Cmd_Channel_GetMemberInfoToC`
 (`0x060BC39A`) is registered to converter `FUN_601391A0`. Its controller path is
 `Net_GetMemberInfo -> channel/getMemInfo -> Msg_GetMemberInfo -> Msg_AddMember`;
 there is no prerequisite client request in this path. Its first wire string maps
 to `k3e`, which `Msg_AddMember` copies into `CMemberData`'s member key. The
-experimental server path sends this push after `EnterChannelToC`, with
-`k3e=b"k601e"`, other fields zero/empty and a present empty `k1e` result
-string. The local trace previously labelled it `unknown` only because its
-message-name table did not yet include ID `0x060BC39A`; that label was not
-evidence that the client ignored the message. Whether the controller actually
-dispatches it, and whether the minimal profile values are sufficient, still
-require a live-client validation with breakpoints on `Net_GetMemberInfo`,
-`Msg_GetMemberInfo` and `Msg_AddMember`.
+server sends this push after `EnterChannelToC` with `k3e` equal to the member id
+from `EnterChannelByUserIdToS`, other fields zero/empty and a present empty
+`k1e` result string. A live run with `k3e="test"` completed the whole path:
+`Msg_GetMemberInfo` and `Msg_AddMember` ran, `MyData()` returned a non-null
+record, `Msg_SendEnterRoom` passed, and the client connected to port 15002 and
+completed the 48-byte secure handshake. The earlier `unknown` trace label was
+only a missing entry in the decoder's message-name table.
 
 The generic HgCom3 `Cmd_Channel_GetMemberInfoToC` is registered in
 layer 0 as converter `FUN_601391A0`. Tet4.exe additionally registers the same

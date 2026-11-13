@@ -79,6 +79,32 @@ class PlaintextTraceTest(unittest.TestCase):
             client_sock.close()
             server_sock.close()
 
+    def test_session_send_records_plaintext_before_encryption(self):
+        client_share = bytes.fromhex(
+            "d33bdf696bac88168ab62b1761a3cd381b62aabf1a11925193e07fbd57b8d564"
+            "f6f24c23084ed3aa5ccdf2c3c964fc4a"
+        )
+        server_share = crypto.encrypt_share(channel.HANDSHAKE_PLAIN)
+        master = crypto.master_words(client_share, server_share)
+        body = channel.pack_u32(channel.AUTO_ENTER_SINGLE_MODE_TOC) + channel.pack_string(b"127.0.0.1")
+        client_sock, server_sock = __import__("socket").socketpair()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "session.jsonl"
+                with patch.dict(os.environ, {"TET4_TRACE_JSONL": str(path)}):
+                    session = channel.Session(master, service="channel", peer="local")
+                    session.send(server_sock, body)
+                event = json.loads(path.read_text(encoding="utf-8").strip())
+            encrypted = client_sock.recv(4096)
+            client_receive = crypto.Stream.from_master(master, "encrypt_to_client")
+            self.assertEqual(client_receive.decrypt(encrypted), channel.frame(body))
+            self.assertEqual(event["direction"], "server_to_client")
+            self.assertEqual(event["message_id"], "0x0df37b3a")
+            self.assertEqual(event["message_stream_hex"], body.hex())
+        finally:
+            client_sock.close()
+            server_sock.close()
+
     def test_unwritable_trace_never_raises(self):
         with patch.dict(os.environ, {"TET4_TRACE_JSONL": "/dev/null/not-a-file"}):
             trace.record_message(

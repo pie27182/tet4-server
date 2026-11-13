@@ -24,14 +24,18 @@ serializer test proves layout, not that the client accepts the message.
 - [x] Channel-entry request decoder and `Cmd_Channel_EnterChannelToC` serializer.
 - [x] Live probe accepted: after the EnterChannel reply the client sends
       `Cmd_LayerAlignment` and then `Cmd_Channel_GetMemberListToS`.
-- [ ] Reply to `Cmd_Channel_GetMemberListToS` with a structurally valid member list.
-      First probe uses an empty vector; next criterion is a live run where the client
-      accepts it and requests the room list.
-- [ ] Reply to `Cmd_Channel_GetRoomListToS` with a structurally valid room list.
-      First probe uses an empty vector; verify the lobby remains usable and identify
-      whether Single Mode entry is available without public rooms.
-- [ ] Implement any follow-up channel messages that the real client requests before
-      it can invoke Single Mode (for example item-state or refresh messages).
+- [x] Reply to `Cmd_Channel_GetMemberListToS` with an empty member vector.
+      Live run: the client accepted it and requested the room list. Non-empty member
+      record serialization is not implemented.
+- [x] Reply to `Cmd_Channel_GetRoomListToS` with an empty room vector.
+      Live run: the client accepted it and requested item state. Non-empty room
+      record serialization is not implemented.
+- [x] Reply to `Cmd_Item_GetItemStateToS` with an empty item vector.
+      Live run: the client stays in the channel for more than two minutes with this
+      reply; without it the observed client exits about three seconds after the request.
+- [ ] Verify that the Single Mode action is available and can be invoked from this
+      channel state; remaining channel messages, if any, should be added only from a
+      fresh trace.
 - [ ] Resolve the lobby row/state defect and the post-channel crash if either remains
       reproducible after the member/room responses. Track those defects in GitHub Issues.
 
@@ -55,8 +59,10 @@ serializer test proves layout, not that the client accepts the message.
 - [ ] Run the client, click Single Mode and verify AutoEnter success, connection to
       the local game socket, and capture the first game request. The room metadata
       fields other than host/port are still constructor defaults and may need values.
-- [ ] Decode and implement `Cmd_ChannelOrderTypeSingleModeRoomInfoTetrisToC`
-      (`0x04B61A2A`) and the nested `_SingleModeInfo` (`0x0071FA1A`).
+- [x] Recover the top-level `Cmd_ChannelOrderTypeSingleModeRoomInfoTetrisToC`
+      layout (`u32 | string | u32 | u8`) and add a serializer test. Its role and
+      values remain unverified; do not send it until the live sequence confirms it.
+- [ ] Recover the nested `_SingleModeInfo` (`0x0071FA1A`) fields.
 - [ ] Verify the real client transitions from the lobby to the Single Mode room screen
       without a crash or indefinite wait.
 
@@ -112,10 +118,10 @@ serializer test proves layout, not that the client accepts the message.
 
 - [x] Live-run harness starts TPack, CDS, channel and game-socket services, records
       the session, and saves decoded game frames as local ignored binary fixtures.
-- [x] GitHub Actions passed all 44 tests on commit
+- [x] GitHub Actions passed all 54 tests on commit
       `328ade223cc133c7d6a16d14878a5b3b3370f151`; subsequent commits in this branch
       only update documentation.
-- [ ] Add a top-level `python -m tet4server` runner with orderly startup/shutdown.
+- [x] Add a top-level `python -m tet4server` runner to start TPack, CDS, channel and game listeners on loopback.
 - [ ] Make the protocol sequence reproducible from a clean checkout using only
       documented local client files and a test account.
 - [ ] Keep captured byte fixtures and regression tests for every implemented message.

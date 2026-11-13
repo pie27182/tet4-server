@@ -54,6 +54,26 @@ request contains `k23e=b""` and `k24e=b"1"`. The server now echoes those exact
 values into the corresponding response fields instead of returning empty strings.
 The next live run must confirm that `Msg_SendEnterRoom` no longer faults.
 
+The latest no-debug Wine run exits in the same way as the WineDbg run: AutoEnter is
+sent, the channel connection closes, and no TCP packets reach port 15002. The
+debugger is therefore not the cause. WineDbg identified the fault at
+`CMetpParser::AddValue` while `Msg_SendEnterRoom` reads `SGlobalInfo::MyData()`.
+
+Static analysis shows that `MyData()` looks up the current-member key from
+`GData["k602e"]`, which `Msg_GetUserId` sets to the literal `"k601e"`.
+`GetMemberListToC` does not initialize this object: `Msg_FillMemberList`
+skips the own row if `MyData()` is still null. The separate
+`Cmd_Channel_GetMemberInfoToC` (`0x060BC39A`) response follows
+`Net_GetMemberInfo -> Msg_GetMemberInfo -> Msg_AddMember` and creates the
+`CMemberData` entry from its first string (`k3e`).
+
+The current experimental branch sends a minimal `GetMemberInfoToC` push after
+`EnterChannelToC`, with `k3e="k601e"` and other fields empty/zero. The
+serializer order and model path are statically recovered; whether the client
+expects this push at that time, and whether this minimal profile is sufficient,
+remain unverified. The next live test must show `MyData()` non-null, pass
+`Msg_SendEnterRoom`, and attempt the connection to port 15002.
+
 This is why `RoomInfoToC` is not currently the right fix for the missing MetpInfo
 keys: its converter does not populate `MetpInfo(4).k23e/k24e`.
 

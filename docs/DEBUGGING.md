@@ -122,6 +122,38 @@ Ghidra's pseudocode and disassembly side-by-side: the dynamic breakpoint answers
 whether the function was reached and what values it received; the static view explains
 what those values mean.
 
+### Self-member bootstrap / Single Mode crash path
+
+For the 2026-11-13 `MyData()` failure, use the dedicated ordered breakpoint file:
+
+```sh
+TIMEOUT=300 tools/debug/winedbg_batch.sh tools/debug/break-member-info-path.wdbg
+```
+
+It stops in this order:
+
+1. `HgCtr3.dll:0x602039F0` — `Net_GetMemberInfo`, the handler for the server
+   `Cmd_Channel_GetMemberInfoToC` response (`0x060BC39A`);
+2. `HgModel3.dll:0x6090B0D0` — `Msg_GetMemberInfo`;
+3. `HgModel3.dll:0x6090AAF0` — `Msg_AddMember`, which creates/indexes
+   `CMemberData` using its first field `k3e`;
+4. `HgModel3.dll:0x6090B480` — `Msg_SendEnterRoom`, reached after clicking
+   Single Mode;
+5. `HgModel3.dll:0x6090B560` — the `MyData()+0x10` use inside
+   `Msg_SendEnterRoom`;
+6. `HgModel3.dll:0x60914950` — `Msg_ConnectGameServer`.
+
+After the third stop (`Msg_AddMember`), the command file continues and waits at the
+next breakpoint; click Single Mode then. If the run stops at `0x6090B560` and
+subsequently faults in `HgCom3.dll:0x60159146`, the self record still was not
+found. If it passes that location but never reaches `0x60914950`, inspect the
+remaining `Msg_SendEnterRoom` branches instead of changing the member record again.
+
+The member-info response is a server-initiated ToC; a client-side
+`GetMemberInfoToS` request is not a prerequisite. The separate
+`GetDisplayMemberInfoTetrisToS` request opens the `dlgMemberInfo` display
+flow and is not the `MyData()` bootstrap path.
+
 ## Recommended order for Single Mode
 
 1. Run with `TET4_TRACE_JSONL` and capture a fresh PCAPNG at the same time.

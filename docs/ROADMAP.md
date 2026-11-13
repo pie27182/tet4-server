@@ -57,7 +57,7 @@ serializer test proves layout, not that the client accepts the message.
       `127.0.0.1:15002`, plus a game-socket listener using the recovered secure
       handshake. The listener currently captures frames and deliberately sends no
       game-level replies.
-- [x] Implement the XLBP batch handling needed for the observed two leading
+- [x] Implement the XLBP batch handling needed for the observed three leading
       `Cmd_LayerAlignment` markers. The old reader treated the first marker as the
       command ID and silently skipped the actual AutoEnter request.
 - [ ] Run the client again and verify that the AutoEnter response is accepted, that

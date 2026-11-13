@@ -72,10 +72,15 @@ push after `EnterChannelToC`, with `k3e="k601e"` and other fields empty/zero.
 The original controller has a direct server-response path
 `Net_GetMemberInfo -> channel/getMemInfo -> Msg_GetMemberInfo -> Msg_AddMember`;
 a prior client request is not required. The previous JSONL label `unknown` was
-only a missing entry in our trace-name table. The serializer order and model path
-are statically recovered; whether the client actually dispatches this message
-at the selected point and whether this minimal profile is sufficient remain
-unverified. The next live test must break on `Net_GetMemberInfo`,
+only a missing entry in our trace-name table. The client also emits
+`Cmd_Channel_OrderTypeGetDisplayMemberInfoTetrisToS` (`0x0E4772BA`) with
+`member_id=test`; this is a different feature. Its `0x0C3B49AA` response
+is converted in `Tet4.exe: FUN_00459EF0` into the `dlgMemberInfo` display
+dialog, not into `CMemberDataList`. It must not be confused with
+`GetMemberInfoToC`. The serializer order and model path are statically
+recovered; whether the client actually dispatches the self-member push at the
+selected point and whether this minimal profile is sufficient remain unverified.
+The next live test must break on `Net_GetMemberInfo`,
 `Msg_GetMemberInfo`, and `Msg_AddMember`, then verify `MyData()` is non-null,
 `Msg_SendEnterRoom` passes, and a connection is attempted on port 15002.
 

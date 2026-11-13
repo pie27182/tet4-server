@@ -80,7 +80,7 @@ def unwrap_layer_alignment(message_stream: bytes) -> tuple[int, bytes]:
     Cmd_LayerAlignment (0x09D0057A) for each null IMessage slot before the
     next populated slot. PC_ConvertX2M (FUN_601206e0) consumes those markers
     and continues dispatching the next message. The live Single Mode capture
-    contains two such markers before AutoEnterSingleModeToS.
+    contains three such markers before AutoEnterSingleModeToS.
 
     This server currently handles one populated application message per XLBP
     batch. It strips any leading alignment markers, but does not yet split

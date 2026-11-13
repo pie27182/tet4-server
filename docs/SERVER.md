@@ -45,17 +45,19 @@ Live-client evidence confirms these channel steps:
   for more than two minutes; without it the observed client exited about three seconds
   after requesting item state.
 
-The 2026-11-13 PCAP contains the AutoEnter request (`0x031AC76A`) inside an XLBP
-message batch preceded by three empty `Cmd_LayerAlignment` markers
-(`0x09D0057A`). The client protocol converter inserts these markers for null message
-slots; the matching receiver consumes them before dispatching the next message.
-The server now strips leading markers and reaches the existing AutoEnter handler.
-That handler returns a response routing to `127.0.0.1:15002`.
+The 2026-11-13 PCAP contains the AutoEnter request (`0x031AC76A`) after three
+empty `Cmd_LayerAlignment` slots. The client sends GameID `TET4` in request
+string +0xa8, then receives AutoEnterToC with host `127.0.0.1` and port `15002`.
+The channel trace proves the response was written, but there are no packets to
+15002 and the client closes the channel shortly afterward.
 
-The captured run predates this parser fix, so it correctly has no 15002 connection.
-The next live run must verify that the new response is accepted and that the client
-connects and completes the game-socket handshake. Room metadata beyond host/port
-still defaults to constructor values.
+Static analysis of `Tet4.exe:0x00445F60` shows that response fields +0xa8/+0xc4/+0xe0
+populate `k22e`/`k23e`/`k24e`; +0xa8 is additionally passed as `k42e` to
+`fillEnterRoomParameter`. The button's ToS builder places GameID/`k23e`/`k24e`
+at the same offsets. The previous server response left these fields empty. The
+current branch fixes this mismatch by echoing request strings 5..7 into the response.
+A fresh live run must verify that this corrected response reaches the game socket.
+Other room metadata remains unverified.
 
 `single_mode_room_info_to_c` serializes the recovered top-level layout
 `u32 id | string | u32 | u8` from `Tet4.exe:0x00443D90`; the role and field

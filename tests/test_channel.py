@@ -298,11 +298,38 @@ class AutoEnterDispatchTest(unittest.TestCase):
         channel._dispatch(
             session, object(), channel.AUTO_ENTER_SINGLE_MODE_TOS, payload
         )
+        response_strings = [b""] * 12
+        response_strings[5:8] = strings[5:8]
         self.assertEqual(
-            session.sent, [channel.auto_enter_single_mode_to_c(
-                game_host=b"127.0.0.1", game_port=15002
-            )]
+            session.sent,
+            [channel.auto_enter_single_mode_to_c(
+                game_host=b"127.0.0.1",
+                game_port=15002,
+                strings=tuple(response_strings),
+            )],
         )
+
+        # These three response fields feed k22e/k23e/k24e in the client
+        # converter; k22e is then passed to fillEnterRoomParameter as k42e.
+        r = Reader(session.sent[0])
+        self.assertEqual(r.u32(), channel.AUTO_ENTER_SINGLE_MODE_TOC)
+        for _ in range(5):
+            r.string()
+        for _ in range(3):
+            r.u32()
+        r.string()  # +0x88
+        r.u32()     # +0xa4
+        self.assertEqual(
+            tuple(r.string() for _ in range(3)),
+            strings[5:8],
+        )
+        self.assertEqual(r.string(), b"")  # success status at +0xfc
+        r.u32()
+        r.string()
+        self.assertEqual(r.string(), b"127.0.0.1")
+        self.assertEqual(r.u32(), 15002)
+        self.assertEqual(r.string(), b"")
+        self.assertEqual(r.remaining(), 0)
 
 
 class DiscoveryOnlyChannelTest(unittest.TestCase):

@@ -37,6 +37,7 @@ class PlaintextTraceTest(unittest.TestCase):
                     sequence=7,
                 )
             record = json.loads(path.read_text(encoding="utf-8").strip())
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
         self.assertEqual(record["service"], "channel")
         self.assertEqual(record["direction"], "client_to_server")
         self.assertEqual(record["sequence"], 7)
@@ -45,7 +46,6 @@ class PlaintextTraceTest(unittest.TestCase):
         self.assertEqual(record["message_name"], "Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToS")
         self.assertEqual(record["payload_hex"], "0000000474657374")
         self.assertEqual(record["message_stream_hex"], message.hex())
-        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
 
     def test_session_read_frame_records_decrypted_batch(self):
         client_share = bytes.fromhex(

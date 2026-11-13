@@ -144,6 +144,7 @@ these markers and continues dispatching the next message. Thus the first ID afte
 | `Cmd_Channel_GetUserIdToC` | `0x0A80E29A` | server to client | **[wire]** our reply accepted (k161e = 0) |
 | `Cmd_Channel_EnterChannelByUserIdToS` | `0x0696068A` | client to server | **[wire]** request observed; request layout decoded from static analysis |
 | `Cmd_Channel_EnterChannelToC` | `0x00C0FC8A` | server to client | **[wire, static]** accepted to member-list request; response strings 3 and 8 populate `MetpInfo(4).k23e/k24e` |
+| `Cmd_Channel_GetMemberInfoToC` | `0x060BC39A` | server to client | **[static, experimental]** push path to seed local `CMemberData`; not yet live-verified |
 | `Cmd_Channel_GetMemberListToS` | `0x0AE3BBDA` | client to server | **[wire]** observed after EnterChannelToC; request layout [static] |
 | `Cmd_Channel_GetMemberListToC` | `0x06B816EA` | server to client | **[wire]** empty-vector reply accepted; the client then requests the room list |
 | `Cmd_Channel_GetRoomListToS` | `0x0DDA299A` | client to server | **[wire]** `u32 id | string × 3`; no trailing integer |
@@ -190,6 +191,25 @@ meaning is not established; the server does not read it.
   into `SGlobalInfo::MetpInfo(4)` under `k23e` and `k24e`. Later,
   `Msg_SendEnterRoom` (HgModel3.dll, `0x6090B480`) reads both keys from
   `MetpInfo(4)`. The RoomInfoToC converter does not write these keys.
+
+The live WineDbg stop at `Msg_SendEnterRoom` was not caused by reading those
+MetpInfo keys. The faulting expression is `AddValue("k3e", MyData()+0x10)`:
+`SGlobalInfo::MyData()` looks up `GData["k602e"]` in the local
+`CMemberDataList`. After a successful `Msg_GetUserId`, `GData["k602e"]`
+is the literal string `"k601e"`. `Msg_FillMemberList` compares the self row
+against this key, but skips it when `MyData()` is still null; adding only the
+self row to the ordinary member vector therefore does not seed the object.
+
+The statically recovered push message `Cmd_Channel_GetMemberInfoToC`
+(`0x060BC39A`) follows `Net_GetMemberInfo -> channel/getMemInfo ->
+Msg_GetMemberInfo -> Msg_AddMember`. Its first wire string maps to `k3e`,
+which `Msg_AddMember` copies into `CMemberData`'s member key. The experimental
+server path sends this message after `EnterChannelToC`, with `k3e=b"k601e"`,
+other fields zero/empty and a present empty `k1e` result string. This send
+point and the minimal profile values still require live-client validation.
+
+This message is distinct from `Cmd_Channel_OrderTypeGetDisplayMemberInfoTetrisToS`
+(`0x0E4772BA`), a separate client request for display-member information.
 - The previous server sent empty strings in both response positions. It now echoes
   request strings 3/4 into response strings 3/8. This is grounded by the request
   converter, response converter and the actual trace values; live confirmation that

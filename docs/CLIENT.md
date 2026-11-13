@@ -223,14 +223,22 @@ dispatches it, and whether the minimal profile values are sufficient, still
 require a live-client validation with breakpoints on `Net_GetMemberInfo`,
 `Msg_GetMemberInfo` and `Msg_AddMember`.
 
+The generic HgCom3 `Cmd_Channel_GetMemberInfoToC` is registered in
+layer 0 as converter `FUN_601391A0`. Tet4.exe additionally registers the same
+outer message ID `0x060BC39A` in layer 3 to a different converter
+`FUN_00459E20` for a Tetris-specific class. The XLBP layer is therefore part
+of message identity here: the experimental self-member record is intentionally
+sent in layer 0, while layer-3 Tetris messages require three alignment markers.
+
 The separate `Cmd_Channel_OrderTypeGetDisplayMemberInfoTetrisToS`
-(`0x0E4772BA`) request is not the trigger for this model path. It has a
-different response, `Cmd_Channel_OrderTypeGetDisplayMemberInfoTetrisToC`
-(`0x0C3B49AA`), implemented in `Tet4.exe`. Its converter
-`FUN_00459EF0` applies a `TT_XDR` header and obtains the `dlgMemberInfo`
-dialog; the response object contains several nested containers and strings.
-This is a display/profile dialog flow, not the `Net_GetMemberInfo ->
-Msg_GetMemberInfo -> Msg_AddMember` path which creates `CMemberData`.
+(`0x0E4772BA`) request is not the trigger for this model path. It is itself
+a layer-3 message and has a different layer-3 response,
+`Cmd_Channel_OrderTypeGetDisplayMemberInfoTetrisToC` (`0x0C3B49AA`),
+implemented in `Tet4.exe`. Its converter `FUN_00459EF0` applies a
+`TT_XDR` header and obtains the `dlgMemberInfo` dialog; the response object
+contains several nested containers and strings. This is a display/profile
+dialog flow, not the `Net_GetMemberInfo -> Msg_GetMemberInfo -> Msg_AddMember`
+path which creates `CMemberData`.
 - The previous server sent empty strings in both response positions. It now echoes
   request strings 3/4 into response strings 3/8. This is grounded by the request
   converter, response converter and the actual trace values; live confirmation that
@@ -343,6 +351,15 @@ Serialize/Deserialize methods are `FUN_00442E90` / `FUN_00443080`; converter:
 str | str | str | str | u32 | str | str | u32 | str`.
 
 The converter applies the `TT_XDR` header and maps the fields into MetpInfo(5).
+In `Tet4.exe: FUN_0045B410` it is registered with
+`PC_RegisterX2M(0x0DF37B3A, 3, FUN_00445F60, ...)`: **the response belongs
+to XLBP layer 3** and must be preceded by three `Cmd_LayerAlignment` markers.
+The observed request has those three markers. The earlier local server sent the
+reply without them (layer 0), so the client's layer-3 AutoEnter converter could
+not receive it. `tet4server.channel.layer_message(response, 3)` now preserves
+the layer on the response. This is a statically established routing fix; live
+acceptance is still pending.
+
 It treats status string at offset `+0xfc` equal to `v2e` as failure; any other value
 takes the success path. In particular:
 - response string `+0xa8` becomes `k22e` and is also passed as `k42e` to

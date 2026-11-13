@@ -83,7 +83,7 @@ class GameRoomRequestTest(unittest.TestCase):
             pack_u32(game.GAME_ALTER_ROOM_TOS)
             + pack_u32(0)
             + b"".join(pack_string(b"") for _ in range(4))
-            + b"\\x00"
+            + b"\x00"
         )
         with self.assertRaises(ProtocolError):
             game.parse_alter_room_request(payload)

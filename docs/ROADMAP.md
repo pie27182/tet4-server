@@ -118,9 +118,9 @@ serializer test proves layout, not that the client accepts the message.
 
 - [x] Live-run harness starts TPack, CDS, channel and game-socket services, records
       the session, and saves decoded game frames as local ignored binary fixtures.
-- [x] GitHub Actions passed all 56 tests on commit
-      `328ade223cc133c7d6a16d14878a5b3b3370f151`; subsequent commits in this branch
-      only update documentation.
+- [x] GitHub Actions passed all 56 tests on HEAD
+      `bd51fd7a251782222a0942382c71ad2147397e43`
+      ([run 43335816230](https://github.com/pie27182/tet4-server/actions/runs/43335816230)).
 - [x] Add a top-level `python -m tet4server` runner to start TPack, CDS, channel and game listeners on loopback.
 - [ ] Make the protocol sequence reproducible from a clean checkout using only
       documented local client files and a test account.

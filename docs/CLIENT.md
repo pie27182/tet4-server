@@ -290,8 +290,18 @@ str | str | str | str | u32 | str | str | u32 | str`.
 
 The converter applies the `TT_XDR` header and maps the fields into MetpInfo(5).
 It treats status string at offset `+0xfc` equal to `v2e` as failure; any other value
-takes the success path. That path calls `fillEnterRoomParameter`, moves the lobby
-state forward, and then calls `game.connGameSvr`.
+takes the success path. In particular:
+- response string `+0xa8` becomes `k22e` and is also passed as `k42e` to
+  `fillEnterRoomParameter`;
+- response strings `+0xc4` and `+0xe0` become `k23e` and `k24e`;
+- the button's ToS builder writes GameID, `k23e` and `k24e` to those same offsets.
+
+The previous local response incorrectly left all three response strings empty even
+though the request carried GameID `TET4`. The server now echoes the ToS strings
+5..7 into these three ToC fields. This fixes the request/response metadata mismatch
+visible in the capture, but acceptance still needs a fresh live run.
+After its field conversion the client calls `fillEnterRoomParameter`, then
+`game.connGameSvr`.
 
 The game endpoint is explicit in the response:
 - string at `+0x138` becomes `k52e`, the game host;

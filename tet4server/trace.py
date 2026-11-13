@@ -115,10 +115,11 @@ def record_message(
             try:
                 os.chmod(target, 0o600)
                 with os.fdopen(fd, "a", encoding="utf-8") as handle:
+                    fd = -1  # ownership transferred to the file object
                     handle.write(line)
-            except BaseException:
-                os.close(fd)
-                raise
+            finally:
+                if fd >= 0:
+                    os.close(fd)
     except OSError:
         # Diagnostics must never break a game session just because the trace
         # path is unwritable or a disk is full.

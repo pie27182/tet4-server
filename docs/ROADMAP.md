@@ -25,8 +25,14 @@ serializer test proves layout, not that the client accepts the message.
 - [x] Recover the EnterChannel request/response mapping for required lobby metadata:
       ToS strings 3/4 are `k23e`/`k24e`; ToC strings 3/8 populate
       `MetpInfo(4).k23e/k24e`. The server now echoes these values.
-- [ ] Live-verify that `Msg_SendEnterRoom` no longer faults while reading
-      `MetpInfo(4).k23e/k24e`.
+- [x] Recover the separate `Cmd_Channel_GetMemberInfoToC` push path:
+      `Msg_GetUserId` sets `GData["k602e"]="k601e"`; `MyData()` looks up that
+      member key; `Msg_GetMemberInfo -> Msg_AddMember` creates the local record.
+      Static finding only; it does not prove the server push timing.
+- [ ] Live-test the experimental `GetMemberInfoToC` push after `EnterChannelToC`
+      and verify that `SGlobalInfo::MyData()` becomes non-null.
+- [ ] Live-verify that `Msg_SendEnterRoom` passes its `MyData()+0x10` read,
+      then confirm a TCP connection attempt to `127.0.0.1:15002`.
 - [x] Live probe accepted: after the EnterChannel reply the client sends
       `Cmd_LayerAlignment` and then `Cmd_Channel_GetMemberListToS`.
 - [x] Reply to `Cmd_Channel_GetMemberListToS` with an empty member vector.

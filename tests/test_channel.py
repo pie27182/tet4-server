@@ -191,25 +191,28 @@ class EnterChannelToCLayoutTest(unittest.TestCase):
 
 
 class GetMemberInfoToCTest(unittest.TestCase):
-    def test_minimal_self_member_record_uses_exact_xdr_field_order(self):
+    def test_minimal_self_member_record_uses_exact_pe_field_order(self):
         r = Reader(channel.get_member_info_to_c())
         self.assertEqual(r.u32(), channel.GET_MEMBER_INFO_TOC)
-        self.assertEqual(r.string(), b"k601e")  # k3e: GData["k602e"]
+
+        # Constructor FUN_6012d850 gives these ordered members/offsets;
+        # the outgoing serializer FUN_6012dce0 writes them in this order.
+        self.assertEqual(r.string(), b"k601e")  # +0x0c / k3e
         self.assertEqual(tuple(r.string() for _ in range(3)), (b"",) * 3)
-        self.assertEqual(r.u32(), 0)             # k10e
-        self.assertEqual(r.string(), b"")        # k12e
-        self.assertEqual(r.take(8), struct.pack(">Q", 0))  # k13e
-        self.assertEqual(tuple(r.u32() for _ in range(7)), (0,) * 7)
-        self.assertEqual(r.string(), b"")        # k32e
+        self.assertEqual(r.u32(), 0)              # +0x7c / k10e
+        self.assertEqual(r.string(), b"")         # +0x80 / k12e
+        self.assertEqual(r.take(8), struct.pack(">Q", 0))  # +0x98 / k13e
+        self.assertEqual(tuple(r.u32() for _ in range(9)), (0,) * 9)
+        self.assertEqual(r.string(), b"")         # +0xc4 / k32e
         self.assertEqual(tuple(r.u32() for _ in range(2)), (0, 0))
-        self.assertEqual(r.string(), b"")        # k102e
-        self.assertEqual(r.take(8), struct.pack(">Q", 0))  # k34e
-        self.assertEqual(tuple(r.u32() for _ in range(2)), (0, 0))
+        self.assertEqual(r.string(), b"")         # +0xe8 / k102e
+        self.assertEqual(r.take(8), struct.pack(">Q", 0))  # +0x100 / k34e
+        self.assertEqual(tuple(r.u32() for _ in range(4)), (0,) * 4)
         self.assertEqual(tuple(r.string() for _ in range(2)), (b"", b""))
-        self.assertEqual(r.u32(), 0)             # k42e
-        self.assertEqual(r.string(), b"")        # k201e
-        self.assertEqual(r.u32(), 0)             # empty k153e vector
-        self.assertEqual(r.string(), b"")        # k1e success-shaped result
+        self.assertEqual(r.u32(), 0)              # +0x150 / k42e
+        self.assertEqual(r.string(), b"")         # +0x154 / k201e
+        self.assertEqual(r.u32(), 0)              # +0x170 / empty k153e vector
+        self.assertEqual(r.string(), b"")         # +0x18c / k1e
         self.assertEqual(r.remaining(), 0)
 
     def test_rejects_missing_or_non_bytes_member_key(self):

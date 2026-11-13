@@ -277,7 +277,7 @@ The button handler sets these values before serialization:
 - all other strings and uint32 fields remain constructor defaults (empty / zero).
 
 The 2026-11-13 PCAP contains this request on the channel socket. It is not the first
-ID in the XLBP batch: two `Cmd_LayerAlignment` markers precede
+ID in the XLBP batch: three `Cmd_LayerAlignment` markers precede
 `0x031AC76A`. The old server reader selected only the first ID and therefore
 silently skipped AutoEnter. The server now strips leading alignment markers and
 dispatches the actual request. Its response serializer for

@@ -46,7 +46,7 @@ Live-client evidence confirms these channel steps:
   after requesting item state.
 
 The 2026-11-13 PCAP contains the AutoEnter request (`0x031AC76A`) inside an XLBP
-message batch preceded by two empty `Cmd_LayerAlignment` markers
+message batch preceded by three empty `Cmd_LayerAlignment` markers
 (`0x09D0057A`). The client protocol converter inserts these markers for null message
 slots; the matching receiver consumes them before dispatching the next message.
 The server now strips leading markers and reaches the existing AutoEnter handler.

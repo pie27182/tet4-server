@@ -13,124 +13,58 @@ Working, verified with the real client (`tools/live_check.py`):
 
 - TPack account replies (AuthSession, LoginTPack)
 - CDS channel directory reply
-- Secure channel handshake, both stream directions
-- Channel authorization (`Cmd_AuthToC`) and the user-id reply (`Cmd_Channel_GetUserIdToC`);
-  the client accepts both and continues
+- Secure channel handshake and both stream directions
+- Channel authorization, user id, channel entry, member list, room list and item state;
+  the client reaches the channel screen with an empty room list
 
-Not yet working: the client waits for the reply to `EnterChannelByUserIdToS`, so it
-stays in the lobby. Single Mode is not started. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
+Not yet working: live-verified AutoEnter/game-socket entry and Single Mode gameplay.
+The game listener still captures frames but does not send a start-game state or turn
+updates. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
+
+## Quick start
+
+```
+git bundle verify tet4-server.bundle      # from a bundle, optional
+git clone tet4-server.bundle tet4-server  # or: git clone <url>
+cd tet4-server
+cp -r /path/to/hangame-client/. client/   # your own client copy, git-ignored
+python3 -m unittest discover -s tests -t .  # OK, needs no client
+python3 -m tet4server                     # start TPack/CDS/channel/game listeners
+python3 tools/check_client.py
+python3 tools/patch_client.py
+python3 tools/live_check.py                # records to live-runs/<time>/
+```
+
+The client, recordings and decompiled output never enter git or the bundle. Versions,
+troubleshooting and every step: [`docs/REPRODUCE.md`](docs/REPRODUCE.md).
 
 ## Documentation
 
-- [`docs/CLIENT.md`](docs/CLIENT.md): how the client works (startup, ports, framing,
-  TPack, CDS, secure channel, message IDs). Each fact is marked as seen on the wire
-  or only read from code.
-- [`docs/METHOD.md`](docs/METHOD.md): tools and method used for the analysis, and
-  the wrong turns to avoid.
-- [`docs/ROADMAP.md`](docs/ROADMAP.md): ordered checklist of what is done and what remains.
-- [`docs/REPRODUCE.md`](docs/REPRODUCE.md): step by step, from the repository and your own
-  client folder to a recorded session. Start here to reproduce the results.
-- [`docs/FILES.md`](docs/FILES.md): what every file of the client folder is.
-- [`docs/ADDRESSES.md`](docs/ADDRESSES.md): the addresses used in the documentation.
-- [`docs/ONLINE.md`](docs/ONLINE.md): how the original online service was reached (launcher
-  remote gateway: pinned TLS tunnel, JSON hello) and how a local gateway could work.
-- [`docs/ISSUES.md`](docs/ISSUES.md): known open problems, with stable IDs and fix criteria.
-- [`CONTRIBUTING.md`](CONTRIBUTING.md): ground rules (no client files, test accounts only,
-  evidence for every reply), branches, commits, and how an issue is closed.
+- [`docs/REPRODUCE.md`](docs/REPRODUCE.md) — everything you run: requirements, client
+  folder, patched copy, live run, decompilation. Start here.
+- [`docs/CLIENT.md`](docs/CLIENT.md) — how the client works: ports, framing, TPack,
+  CDS, secure channel, messages. Facts marked as seen on the wire or read from code.
+- [`docs/READING.md`](docs/READING.md) — how to read the reconstructed code, which
+  names are original, and the reference documentation behind the tools.
+- [`docs/METHOD.md`](docs/METHOD.md) — the rules and the wrong turns.
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — what is done and what remains.
+- [`docs/SERVER.md`](docs/SERVER.md) — start the local protocol services and current Single Mode boundary.
+- [`docs/FILES.md`](docs/FILES.md) — every file of the client folder.
+- [`docs/ADDRESSES.md`](docs/ADDRESSES.md) — addresses used in the docs.
+- [`docs/ONLINE.md`](docs/ONLINE.md) — the original online gateway (not implemented).
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — ground rules, branches, commits, issues.
 
 ## Layout
 
 ```
-tet4server/   protocol code (xdr, tpack, cds, crypto)
-tests/        unittest tests; byte vectors come from captured runs
-docs/         client description, method, roadmap
-tools/        client check and patch, live run, Ghidra export, function lookup,
-              disassembler, RTTI extractor, sample startup string
+tet4server/   protocol code (xdr, tpack, cds, crypto, channel, game, tetris)
+tests/        unittest tests with byte vectors from captured runs
+docs/         client description, method, roadmap, reproduction, reading guide
+tools/        client check/patch, live run, Ghidra export, class recovery,
+              disassembler, function lookup, RTTI extractor, debugger driver
+names/        reconstructed function names (address -> name)
+fields/       reconstructed structure fields (structure, offset, name)
 
-Local data, all git-ignored and never in the bundle (created by you or the tools):
-client/           your copy of the client folder (you put it here)
-client-patched/   patched copy made by tools/patch_client.py
-work/             Ghidra (unzipped here), decompiled output, Ghidra project, logs
-live-runs/        recordings and frames from tools/live_check.py
-.venv/            Python packages for tools/disasm.py
+Local data, git-ignored, never in the bundle:
+client/ client-patched/ work/ live-runs/ .venv/
 ```
-
-## Getting the code
-
-From a bundle file (`tet4-server.bundle`):
-
-```
-git bundle verify tet4-server.bundle      # checks the bundle is complete
-git clone tet4-server.bundle tet4-server
-cd tet4-server
-python3 -m unittest discover -s tests -t .  # should print OK; needs no client
-```
-
-The bundle has only tracked files. The client, the decompiled output and the recordings
-are not in it; you add them yourself (below). Then:
-
-1. Copy your client folder into `client/` (see "What you need").
-2. `python3 -m venv .venv && .venv/bin/pip install pefile capstone` (only for `tools/disasm.py`).
-3. Download Ghidra 12.2 PUBLIC from <https://github.com/NationalSecurityAgency/ghidra/releases>,
-   unzip it into `work/` (so `work/ghidra_12.2_PUBLIC/` exists) and run `tools/export_all.sh`
-   (only for decompiling).
-4. Follow `docs/REPRODUCE.md` for the live run.
-
-From the git hosting service, use `git clone <url>` instead of the first command.
-
-## What you need
-
-**Client files (not included).** Copy the whole contents of your official client folder,
-version 1.3.4, into `client/` in the repository (git-ignored, never committed or bundled).
-Put the files directly in `client/`, not in a subfolder, so `client/Tet4.exe` exists.
-Check it with `tools/check_client.py`. The game needs `Tet4.exe`, all DLLs, and
-the `Tet4/`, `common/` and `Sysfiles/` folders. `h-tetra.exe` is the launcher; the local
-flow does not use it. For the experiments make a patched copy with
-`tools/patch_client.py` (see `docs/REPRODUCE.md`, section 3).
-
-**Tools.**
-- Python 3 (standard library only) for the servers and tests.
-- Wine, `wf-recorder`, `ffmpeg`, `grim` and a Wayland session, for live runs.
-- Ghidra 12.2 PUBLIC (unzipped in `work/`) with OpenJDK, for decompiling the client (`tools/export.sh`).
-- `pefile` and `capstone` in `.venv` for `tools/disasm.py`.
-
-Versions, disk space and the decompilation list: [`docs/REPRODUCE.md`](docs/REPRODUCE.md).
-
-## How the server is developed
-
-1. **Capture.** Run the client against the local servers (`tools/live_check.py`) and
-   read the server logs and the recording. Save byte captures as test vectors.
-2. **Decompile.** Export the modules with `tools/export.sh` and look up addresses with
-   `tools/find_function.py`. Message IDs come from `tools/tet4_rtti_extract.py`;
-   field order comes from the `Serialize` and `Deserialize` functions.
-3. **Implement** in `tet4server/`, with a byte-level test in `tests/` that uses a
-   capture.
-4. **Check.** Run the tests, then a live run. Compare what the client sends and does
-   next with what the docs predict.
-5. **Record.** Verified facts go in `docs/CLIENT.md`, marked as seen on the wire or
-   read from code. Progress goes in `docs/ROADMAP.md`.
-
-Rule: the server sends a reply only when a capture or the decompiled code supports
-it. Requests with no known reply get no answer.
-
-## Running the tests
-
-```
-python3 -m unittest discover -s tests -t .
-```
-
-## Running the live check
-
-Full steps, with what you should see at each one, are in
-[`docs/REPRODUCE.md`](docs/REPRODUCE.md). In short:
-
-```
-python3 tools/check_client.py          # client/ in the repository
-python3 tools/patch_client.py          # writes client-patched/
-python3 tools/live_check.py            # writes live-runs/<time>/
-```
-
-The startup string is `tools/bootstrap-sample.txt` (test account, local servers). The
-script starts the servers from this repository, starts `wf-recorder`, then the client.
-Close the game when you are done: the recording stops after Wine exits. The output
-directory gets `session.mp4` and `frames/` (one PNG per visual change).

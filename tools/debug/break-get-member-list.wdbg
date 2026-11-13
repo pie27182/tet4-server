@@ -1,0 +1,4 @@
+break *0x602032c0
+c
+bt
+quit

@@ -58,6 +58,21 @@ HANDSHAKE_PLAIN = struct.pack("<24H", *range(24))
 log = logging.getLogger("tet4.channel")
 
 
+def layer_message(body: bytes, layer: int) -> bytes:
+    """Place one populated message in the requested XLBP layer slot.
+
+    PC_ConvertX2M dispatches four ordered layer slots (0..3). Empty slots
+    before a populated slot are represented by Cmd_LayerAlignment markers.
+    For example, Tetris-specific channel messages registered with
+    PC_RegisterX2M(..., NLayer=3, ...) require three leading markers.
+    """
+    if not isinstance(body, bytes) or len(body) < 4:
+        raise ValueError("layer message body must contain a 4-byte message ID")
+    if not isinstance(layer, int) or not 0 <= layer <= 3:
+        raise ValueError("XLBP layer must be in 0..3")
+    return pack_u32(LAYER_ALIGNMENT) * layer + body
+
+
 def unwrap_layer_alignment(message_stream: bytes) -> tuple[int, bytes]:
     """Skip leading empty Cmd_LayerAlignment slots in one XLBP message batch.
 
@@ -708,10 +723,12 @@ def _dispatch(session, conn, msg_id: int, payload: bytes) -> None:
             # fillEnterRoomParameter. Preserve these identity fields in the reply.
             response_strings = [b""] * 12
             response_strings[5:8] = request.strings[5:8]
-            session.send(
-                conn,
-                auto_enter_single_mode_to_c(strings=tuple(response_strings)),
-            )
+            # Tet4.exe registers AutoEnterSingleModeToC (0x0DF37B3A)
+            # with PC_RegisterX2M(..., NLayer=3, ...). The captured ToS
+            # arrived after three LayerAlignment markers, so its ToC must
+            # occupy the same layer slot rather than defaulting to layer 0.
+            response = auto_enter_single_mode_to_c(strings=tuple(response_strings))
+            session.send(conn, layer_message(response, 3))
             log.info(
                 "sent Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToC "
                 "game_id=%r endpoint=%s:%d",

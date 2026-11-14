@@ -2,18 +2,19 @@
 
 The channel's AutoEnter reply directs the original client to this local listener.
 The secure-socket handshake is shared with the channel connection. Recovered
-client requests are decoded and captured, but the server does not fabricate
-game-service acknowledgements or start-game state.
+client requests are decoded and captured. A minimal success-shaped
+Cmd_Room_EnterRoomToC probe is sent; start-game state is still not fabricated.
 """
 import logging
 import socket
+import struct
 import threading
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
 from . import channel
-from .xdr import ProtocolError, Reader
+from .xdr import ProtocolError, Reader, pack_string, pack_u32
 
 log = logging.getLogger("tet4.game")
 
@@ -21,6 +22,7 @@ GAME_REPORT_TOS = 0x05BCDF3A
 POLY_MINO_PUT_TOS = 0x0CC4004A
 GAME_ENTER_ROOM_TOS = 0x09A5347A
 GAME_ALTER_ROOM_TOS = 0x0D31FDDA
+GAME_ENTER_ROOM_TOC = 0x0974DCEA
 
 
 @dataclass(frozen=True)
@@ -33,6 +35,31 @@ class GameReportRequest:
 @dataclass(frozen=True)
 class PolyMinoPutRequest:
     values: tuple[int, int, int, int]
+
+
+def enter_room_to_c(
+    k1e: bytes = b"",
+    failcode: int = 0,
+    k2e: bytes = b"",
+) -> bytes:
+    """Serialize Cmd_Room_EnterRoomToC: id | k1e | failcode | k2e.
+
+    Converter HgCom3.dll:0x6013C940 applies the header ("s4e", "c14e", 1),
+    then writes AddValue("k1e", string), AddValue("failcode", u32) and
+    AddValue("k2e", string). The constructor at 0x60133280 sets the message id
+    to 0x0974DCEA. Empty strings and failcode 0 are a success-shaped probe,
+    not a verified room state.
+    """
+    if not isinstance(k1e, bytes) or not isinstance(k2e, bytes):
+        raise ValueError("k1e and k2e must be bytes")
+    if not 0 <= failcode <= 0xFFFFFFFF:
+        raise ValueError("failcode must fit in u32")
+    return (
+        pack_u32(GAME_ENTER_ROOM_TOC)
+        + pack_string(k1e)
+        + struct.pack(">I", failcode)
+        + pack_string(k2e)
+    )
 
 
 @dataclass(frozen=True)
@@ -200,6 +227,12 @@ def handle(conn: socket.socket, capture_dir: Path | None = None) -> None:
                     ),
                     string_lengths,
                     saved is not None,
+                )
+                session.send(conn, enter_room_to_c())
+                log.info(
+                    "sent Cmd_Room_EnterRoomToC connection=%s "
+                    "failcode=0 k1e_len=0 k2e_len=0",
+                    connection_id,
                 )
             elif msg_id == GAME_ALTER_ROOM_TOS:
                 request = parse_alter_room_request(payload)

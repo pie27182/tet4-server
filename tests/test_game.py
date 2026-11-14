@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 from tet4server import game
-from tet4server.xdr import ProtocolError, pack_string, pack_u32
+from tet4server.xdr import ProtocolError, Reader, pack_string, pack_u32
 
 
 class SaveGameFrameTest(unittest.TestCase):
@@ -87,6 +87,36 @@ class GameRoomRequestTest(unittest.TestCase):
         )
         with self.assertRaises(ProtocolError):
             game.parse_alter_room_request(payload)
+
+
+class EnterRoomReplyTest(unittest.TestCase):
+    def test_enter_room_reply_wire_layout(self):
+        body = game.enter_room_to_c(b"ok", 0, b"room")
+        r = Reader(body)
+        self.assertEqual(r.u32(), game.GAME_ENTER_ROOM_TOC)
+        self.assertEqual(r.string(), b"ok")
+        self.assertEqual(r.u32(), 0)
+        self.assertEqual(r.string(), b"room")
+        self.assertEqual(r.remaining(), 0)
+
+    def test_enter_room_reply_defaults_are_success_shaped(self):
+        r = Reader(game.enter_room_to_c())
+        self.assertEqual(r.u32(), game.GAME_ENTER_ROOM_TOC)
+        self.assertEqual(r.string(), b"")
+        self.assertEqual(r.u32(), 0)
+        self.assertEqual(r.string(), b"")
+        self.assertEqual(r.remaining(), 0)
+
+    def test_enter_room_reply_rejects_bad_values(self):
+        for k1e, code, k2e in (
+            ("", 0, b""),
+            (b"", -1, b""),
+            (b"", 0x100000000, b""),
+            (b"", 0, ""),
+        ):
+            with self.subTest(k1e=k1e, code=code, k2e=k2e):
+                with self.assertRaises(ValueError):
+                    game.enter_room_to_c(k1e, code, k2e)
 
 
 class SingleModeGameRequestTest(unittest.TestCase):

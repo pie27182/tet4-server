@@ -398,6 +398,22 @@ The client still faults at `Tet4.exe:0x004FE2D5` in `CF5GameWnd`
 `_SingleModeInfo` / `_TetrisMemberInfo` messages, which should initialize the scene
 and board. This is a verified connection and room-request path, not a playable room.
 
+### Scene manager and the `+0x8EC` null field [static, REA]
+
+`DAT_0064EBE8` is the active `CTetSceneManager`. The base constructor
+`FUN_00586D30` installs its vtable; virtual slot 10 `FUN_005870C0` creates the
+scene and writes `[manager+0x8EC]`. The Single Mode subclass is
+`CTetSceneManager_Shadow` (vtable `0x5F9AF4`; its slot 10 is the thunk
+`0x56F6A0` to the base). Its constructor `FUN_005707A0` loads
+`TET4\XML\tet4ui_Shadow.xml`.
+
+`FUN_004FC280` is the mode factory. `FUN_004FE660` maps the mode character:
+`H -> 5 (Shadow)`, `N`/`Y -> 1`, `R -> 3`, `S -> 4`, non-zero flag -> 2.
+The crash happens before any of these paths create the scene, so
+`[manager+0x8EC]` stays null. `EnterRoomToC` does not carry the mode selection;
+the next target is the room/start-game message that supplies the character and
+calls slot 10.
+
 `Cmd_ChannelOrderTypeSingleModeRoomInfoTetrisToC` (`0x04B61A2A`) has a smaller
 layout: `u32 id | string | u32 | u8` (`Serialize FUN_00443D90`). Its role in the
 transition still needs to be confirmed from the live message sequence.

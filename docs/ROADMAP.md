@@ -100,10 +100,13 @@ serializer test proves layout, not that the client accepts the message.
       `HgCom3.dll:0x6013C940`) and live-probe it after `EnterRoomToS`. The
       24-byte reply is delivered, but the scene pointer remains null and the
       `0x4FE2D5` fault persists; `EnterRoomToC` alone is not sufficient.
-- [ ] Recover the start-game container
-      `Cmd_Room_OrderTypeStartNewGameTetrisToC` (`0x06FE5D0A`) and the nested
-      scene/board messages, then verify that `[0x64EBE8+0x8EC]` is initialized
-      instead of null.
+- [x] Locate the scene manager and the `+0x8EC` null field: `DAT_0064EBE8` is
+      `CTetSceneManager`; slot 10 `FUN_005870C0` writes `[manager+0x8EC]`.
+      Single Mode is `CTetSceneManager_Shadow` (`FUN_005707A0`), selected by
+      mode character `H` in `FUN_004FE660` (`H -> 5`, `N`/`Y -> 1`, `R -> 3`,
+      `S -> 4`).
+- [ ] Recover the room/start-game message that selects the Shadow manager and
+      calls slot 10, then verify that `[0x64EBE8+0x8EC]` is non-null.
 - [x] Recover the top-level `Cmd_ChannelOrderTypeSingleModeRoomInfoTetrisToC`
       layout (`u32 | string | u32 | u8`) and add a serializer test. Its role and
       values remain unverified; do not send it until the live sequence confirms it.

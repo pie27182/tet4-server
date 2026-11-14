@@ -1,0 +1,16 @@
+# Do not stop on first-chance C++ exceptions (MFC uses them for control flow).
+# Then prove that MyData returns non-null inside Msg_SendEnterRoom and that
+# Msg_ConnectGameServer is reached.
+# Run with: env TIMEOUT=600 tools/debug/winedbg_batch.sh tools/debug/break-mydata-result-nofirst.wdbg
+set $BreakOnFirstChance = 0
+break *0x6090b480
+break *0x60914950
+c
+info reg
+bt
+break *0x60113afc
+c
+print $eax
+c
+bt
+quit

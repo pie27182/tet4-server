@@ -107,8 +107,9 @@ serializer test proves layout, not that the client accepts the message.
       `S -> 4`). `FUN_004F9000` uses `CGameReg::Get("SHADOW")` and `"NYRSH"`.
 - [x] Identify the room-type key: `CChannelLobbyModel::SetRoomInfo`
       (`HgModel3.dll:0x6090A650`) reads `k66e` and calls
-      `CRoomData::SetRoomType`; the RoomInfo converters carry `k66e`.
-      `EnterRoomToC` does not, which explains the null scene.
+      `CRoomData::SetRoomType`; the room-list and RoomInfo converters carry
+      `k66e`. The missing field in `EnterRoomToC` is not itself the cause;
+      the current room type's first byte selects the wrong mode.
 - [ ] Recover and test the exact Shadow room-type code in `k66e`. The room
       selector `FUN_004F9000` compares the first byte of `CRoomData+0x30`
       against `"NYRSH"`; the `SHADOW` registry flag enables `'H'`, and

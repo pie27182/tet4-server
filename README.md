@@ -47,6 +47,10 @@ troubleshooting and every step: [`docs/REPRODUCE.md`](docs/REPRODUCE.md).
 
 - [`docs/REPRODUCE.md`](docs/REPRODUCE.md) — everything you run: requirements, client
   folder, patched copy, live run, decompilation. Start here.
+- [`docs/ORIGINAL.md`](docs/ORIGINAL.md) — what the original client is: game,
+  C++/MFC 9/VC9 stack, and the matching-decompilation method.
+- [`docs/RTTI.md`](docs/RTTI.md) — MSVC RTTI class/vtable inventory and the
+  generated C++03 skeletons.
 - [`docs/CLIENT.md`](docs/CLIENT.md) — how the client works: ports, framing, TPack,
   CDS, secure channel, messages. Facts marked as seen on the wire or read from code.
 - [`docs/READING.md`](docs/READING.md) — how to read the reconstructed code, which

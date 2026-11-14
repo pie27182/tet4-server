@@ -186,8 +186,12 @@ before it.
       `XInNetwork.dll`, `XStream.dll`.
 - [x] All 33 native Hangame modules: 79,521 indexed functions, 68,470 bodies,
       11,049 external, 2 Ghidra failures. See `docs/DECOMPILATION.md`.
+- [x] RTTI class/vtable inventory: 2,352 vtables, 33,871 slots, C++03 skeleton
+      headers. See `docs/RTTI.md`.
+- [ ] Ghidra class recovery for `Tet4.exe` (running) and the remaining modules:
+      fields, `this` types and method signatures.
+- [ ] Merge RTTI, class recovery and call-site names into compilable headers.
 - [ ] Decompile the .NET launcher `h-tetra.exe` to C# with ILSpy.
-- [ ] Build the class, field and vtable inventory from the complete dump.
 - [ ] Only then lay out the readable `src/`/`include/` tree.
 
 ## Engineering / regression tasks

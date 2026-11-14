@@ -3,9 +3,11 @@
 The channel's AutoEnter reply directs the original client to this local listener.
 The secure-socket handshake is shared with the channel connection. Recovered
 client requests are decoded and captured. A minimal success-shaped
-Cmd_Room_EnterRoomToC probe is sent; start-game state is still not fabricated.
+Cmd_Room_EnterRoomToC probe is sent. An experimental layer-3 AddMemberToC
+bootstrap can be enabled for live testing; it remains off by default.
 """
 import logging
+import os
 import socket
 import struct
 import threading
@@ -13,7 +15,7 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import channel
+from . import channel, single_mode
 from .xdr import ProtocolError, Reader, pack_string, pack_u32
 
 log = logging.getLogger("tet4.game")
@@ -306,13 +308,30 @@ def handle(conn: socket.socket, capture_dir: Path | None = None) -> None:
                     connection_id,
                 )
                 if member_id and room_option:
+                    # The Tet4.exe-specific AddMemberToC converter is registered
+                    # at XLBP layer 3. Its field layout is reconstructed, but
+                    # the default nested school/item record still needs live
+                    # validation, so never send this candidate unless opted in.
+                    if os.environ.get("TET4_EXPERIMENTAL_ADD_MEMBER_BOOTSTRAP") == "1":
+                        bootstrap = single_mode.layered_add_member_to_c_candidate(
+                            member_id,
+                            single_mode_index=0,
+                        )
+                        session.send(conn, bootstrap)
+                        log.warning(
+                            "sent experimental Tetris AddMemberToC candidate "
+                            "connection=%s member_id_len=%d layer=%d",
+                            connection_id,
+                            len(member_id),
+                            single_mode.ADD_MEMBER_LAYER,
+                        )
                     session.send(conn, start_new_game_svckor_to_c(member_id))
                     log.info(
-                        "sent Cmd_Room_StartNewGameToC connection=%s "
-                        "member=%r option=%r entries=1 (svckor vector)",
+                        "sent Cmd_Room_StartNewGameSvcKorToC connection=%s "
+                        "member_id_len=%d option_len=%d entries=1",
                         connection_id,
-                        member_id,
-                        room_option,
+                        len(member_id),
+                        len(room_option),
                     )
             elif msg_id == GAME_ALTER_ROOM_TOS:
                 request = parse_alter_room_request(payload)

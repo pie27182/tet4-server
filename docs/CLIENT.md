@@ -409,10 +409,17 @@ scene and writes `[manager+0x8EC]`. The Single Mode subclass is
 
 `FUN_004FC280` is the mode factory. `FUN_004FE660` maps the mode character:
 `H -> 5 (Shadow)`, `N`/`Y -> 1`, `R -> 3`, `S -> 4`, non-zero flag -> 2.
-The crash happens before any of these paths create the scene, so
-`[manager+0x8EC]` stays null. `EnterRoomToC` does not carry the mode selection;
-the next target is the room/start-game message that supplies the character and
-calls slot 10.
+`FUN_004F9000` builds the candidate list from `CGameReg::Get("SHADOW")` and
+the literal `"NYRSH"`, so index 4 (`'H'`) is Single/Shadow.
+
+The room type itself is the `k66e` string. `CChannelLobbyModel::SetRoomInfo`
+(`HgModel3.dll:0x6090A650`) reads `k66e` and calls
+`CRoomData::SetRoomType`; `Cmd_Channel_RoomInfoToC::Converter`
+(`HgCom3.dll:0x6013B850`) and `Cmd_Room_GetRoomInfoToC::Converter`
+(`0x6013E9F0`) serialize that key. `EnterRoomToC` does not carry `k66e`, which
+is why the scene stays null. The next target is a room-info response with
+`k66e="SHADOW"` (and the matching room metadata), sent before or with the
+AutoEnter flow; then slot 10 should create `[manager+0x8EC]`.
 
 `Cmd_ChannelOrderTypeSingleModeRoomInfoTetrisToC` (`0x04B61A2A`) has a smaller
 layout: `u32 id | string | u32 | u8` (`Serialize FUN_00443D90`). Its role in the

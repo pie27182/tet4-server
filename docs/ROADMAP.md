@@ -104,9 +104,14 @@ serializer test proves layout, not that the client accepts the message.
       `CTetSceneManager`; slot 10 `FUN_005870C0` writes `[manager+0x8EC]`.
       Single Mode is `CTetSceneManager_Shadow` (`FUN_005707A0`), selected by
       mode character `H` in `FUN_004FE660` (`H -> 5`, `N`/`Y -> 1`, `R -> 3`,
-      `S -> 4`).
-- [ ] Recover the room/start-game message that selects the Shadow manager and
-      calls slot 10, then verify that `[0x64EBE8+0x8EC]` is non-null.
+      `S -> 4`). `FUN_004F9000` uses `CGameReg::Get("SHADOW")` and `"NYRSH"`.
+- [x] Identify the room-type key: `CChannelLobbyModel::SetRoomInfo`
+      (`HgModel3.dll:0x6090A650`) reads `k66e` and calls
+      `CRoomData::SetRoomType`; the RoomInfo converters carry `k66e`.
+      `EnterRoomToC` does not, which explains the null scene.
+- [ ] Send a room-info response with `k66e="SHADOW"` (and the matching room
+      metadata) before or with AutoEnter, then verify that
+      `CTetSceneManager_Shadow` is selected and `[0x64EBE8+0x8EC]` is non-null.
 - [x] Recover the top-level `Cmd_ChannelOrderTypeSingleModeRoomInfoTetrisToC`
       layout (`u32 | string | u32 | u8`) and add a serializer test. Its role and
       values remain unverified; do not send it until the live sequence confirms it.

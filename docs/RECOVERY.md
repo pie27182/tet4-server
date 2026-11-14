@@ -6,15 +6,17 @@ name/field maps are already stable.
 
 ## Queue
 
-`tools/recover_all_dlls.sh` runs two Ghidra workers with separate projects and a
-2 GiB heap each:
+`tools/recover_all_dlls.sh` runs **one module at a time**, with all DLLs first and
+`Tet4.exe` last. It uses a 5 GiB heap and up to 8 CPU cores for Ghidra
+auto-analysis:
 
 ```
-JOBS=2 HEAP=2048M GHIDRA_MAX_CPU=2 tools/recover_all_dlls.sh
+JOBS=1 HEAP=5G GHIDRA_MAX_CPU=8 tools/recover_all_dlls.sh
 ```
 
-Order: protocol and small modules first, UI next, graphics/audio and the largest
-modules last. `Tet4.exe` is deliberately excluded and run separately.
+Ghidra's `RecoverClassesFromRTTIScript` itself is single-threaded; `-max-cpu`
+accelerates the auto-analysis phase. A larger heap mainly prevents failure on
+large modules (`HanVM2d/3d`, `neon4/9`, `Tet4.exe`), not a linear speedup.
 
 Current logs:
 

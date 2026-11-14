@@ -189,8 +189,8 @@ before it.
 - [x] RTTI class/vtable inventory: 2,352 vtables, 33,871 slots, C++03 skeleton
       headers. See `docs/RTTI.md`.
 - [x] RTTI/MFC name maps for every module in `work/rtti/names/`.
-- [ ] DLL class-recovery queue running: 32 modules, two workers, `Tet4.exe`
-      intentionally last. See `docs/RECOVERY.md`.
+- [ ] Class-recovery queue running sequentially: all DLLs first, `Tet4.exe`
+      last; 5 GiB heap, `-max-cpu 8`. See `docs/RECOVERY.md`.
 - [ ] Review recovered headers and field layouts; fix duplicate structs.
 - [ ] Merge RTTI, class recovery and call-site names into compilable headers.
 - [ ] Decompile the .NET launcher `h-tetra.exe` to C# with ILSpy.

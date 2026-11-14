@@ -1,17 +1,17 @@
 #!/bin/bash
-# Recover classes for every Hangame DLL (Tet4.exe is intentionally last and
-# separate). Two workers, each with an isolated Ghidra project and a 2 GiB heap.
+# Recover classes for every native Hangame module, strictly one at a time.
+# Tet4.exe is last, after all DLLs.
 #
-#   JOBS=2 HEAP=2048M GHIDRA_MAX_CPU=2 tools/recover_all_dlls.sh
+#   JOBS=1 HEAP=5G GHIDRA_MAX_CPU=8 tools/recover_all_dlls.sh
 #
 # Per-module RTTI/MFC name maps are taken from work/rtti/names/<module>.tsv.
 # Logs and the job status go to work/logs/.
 set -u
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-JOBS="${JOBS:-2}"
-HEAP="${HEAP:-2048M}"
-MAXCPU="${GHIDRA_MAX_CPU:-2}"
+JOBS="${JOBS:-1}"
+HEAP="${HEAP:-5G}"
+MAXCPU="${GHIDRA_MAX_CPU:-8}"
 STATUS="$ROOT/work/logs/recover-dlls.status"
 
 # Small/protocol first, large graphics/audio last.
@@ -24,6 +24,8 @@ MODULES=(
     HgAniGm3.dll HgAniGm3_16Bit.dll GcDxbase.dll GcDxbase_3d.dll
     IRIA.dll HgTool3.dll neon4.dll neon9.dll HanVM2d.dll HanVM3d.dll
     HgSoundOut.exe
+    # Last: the main executable uses the maps and classes learned above.
+    Tet4.exe
 )
 
 mkdir -p "$ROOT/work/logs" "$ROOT/work/rtti/names"

@@ -90,11 +90,27 @@ explain the crash.
 
 ## 4. Startup string
 
-Nothing to do. `tools/live_check.py` uses `tools/bootstrap-sample.txt` by default.
+For the automated live run, nothing needs to be generated:
+`tools/live_check.py` uses `tools/bootstrap-sample.txt` by default, starts all four
+local listeners, and launches `Tet4.exe` directly with that bootstrap string.
 
-The launcher `h-tetra.exe` reads the same kind of string from `bootstrap.txt` in the
-client folder. The string is a sequence of `key:length=value` fields separated by `&`
-after a `metp://127.0.0.1:15000//go/go;` header. It must start with
+**Do not start `python3 -m tet4server` before running `tools/live_check.py`**:
+the live-check script starts the listeners itself, so doing both causes port conflicts.
+For a manual run instead, start `python3 -m tet4server` in one terminal and launch
+`Tet4.exe` directly in another:
+
+```sh
+wine client-patched/Tet4.exe "$(cat tools/bootstrap-sample.txt)"
+```
+
+Do not use `h-tetra.exe` for this local-server workflow. The launcher checks that
+ports 15000 and 15001 are free before starting the game, but the local CDS and channel
+listeners must already own those ports. The launcher has no TPack, CDS, channel or
+game protocol implementation; bypassing it does not remove any game functionality.
+
+The launcher normally reads the same kind of string from `bootstrap.txt` in the client
+folder. The string is a sequence of `key:length=value` fields separated by `&` after a
+`metp://127.0.0.1:15000//go/go;` header. It must start with
 `metp://127.0.0.1:15000/` and include the TPack port `k602e:5=10454`. `k3e` is the
 account name (`test`), `k8e` the ticket.
 

@@ -39,10 +39,9 @@ git clone tet4-server.bundle tet4-server  # or: git clone <url>
 cd tet4-server
 cp -r /path/to/hangame-client/. client/   # your own client copy, git-ignored
 python3 -m unittest discover -s tests -t .  # OK, needs no client
-python3 -m tet4server                     # start TPack/CDS/channel/game listeners
 python3 tools/check_client.py
 python3 tools/patch_client.py
-python3 tools/live_check.py                # records to live-runs/<time>/
+python3 tools/live_check.py                # starts listeners + client; records to live-runs/<time>/
 ```
 
 The client binaries and recordings never enter git. The decompiled text is

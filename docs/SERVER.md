@@ -154,6 +154,16 @@ The local server now replies to the Single Mode auto-create path with:
   client dispatches through `FUN_60147870` and
   `CF5GameWnd::Evt_OnStartNewGame`.
 
+This is the current experimental ordering: the Korean `StartNewGameToC` is sent
+immediately after `EnterRoomToS`. Static client analysis has since recovered a
+separate `Cmd_Room_StartNewGameToS` request (`0x072585BA`), but its use in the
+Single Mode flow is not yet live-confirmed. Do not treat receipt of the Korean
+vector as proof that the game scene started. The higher-priority transition
+check is the room-type filter: the current `k66e=N000S` is an `N` room, while
+the Shadow selector expects the `H` mode code and then calls
+`lobbyState/moveNext`. Only gate the start reply on `StartNewGameToS` after a
+fresh trace proves that the client emits it in this flow.
+
 Live winedbg checks on the current build:
 
 - `Msg_FillRoomList` (`HgModel3.dll:0x60909BE0`) runs for the returned room.

@@ -476,6 +476,23 @@ reaches `FUN_60147870`, `Cmd_Room_StartNewGameSvcKorToC::vfunction7` and
 `_AliasInfo` vector does not reach `FUN_00459BD0` on this service path, so the
 Tetris-specific container is not the active receive registration.
 
+### Client room-start request [static; Single Mode use pending live confirmation]
+
+`CGameLobbyModel::OnAttached` (`HgModel3.dll:0x60913F80`) registers
+`sendRoomStartNewGame` to `Msg_SendRoomStartNewGame`. The handler
+(`0x609173F0`) builds service `s4e`, command `c56e`, adds
+`k59e="v6e"`, and sends it over the `game` connection.
+
+The matching XDR class is `Cmd_Room_StartNewGameToS`: its constructor
+(`HgCom3.dll:0x6012B880`) sets message ID `0x072585BA` and initializes a
+string field at +0x08; `vfunction3` (`0x6012B940`) returns that ID. The
+client-side Single Mode direct-start button is a different action:
+`CChannelLobbyController::Evt_ChannelView_OnClickDirectStartBtn`
+(`0x60204320`) invokes `channel/autoEnterRoom`. Therefore
+`StartNewGameToS` is a separate room-start request, not the initial
+Single Mode click. Whether the Single Mode flow emits it after room selection
+must be confirmed in WineDbg before changing server response ordering.
+
 ### Single Mode scene transition [live; current blocker]
 
 Clicking Single Mode runs `FUN_0049D0A0`, which calls

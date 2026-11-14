@@ -172,21 +172,18 @@ response is accepted.
 - [ ] Verify the result screen, completion state, and clean return to the lobby.
 - [ ] Verify reconnect/restart after a completed or abandoned game.
 
-## Reconstruction track
+## Decompilation track
 
-- [x] Exact VC9 SP1 compiler (`15.00.30729.01`) under wibo, compile-only,
-      verified with an i386 COFF object; see `docs/TOOLCHAIN.md`.
-- [x] `reconstruction/` scaffold with provenance tables and the scene slice.
-- [x] Full vtable map for `CTetSceneManager` (36 slots) and
-      `CTetSceneManager_Shadow` (37 slots) in `metadata/scene_vtable.tsv`.
-- [x] Pilot `GetTetSceneManager` (`FUN_005810D0`): opcode and operand shape match
-      the original after address relocation normalisation.
-- [x] Decision slice of `FUN_004FE660` (`SceneModeFromChar`) reconstructed in C++03
-      and compiled with VC9 SP1.
-- [ ] Recover `CTetSceneManager` fields and vtable method names from RTTI and call
-      sites.
-- [ ] Reconstruct the `CF5GameWnd` update path and the `k66e` mode selection.
-- [ ] Continue with room/start-game messages and the Tetris board.
+The full REA/Ghidra dump comes first; the readable C++ tree is built from it, not
+before it.
+
+- [x] Exact VC9 SP1 compiler (`15.00.30729.01`) under wibo, compile-only, for
+      later function matching; see `docs/TOOLCHAIN.md`.
+- [ ] Full REA decompilation of `Tet4.exe` into `work/decompiled-rea/Tet4.exe`.
+- [ ] Same for `HgCom3.dll`, `HgModel3.dll`, `HgCtr3.dll`, `HgSock3.dll` and the
+      remaining client modules.
+- [ ] Build the class, field and vtable inventory from the complete dump.
+- [ ] Only then lay out the readable `src/`/`include/` tree.
 
 ## Engineering / regression tasks
 

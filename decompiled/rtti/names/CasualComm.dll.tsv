@@ -1,0 +1,23 @@
+# RTTI-derived names for CasualComm.dll.
+0x10002a30	ChatParser::~ChatParser
+0x10002e00	CasualNet::OnAcceptBuddyAck
+0x10002e10	CasualNet::GLogDscUserDefineddata
+0x100033c0	CasualNet::Create
+0x100033d0	CasualNet::Destroy
+0x10004780	CasualNet::OnPMLReceive
+0x100047f0	CasualNet::OnConnect
+0x100048a0	CasualNet::OnDisconnect
+0x10004950	CasualNet::OnConnectError
+0x10009490	CasualNetV2::Destroy
+0x10009dd0	CasualNetV2::OnDisconnect
+0x10009df0	CasualNetV2::OnWebLoginAck
+0x10009ea0	CasualNetV2::OnAddBuddyAck
+0x10009ee0	CasualNetV2::OnDeleteBuddyAck
+0x10009f30	CasualNetV2::OnAcceptBuddyAck
+0x10009f70	CasualNetV2::OnAddBuddyAccepted
+0x1000b560	PMLNet::Destroy
+0x1000b720	PMLNet::OnReceive
+0x1000bf10	SockNet::Create
+0x1000bf80	SockNet::Destroy
+0x1000cfca	std::exception::what
+0x1000d7aa	CCriticalSection::GetRuntimeClass

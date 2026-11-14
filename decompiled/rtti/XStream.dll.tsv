@@ -1,0 +1,11 @@
+class	type_descriptor	complete_object_locator	vtable	slots	bases	inheritance
+IXStream	0x1000fdb4	0x1000ce44	0x1000cac0	10	IXStream	0x0
+XDequeStream	0x1000fd98	0x1000cdf8	0x1000caec	10	XDequeStream;IXStream	0x0
+XMemoryStream	0x1000fe0c	0x1000ce8c	0x1000cb18	10	XMemoryStream;IXStream	0x0
+bad_alloc@std	0x1000fd7c	0x1000ccdc	0x1000b1a0	2	bad_alloc;exception	0x0
+bad_exception@std	0x1000f4a4	0x1000cc90	0x1000b890	2	bad_exception;exception	0x0
+exception@std	0x1000fd60	0x1000cc34	0x1000b1f8	2	exception	0x0
+length_error@std	0x1000fdcc	0x1000cd5c	0x1000b1b8	2	length_error;logic_error;exception	0x0
+logic_error@std	0x1000fdec	0x1000cdac	0x1000b1ac	2	logic_error;exception	0x0
+out_of_range@std	0x1000f008	0x1000cbe4	0x1000b1c4	2	out_of_range;logic_error;exception	0x0
+type_info	0x1000f038	0x1000cc48	0x1000b218	1	type_info	0x0

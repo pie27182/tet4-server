@@ -15,16 +15,21 @@ Working, verified with the real client (`tools/live_check.py`):
 - CDS channel directory reply
 - Secure channel handshake and both stream directions
 - Channel authorization, user id, channel entry, member list, room list and item state;
-  the client reaches the channel screen with an empty room list
-- Single Mode AutoEnter, connection to the game socket on `15002`, and the 48-byte
-  secure handshake; the client sends `EnterRoomToS` and `AlterRoomToS`
-  (manual WineDbg/dumpcap run)
+  the client reaches the channel screen
+- Single Mode AutoEnter, a one-room `GetRoomListToC` reply, `CreateRoomToC`,
+  `RoomInfoToC`, connection to the game socket on `15002`, the 48-byte secure
+  handshake, `EnterRoomToS`/`AlterRoomToS`, and the Korean
+  `Cmd_Room_StartNewGameSvcKorToC` vector
+- Live WineDbg checks show the room list, `SetRoomInfo`, the Korean start
+  converter and `Net_StartNewGame` all executing
 
-Not yet working: game-room scene initialization and Single Mode gameplay. The
-listener replies to `EnterRoomToS` with the recovered `EnterRoomToC`, but the
-client still faults at `Tet4.exe:0x004FE2D5` because the game scene
-(`[0x64EBE8+0x8EC]`) is null. The start-game state and turn updates are not
-implemented. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
+Not yet working: the room-to-game scene transition. Clicking Single Mode creates
+`CTetSingleScene` and starts updating it before `CTetSingleMainBody::Start`
+(`FUN_00460DD0`) runs, so the scene step vectors are empty and the client faults
+at `Tet4.exe:0x00461E9D` (return address `0x004627F5`). The server already
+delivers the room and start messages; the missing piece is the client-side
+trigger that starts the main body. See [`docs/CLIENT.md`](docs/CLIENT.md) and
+[`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Quick start
 
@@ -40,8 +45,10 @@ python3 tools/patch_client.py
 python3 tools/live_check.py                # records to live-runs/<time>/
 ```
 
-The client, recordings and decompiled output never enter git or the bundle. Versions,
-troubleshooting and every step: [`docs/REPRODUCE.md`](docs/REPRODUCE.md).
+The client binaries and recordings never enter git. The decompiled text is
+committed as a snapshot under [`decompiled/`](decompiled/); the client's
+executables and DLLs remain local and git-ignored. Versions, troubleshooting and
+every step: [`docs/REPRODUCE.md`](docs/REPRODUCE.md).
 
 ## Documentation
 
@@ -63,6 +70,9 @@ troubleshooting and every step: [`docs/REPRODUCE.md`](docs/REPRODUCE.md).
   function-level matching, the download script, and its limits.
 - [`docs/DECOMPILATION.md`](docs/DECOMPILATION.md) — the full REA native
   decompilation, its counts, failures and missing .NET part.
+- [`decompiled/README.md`](decompiled/README.md) — the committed snapshot:
+  full REA archive, consolidated C/H, class headers and RTTI, with sizes and
+  extraction instructions.
 - [`docs/METHOD.md`](docs/METHOD.md) — the rules and the wrong turns.
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — what is done and what remains.
 - [`docs/SERVER.md`](docs/SERVER.md) — start the local protocol services and current Single Mode boundary.
@@ -81,6 +91,8 @@ tools/        client check/patch, live run, Ghidra export, class recovery,
               disassembler, function lookup, RTTI extractor, debugger driver
 names/        reconstructed function names (address -> name)
 fields/       reconstructed structure fields (structure, offset, name)
+decompiled/   committed decompilation snapshot: full REA archive, consolidated
+              Ghidra C/H, class-recovery headers, RTTI inventory
 
 Local data, git-ignored, never in the bundle:
 client/ client-patched/ work/ live-runs/ .venv/

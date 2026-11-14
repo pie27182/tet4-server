@@ -1,0 +1,13 @@
+class	type_descriptor	complete_object_locator	vtable	slots	bases	inheritance
+CDS_AnsSelect	0x1001e068	0x1001a214	0x10019e70	9	CDS_AnsSelect;IMessage	0x0
+CDS_ReqSelect	0x1001df68	0x10019fcc	0x10019da4	9	CDS_ReqSelect;IMessage	0x0
+IMessage@XDR	0x1001df84	0x1001a018	0x10019d7c	9	IMessage	0x0
+Socket@Impl@ClientConnector@CDS	0x1001e038	0x1001a1cc	0x10019dcc	1	Socket	0x0
+StrList	0x1001e084	0x1001a260	0x10019e48	9	StrList;IMessage	0x0
+bad_alloc@std	0x1001e01c	0x1001a14c	0x10018240	2	bad_alloc;exception	0x0
+bad_exception@std	0x1001db90	0x10019f80	0x10018ab8	2	bad_exception;exception	0x0
+exception@std	0x1001dfa0	0x10019f24	0x10018298	2	exception	0x0
+length_error@std	0x1001dffc	0x1001a0b0	0x10018258	2	length_error;logic_error;exception	0x0
+logic_error@std	0x1001dfdc	0x1001a100	0x1001824c	2	logic_error;exception	0x0
+out_of_range@std	0x1001dfbc	0x1001a060	0x10018264	2	out_of_range;logic_error;exception	0x0
+type_info	0x1001d014	0x10019f38	0x100182b8	1	type_info	0x0

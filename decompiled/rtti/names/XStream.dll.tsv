@@ -1,0 +1,20 @@
+# RTTI-derived names for XStream.dll.
+0x10002425	type_info::`scalar_deleting_destructor'
+0x10009db0	XMemoryStream::LoadFromStream
+0x10009e30	XMemoryStream::SaveToStream
+0x10009ea0	XMemoryStream::GetLength
+0x10009eb0	XMemoryStream::Clear
+0x10009ec0	XMemoryStream::RemoveRight
+0x10009f50	XMemoryStream::RemoveLeft
+0x1000a000	XMemoryStream::CopyTo
+0x1000a040	XMemoryStream::Write
+0x1000a0e0	XMemoryStream::Read
+0x1000a1e0	XDequeStream::LoadFromStream
+0x1000a260	XDequeStream::SaveToStream
+0x1000a2d0	XDequeStream::GetLength
+0x1000a2e0	XDequeStream::Read
+0x1000a310	XDequeStream::Clear
+0x1000a3d0	XDequeStream::CopyTo
+0x1000a490	XDequeStream::RemoveRight
+0x1000a540	XDequeStream::RemoveLeft
+0x1000a5e0	XDequeStream::Write

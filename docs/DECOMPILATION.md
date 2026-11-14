@@ -58,9 +58,13 @@ help. Keep them as disassembly cases; they are UI/advertising code.
 
 ## Reproduce
 
-The commands are MCP calls, not shell commands. The output stays in `work/`
-(gitignored); it is never committed or included in the bundle.
+The commands are MCP calls, not shell commands. The working output stays in
+`work/` (gitignored). A snapshot is committed under `decompiled/` and can be
+refreshed with `tools/export_decompilation.sh`; that script stores the full
+per-function dump as `decompiled/rea-full.tar.gz` and copies the consolidated
+C/H, class headers and RTTI inventory as plain text.
 
 ```
 tools/rea_summary.py work/decompiled-rea
+tools/export_decompilation.sh
 ```

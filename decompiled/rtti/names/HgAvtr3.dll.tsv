@@ -1,0 +1,8 @@
+# RTTI-derived names for HgAvtr3.dll.
+0x60502560	CHgAImage::Create
+0x60502610	CHgAImage::Create
+0x60502650	CHgAImage::Create
+0x60502710	CHgAImage::Create
+0x60502740	CHgAImage::Destroy
+0x60516328	std::exception::what
+0x60516518	purecall

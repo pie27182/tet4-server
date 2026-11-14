@@ -55,6 +55,8 @@ This proves the protocol and encryption up to `EnterRoomToC` are sufficient to
 create the scene. The remaining problem is the client's premature update, not
 the room-list filter.
 
+![Debug-patched Single Mode scene](images/single-mode-start.png)
+
 Clicking `게임시작` after the game socket has already closed terminates the
 client. The game socket currently closes shortly after `EnterRoomToC`; the
 client's timeout dialog `제한 시간에 걸렸습니다` follows. The server still needs

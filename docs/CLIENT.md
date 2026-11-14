@@ -414,12 +414,23 @@ the literal `"NYRSH"`, so index 4 (`'H'`) is Single/Shadow.
 
 The room type itself is the `k66e` string. `CChannelLobbyModel::SetRoomInfo`
 (`HgModel3.dll:0x6090A650`) reads `k66e` and calls
-`CRoomData::SetRoomType`; `Cmd_Channel_RoomInfoToC::Converter`
-(`HgCom3.dll:0x6013B850`) and `Cmd_Room_GetRoomInfoToC::Converter`
-(`0x6013E9F0`) serialize that key. `EnterRoomToC` does not carry `k66e`, which
-is why the scene stays null. The next target is a room-info response with
-`k66e="SHADOW"` (and the matching room metadata), sent before or with the
-AutoEnter flow; then slot 10 should create `[manager+0x8EC]`.
+`CRoomData::SetRoomType`; the RoomInfo converters carry that key. The important
+detail is how the client consumes it: `FUN_004F9000` compares the first byte of
+the stored room type (`CRoomData+0x30`) against `"NYRSH"`. The fifth code,
+`'H'`, is enabled by `CGameReg::Get("SHADOW")`, and
+`FUN_004FE660('H', 0)` selects mode 5 (`CTetSceneManager_Shadow`).
+
+The current server's `k66e="N000S"` therefore describes an `N` room, not an
+`H`/Shadow room. When only Shadow is enabled, this record does not match the
+room-selection filter. Do **not** send the literal string `"SHADOW"`: its first
+byte is `'S'`, which selects mode 4, not Shadow. The room type must start with
+`H`; `H000S` is a useful controlled test based on the existing `N000S`
+shape, but its suffix is not yet verified.
+
+Most importantly, `FUN_004F9000` is the actual automatic room-to-game transition:
+after selecting a matching room it calls `FUN_004FE660(room_type, 0)`,
+`channel/fillEnterRoomParameter` with `k42e=room_id` and `p036=5`, then
+`lobbyState/moveNext`. This is the transition to target in the next live run.
 
 `Cmd_ChannelOrderTypeSingleModeRoomInfoTetrisToC` (`0x04B61A2A`) has a smaller
 layout: `u32 id | string | u32 | u8` (`Serialize FUN_00443D90`). Its role in the
@@ -468,30 +479,31 @@ Tetris-specific container is not the active receive registration.
 ### Single Mode scene transition [live; current blocker]
 
 Clicking Single Mode runs `FUN_0049D0A0`, which calls
-`FUN_004FE660(0,1)`. That dispatcher creates scene case 2,
+`FUN_004FE660(0,1)`. That dispatcher creates the transitional scene case 2,
 `CTetSingleScene` (`tet4single.xml`, constructor `FUN_00462CB0`), and sets
 `DAT_0064EBE8` to it.
 
-`CTetSingleScene::Update` (`FUN_00462600`) calls `FUN_00461E70` and
+The room-list selector `FUN_004F9000` is now the leading transition candidate,
+because its recovered success path explicitly calls `lobbyState/moveNext`.
+It filters room records by the first byte of `CRoomData+0x30` against
+`"NYRSH"` and the corresponding `CGameReg` mode flags. Shadow is the `'H'`
+entry, enabled by the `SHADOW` registry flag. The current `N000S` room record
+does not match that mode. The next live test must verify that an H-prefixed
+`k66e` makes `FUN_004F9000` select the room and call `moveNext`.
+
+`CTetSingleScene::Update` (`FUN_00462600`) still calls `FUN_00461E70` and
 `FUN_00461FA0` every frame. Both index the step vectors at scene `+0x268` /
-`+0x29c`. When the Single scene exists before the game data is applied, those
-vectors are empty and the client faults at `0x461E9D`
+`+0x29c`. When the transitional Single scene exists before the game data is
+applied, those vectors are empty and the client faults at `0x461E9D`
 (`mov edx,[ebp+0x2c]`, EBP=0), then at `0x462009` if the first call is skipped.
 The stack return address is `0x4627F5` in `FUN_00462600`.
 
 `CTetSingleMainBody::Start` (`FUN_00460DD0`, vtable slot 12 of
-`CTetSingleMainBody`, vtable `0x5E6C44`) is the function that calls
-`FUN_004C0750` and `CF5GameWnd::SendStartNewGame`, i.e. the function that
-initializes the vectors. A winedbg breakpoint on `FUN_00460DD0` never fires in
-the live flow: the client enters the Single scene and starts updating it before
-the main body is started.
-
-This is the current global blocker, not a missing byte in a single reply:
-the room/AutoEnter messages are parsed, but the client does not perform the
-room-to-game scene transition that would start `CTetSingleMainBody`. The next
-things to recover are the trigger that calls `CTetSingleMainBody::Start`
-(room-view activation, `onStartNewGame`, or the room-enter controller) and the
-matching room record fields in `GetRoomListToC` / `RoomInfoToC`.
+`CTetSingleMainBody`, vtable `0x5E6C44`) calls `FUN_004C0750` and
+`CF5GameWnd::SendStartNewGame`, initializing the vectors. A winedbg breakpoint
+on it never fires in the current live flow. First prove the room-type filter and
+`lobbyState/moveNext`; only then investigate the later start-game request if
+the main body still does not start.
 
 ### Single Mode game client-to-server messages [static]
 

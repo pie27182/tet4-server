@@ -37,6 +37,7 @@ class PlaintextTraceTest(unittest.TestCase):
                     sequence=7,
                 )
             record = json.loads(path.read_text(encoding="utf-8").strip())
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
         self.assertEqual(record["service"], "channel")
         self.assertEqual(record["direction"], "client_to_server")
         self.assertEqual(record["sequence"], 7)

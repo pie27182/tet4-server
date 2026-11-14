@@ -43,7 +43,7 @@ export XDG_CONFIG_HOME="$ROOT/work/xdg/config" XDG_CACHE_HOME="$ROOT/work/xdg/ca
     -scriptPath "$MS_SCRIPTS" \
     -scriptPath "$ROOT/tools" \
     -postScript FixUpRttiAnalysisScript.java \
-    -postScript RecoverClassesFromRTTIScript.java \
+    -postScript "${RECOVER_SCRIPT:-RecoverClassesFromRTTIScript.java}" \
     ${NAMEMAP:+-postScript ApplyNameMap.java "$NAMEMAP"} \
     ${FIELDS:+-postScript ApplyFieldNames.java "$FIELDS"} \
     -postScript ExportAllFunctions.java "$OUT" \

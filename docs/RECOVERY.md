@@ -54,6 +54,22 @@ records (`OnPaint`, `OnTimer`, ...). The generated maps live in
 `work/rtti/names/<module>.tsv` and are passed to class recovery through
 `NAMEMAP`.
 
+## Fast path for `Tet4.exe`
+
+The stock script can spend hours in `fixUpProgram()` →
+`createMissingFunctions()` → `PseudoDisassembler.checkValidSubroutine()`. A
+thread dump of the running `Tet4.exe` job shows exactly that recursive
+pseudo-disassembly, not class recovery.
+
+`work/recovery-kit/run-fast.sh` uses a patched copy,
+`RecoverClassesFast.java`, with `FIXUP_PROGRAM = false`. It still runs the
+separate `FixUpRttiAnalysisScript` and the full RTTI class recovery; it only
+skips the pseudo-disassembly that creates missing functions.
+
+Tradeoff: a few undefined functions may stay undefined. The class, vtable and
+field recovery still runs. This is the recommended path for `Tet4.exe` on a
+large MFC binary.
+
 ## Readability rules
 
 - Class names come from MSVC RTTI; method names from vtables, exports/imports

@@ -188,10 +188,13 @@ before it.
       11,049 external, 2 Ghidra failures. See `docs/DECOMPILATION.md`.
 - [x] RTTI class/vtable inventory: 2,352 vtables, 33,871 slots, C++03 skeleton
       headers. See `docs/RTTI.md`.
-- [ ] Ghidra class recovery for `Tet4.exe` (running) and the remaining modules:
-      fields, `this` types and method signatures.
+- [x] RTTI/MFC name maps for every module in `work/rtti/names/`.
+- [ ] DLL class-recovery queue running: 32 modules, two workers, `Tet4.exe`
+      intentionally last. See `docs/RECOVERY.md`.
+- [ ] Review recovered headers and field layouts; fix duplicate structs.
 - [ ] Merge RTTI, class recovery and call-site names into compilable headers.
 - [ ] Decompile the .NET launcher `h-tetra.exe` to C# with ILSpy.
+- [ ] Then recover `Tet4.exe` with its 694 RTTI names and the established maps.
 - [ ] Only then lay out the readable `src/`/`include/` tree.
 
 ## Engineering / regression tasks

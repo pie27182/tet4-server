@@ -12,7 +12,7 @@ Two structures are scanned directly in the file:
 
 Output: names/<module>.tsv entries (address TAB name) and a short report.
 
-Usage: python3 tools/scan_mfc.py client/HgCtr3.dll
+Usage: python3 tools/scan_mfc.py client/HgCtr3.dll [output.tsv]
 """
 from __future__ import annotations
 
@@ -208,7 +208,11 @@ def main() -> int:
     for va, name in handlers[:10]:
         print(f"  0x{va:x} {name}")
 
-    out = ROOT / "names" / f"{path.name}.tsv"
+    out = (
+        Path(sys.argv[2])
+        if len(sys.argv) >= 3
+        else ROOT / "names" / f"{path.name}.tsv"
+    )
     existing = out.read_text().splitlines() if out.exists() else []
     have = {line.split("\t", 1)[0].strip().lower() for line in existing if "\t" in line}
     added = []

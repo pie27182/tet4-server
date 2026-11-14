@@ -51,6 +51,8 @@ troubleshooting and every step: [`docs/REPRODUCE.md`](docs/REPRODUCE.md).
   C++/MFC 9/VC9 stack, and the matching-decompilation method.
 - [`docs/RTTI.md`](docs/RTTI.md) — MSVC RTTI class/vtable inventory and the
   generated C++03 skeletons.
+- [`docs/RECOVERY.md`](docs/RECOVERY.md) — the DLL-first recovery queue and the
+  rules for readable class/field/method output.
 - [`docs/CLIENT.md`](docs/CLIENT.md) — how the client works: ports, framing, TPack,
   CDS, secure channel, messages. Facts marked as seen on the wire or read from code.
 - [`docs/READING.md`](docs/READING.md) — how to read the reconstructed code, which

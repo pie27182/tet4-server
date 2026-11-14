@@ -138,16 +138,47 @@ requests and logs only numeric fields and string lengths (not string contents).
 
 A recovered `Cmd_Room_EnterRoomToC` serializer (`0x0974DCEA`) replies to
 `EnterRoomToS` with `k1e | failcode | k2e`; the converter at
-`HgCom3.dll:0x6013C940` writes exactly those fields. A live probe with empty
-strings and `failcode=0` was delivered as a 24-byte frame, but the client still
-faults at `Tet4.exe:0x004FE2D5` inside `CF5GameWnd` (`mov ecx,[eax+0x70]`,
-`EAX=0`): `[0x64EBE8+0x8EC]`, the game scene, remains null. `EnterRoomToC` alone
-therefore does not create the scene. The next candidate is the start-game
-container `Cmd_Room_OrderTypeStartNewGameTetrisToC` (`0x06FE5D0A`).
+`HgCom3.dll:0x6013C940` writes exactly those fields.
 
-The independent Tetris engine is not connected to the wire protocol. The nested
-`StartNewGameToC` messages, `_SingleModeInfo`, `_TetrisMemberInfo`, board
-encoding, authoritative updates and game-end flow remain to be recovered. This is a
+The local server now replies to the Single Mode auto-create path with:
+
+- `Cmd_Channel_CreateRoomToC` (`0x0A80143A`): `failcode=0`, room id `1`,
+  room option `N000S`, GameID `TET4`, and the local game endpoint.
+- `Cmd_Channel_RoomInfoToC` (`0x0A680DDA`): one `_RoomInfo` with room id `1`,
+  host `test`, room option `N000S`. The wire form is
+  `u32 id | u32 dummy | _RoomInfo fields`; the dummy absorbs the redundant id
+  read performed by `_RoomInfo::vfunction7` after `PC_ConvertX2M` has already
+  consumed the real message id.
+- `Cmd_Room_StartNewGameToC` (`0x0F809B5A`) with the Korean
+  `_MemberInfoStartNewGame` vector (`str member | 00 00 00`), which the live
+  client dispatches through `FUN_60147870` and
+  `CF5GameWnd::Evt_OnStartNewGame`.
+
+Live winedbg checks on the current build:
+
+- `Msg_FillRoomList` (`HgModel3.dll:0x60909BE0`) runs for the returned room.
+- `Cmd_Channel_RoomInfoToC` reaches `Cmd_Channel_RoomInfoToC::Converter`
+  (`0x6013B850`) and `CChannelLobbyModel::SetRoomInfo`
+  (`HgModel3.dll:0x6090A650`).
+- `Cmd_Room_EnterRoomToS` is parsed and `EnterRoomToC` is delivered.
+- `Cmd_Room_OrderTypeStartNewGameTetrisToC` (`0x06FE5D0A`) with the
+  `_AliasInfo` vector is not dispatched on this service path. Its converter
+  `FUN_00459BD0` is registered under `0x0F809B5A`, where the HgCom3 SvcKor
+  converter wins.
+
+The remaining fault is not a missing reply field. After the Single Mode button
+creates `CTetSingleScene`, `CTetSingleScene::Update` (`FUN_00462600`) calls
+`FUN_00461E70` and `FUN_00461FA0` against empty step vectors and faults at
+`Tet4.exe:0x461E9D` (and at `0x462009` when the first call is skipped).
+`CTetSingleMainBody::Start` (`FUN_00460DD0`, vtable slot 12) is never called in
+the live flow, so the vectors that those update functions index are never
+initialized. The next recovery target is the client transition that calls
+`CTetSingleMainBody::Start`, together with the exact `_RoomInfo` fields the room
+list/view expects.
+
+The independent Tetris engine is not connected to the wire protocol. The
+room-to-game transition, `_SingleModeInfo`, `_TetrisMemberInfo`, board encoding,
+authoritative updates and game-end flow remain to be recovered. This is a
 runnable protocol server with a verified channel path, not a playable Single Mode
 implementation.
 

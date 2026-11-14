@@ -434,17 +434,64 @@ verified; sending guessed room metadata would not be justified by the current ev
 The client also has an XDR class `Cmd_Room_OrderTypeStartNewGameTetrisToC`
 (`0x06FE5D0A`):
 - constructor: `FUN_0044AD80`;
-- GetSize: `FUN_0044ACA0`;
-- serializer/deserializer pair: `FUN_0044ACF0` and `FUN_0044B1D0` (the latter validates
-  the nested message vector plus scalar fields);
-- body shape: `u32 id | vector<XDR::IMessage> | string | u32`.
+- GetSize: `FUN_0044B1A0`;
+- serializer/deserializer pair: `FUN_0044B1D0` and `FUN_00459630`;
+- body shape: `u32 id | vector<_AliasInfo>`.
 
-The client controller has `CGameLobbyController::Net_StartNewGame`
-(`HgCtr3.dll:0x60207880`), which dispatches `onStartNewGame` to the game view.
-This is a strong candidate for the start event carried by the class above, but the
-message-to-handler registration key is not yet confirmed from the stripped global
-string reference. The vector's nested message types and required initial board
-configuration are not yet decoded; do not send an empty vector as if it started a game.
+Each `_AliasInfo` element (`0x3B561A`, constructor `FUN_0044A020`,
+serializer/deserializer `FUN_0044A870`/`FUN_0044A8D0`) is
+`string +0x0c | string +0x28 | u32 +0x44`.
+
+The converter `FUN_00459BD0` is registered under the generic
+`Cmd_Room_StartNewGameToC` id `0x0F809B5A`; it reads the id and the
+`_AliasInfo` vector itself and calls `FUN_00571CA0`, `FUN_005730C0` and
+`FUN_005730D0` per entry. The same id is also registered in `HgCom3.dll`
+with `FUN_60147870` for the Korean-service variant, and that converter is the
+one the live client actually dispatches.
+
+### Korean-service start message [live verified]
+
+`Cmd_Room_StartNewGameSvcKorToC` (`HgCom3.dll:0x013AA2DA`) carries
+`u32 id | vector<_MemberInfoStartNewGame>`. Each entry (`0x0615B60A`,
+deserializer `0x60141EC0`) is `string +0x08 | u8 +0x24 | u8 +0x25 | u8 +0x26`.
+The `HgCom3.dll` converter `FUN_60147870` maps the vector count to `k25e` and
+each entry to `k3e<i>`, `k118e<i>` and `k119e<i>`. `CF5GameWnd::Evt_OnStartNewGame`
+(`HGF5V.dll:0x60A090D0`, registered under `game/onStartNewGame`) consumes those
+keys and updates `CPlayerInfo+0x118/+0x11c`.
+
+Live dispatch check: sending `0x0F809B5A | u32 count | str "test" | 00 00 00`
+reaches `FUN_60147870`, `Cmd_Room_StartNewGameSvcKorToC::vfunction7` and
+`_MemberInfoStartNewGame::vfunction7`. Sending `0x06FE5D0A` with the
+`_AliasInfo` vector does not reach `FUN_00459BD0` on this service path, so the
+Tetris-specific container is not the active receive registration.
+
+### Single Mode scene transition [live; current blocker]
+
+Clicking Single Mode runs `FUN_0049D0A0`, which calls
+`FUN_004FE660(0,1)`. That dispatcher creates scene case 2,
+`CTetSingleScene` (`tet4single.xml`, constructor `FUN_00462CB0`), and sets
+`DAT_0064EBE8` to it.
+
+`CTetSingleScene::Update` (`FUN_00462600`) calls `FUN_00461E70` and
+`FUN_00461FA0` every frame. Both index the step vectors at scene `+0x268` /
+`+0x29c`. When the Single scene exists before the game data is applied, those
+vectors are empty and the client faults at `0x461E9D`
+(`mov edx,[ebp+0x2c]`, EBP=0), then at `0x462009` if the first call is skipped.
+The stack return address is `0x4627F5` in `FUN_00462600`.
+
+`CTetSingleMainBody::Start` (`FUN_00460DD0`, vtable slot 12 of
+`CTetSingleMainBody`, vtable `0x5E6C44`) is the function that calls
+`FUN_004C0750` and `CF5GameWnd::SendStartNewGame`, i.e. the function that
+initializes the vectors. A winedbg breakpoint on `FUN_00460DD0` never fires in
+the live flow: the client enters the Single scene and starts updating it before
+the main body is started.
+
+This is the current global blocker, not a missing byte in a single reply:
+the room/AutoEnter messages are parsed, but the client does not perform the
+room-to-game scene transition that would start `CTetSingleMainBody`. The next
+things to recover are the trigger that calls `CTetSingleMainBody::Start`
+(room-view activation, `onStartNewGame`, or the room-enter controller) and the
+matching room record fields in `GetRoomListToC` / `RoomInfoToC`.
 
 ### Single Mode game client-to-server messages [static]
 

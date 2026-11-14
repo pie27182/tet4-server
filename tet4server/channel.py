@@ -50,6 +50,9 @@ GET_DISPLAY_MEMBER_INFO_TOC = 0x0C3B49AA
 GET_MEMBER_INFO_TOC = 0x060BC39A
 AUTO_ENTER_SINGLE_MODE_TOS = 0x031AC76A
 AUTO_ENTER_SINGLE_MODE_TOC = 0x0DF37B3A
+CREATE_ROOM_TOS = 0x0CA9895A
+CREATE_ROOM_TOC = 0x0A80143A
+ROOM_INFO_TOC = 0x0A680DDA
 GAME_SERVER_HOST = b"127.0.0.1"
 GAME_SERVER_PORT = 15002
 SINGLE_MODE_ROOM_INFO_TOC = 0x04B61A2A
@@ -378,16 +381,82 @@ def get_member_list_to_c(
     )
 
 
+def room_info_entry(
+    room_id: int = 1,
+    host: bytes = b"test",
+    room_option: bytes = b"N000S",
+) -> bytes:
+    """Serialize one nested _RoomInfo record for GetRoomListToC.
+
+    _RoomInfo deserializer HgCom3.dll:0x60126C10 (nested flag set, so no id):
+      u32 +0x08
+      str +0x0c
+      u32 +0x28
+      u32 +0x2c
+      u8  +0x30 (room id low byte)
+      str +0x34
+      str +0x50
+      u32 +0x6c
+      str +0x70
+      str +0x8c
+      u32 +0xa8
+      count +0xac vector
+      count +0xc8 vector
+      count +0xe4 vector
+    """
+    if not 0 <= room_id <= 0xFF:
+        raise ValueError("room_id must fit in one byte for _RoomInfo")
+    if not host or not room_option:
+        raise ValueError("host and room_option must be non-empty")
+    return (
+        pack_u32(0)                    # +0x08
+        + pack_string(host)            # +0x0c
+        + pack_u32(0)                  # +0x28
+        + pack_u32(0)                  # +0x2c
+        + bytes((room_id,))            # +0x30
+        + pack_string(room_option)     # +0x34 (k46e)
+        + pack_string(room_option)     # +0x50 (k200e room type)
+        + pack_u32(0)                  # +0x6c
+        + pack_string(b"")             # +0x70
+        + pack_string(b"")             # +0x8c
+        + pack_u32(0)                  # +0xa8
+        + pack_u32(0)                  # +0xac empty vector
+        + pack_u32(0)                  # +0xc8 empty vector
+        + pack_u32(0)                  # +0xe4 empty vector
+    )
+
+
+def room_info_to_c(
+    room_id: int = 1,
+    host: bytes = b"test",
+    room_option: bytes = b"N000S",
+) -> bytes:
+    """Serialize Cmd_Channel_RoomInfoToC (0x0A680DDA).
+
+    The message body is one _RoomInfo with its non-nested flag, so the wire is
+    the message id followed by the same fields as room_info_entry(). The
+    client's Msg_UpdateRoomInfo -> SetRoomInfo path updates CRoomData, applies
+    SetRoomType and lets the room scene replace the transitional single scene.
+    """
+    return (
+        pack_u32(ROOM_INFO_TOC)
+        + pack_u32(0)  # framework consumed the id; _RoomInfo reads this one
+        + room_info_entry(room_id=room_id, host=host, room_option=room_option)
+    )
+
+
 def get_room_list_to_c(
     strings: tuple[bytes, bytes, bytes] = (b"", b"", b""),
     option: int = 0,
     final: bytes = b"",
+    room_entries: tuple[bytes, ...] = (),
 ) -> bytes:
-    """Serialize an empty Cmd_Channel_GetRoomListToC response.
+    """Serialize a Cmd_Channel_GetRoomListToC response.
 
     HgCom3.dll Serialize FUN_60130630: string × 3 | uint32 | string | vector.
-    The vector count is zero; room-record serialization is intentionally not
-    guessed before a real room is observed.
+    Each vector entry is one nested _RoomInfo; see room_info_entry() for the
+    field order. The Single Mode path sends one room with id 1 and option
+    N000S, which the live client parses in Msg_FillRoomList.
     """
     if len(strings) != 3 or any(not isinstance(v, bytes) for v in strings):
         raise ValueError("GetRoomListToC requires exactly three byte-string fields")
@@ -395,12 +464,15 @@ def get_room_list_to_c(
         raise ValueError("GetRoomListToC option must fit in uint32")
     if not isinstance(final, bytes):
         raise ValueError("GetRoomListToC final field must be bytes")
+    if any(not isinstance(entry, bytes) for entry in room_entries):
+        raise ValueError("GetRoomListToC room entries must be bytes")
     return (
         pack_u32(GET_ROOM_LIST_TOC)
         + b"".join(pack_string(v) for v in strings)
         + pack_u32(option)
         + pack_string(final)
-        + pack_u32(0)
+        + pack_u32(len(room_entries))
+        + b"".join(room_entries)
     )
 
 
@@ -439,6 +511,29 @@ def parse_auto_enter_single_mode_request(payload: bytes) -> AutoEnterSingleModeR
     return AutoEnterSingleModeRequest(tuple(strings), tuple(integers))
 
 
+def auto_enter_single_mode_reply(
+    request: "AutoEnterSingleModeRequest",
+) -> tuple[tuple[bytes, ...], tuple[int, ...]]:
+    """Echo the room identity fields of a Single Mode AutoEnter request.
+
+    The request and response are different message classes, but their room
+    identity fields share offsets: +0x2c/k67e, +0x48/k45e, +0x64/k46e,
+    +0x88/k200e, +0xa8/k22e, +0xc4/k23e and +0xe0/k24e. +0x64 is the room
+    option string that CF5GameWnd::DoExActive switches on; Single Mode requests
+    carry "N000S" there. The response must preserve it, otherwise the room
+    scene stays null (Tet4.exe:0x4FE2D5).
+    """
+    values = [b""] * 12
+    values[1] = request.strings[1]  # +0x2c, k67e
+    values[2] = request.strings[2]  # +0x48, k45e
+    values[3] = request.strings[3]  # +0x64, k46e (room option)
+    values[4] = request.strings[4]  # +0x88, k200e
+    values[5:8] = request.strings[5:8]  # +0xa8/k22e, +0xc4/k23e, +0xe0/k24e
+    numbers = list(request.integers)  # +0x28, +0x80, +0x84, +0xa4
+    numbers.extend((0, 0))  # +0x118, +0x154 (port is filled by the serializer)
+    return tuple(values), tuple(numbers)
+
+
 def auto_enter_single_mode_to_c(
     game_host: bytes = GAME_SERVER_HOST,
     game_port: int = GAME_SERVER_PORT,
@@ -447,19 +542,40 @@ def auto_enter_single_mode_to_c(
 ) -> bytes:
     """Serialize the AutoEnter ToC response and direct the client to our local game socket.
 
-    Tet4.exe Serialize FUN_00442E90 / Deserialize FUN_00443080:
-      str, u32, str, str, str, u32, u32, str, u32,
-      str, str, str, str, u32, str, str, u32, str.
+    Tet4.exe Deserialize FUN_00443080 (class constructor FUN_00433120) and its
+    converter FUN_00445F60 establish this wire order, with the converter keys in
+    parentheses:
 
-    The success converter rejects status string "v2e" at +0xfc. It maps the
-    strings at +0xa8, +0xc4 and +0xe0 to k22e, k23e and k24e; +0xa8 is also
-    passed as k42e to channel/fillEnterRoomParameter. The button request carries
-    GameID, k23e and k24e at those same three offsets, so callers should echo
-    those values rather than leaving them blank.
-    
-    The game server endpoint is read from k52e (string +0x138) and k53e (uint32
-    +0x154). Other room metadata remains unverified. The response shape and its
-    acceptance still require live-client validation.
+        u32  message id
+        str  +0x0c
+        u32  +0x28 (k42e)
+        str  +0x2c (k67e)
+        str  +0x48 (k45e)
+        str  +0x64 (k46e, room option string)
+        u32  +0x80 (k127e)
+        u32  +0x84 (k66e, room id)
+        str  +0x88 (k200e)
+        u32  +0xa4
+        str  +0xa8 (k22e)
+        str  +0xc4 (k23e)
+        str  +0xe0 (k24e)
+        str  +0xfc (status; the success converter rejects "v2e")
+        u32  +0x118
+        str  +0x11c
+        str  +0x138 (k52e, game server host)
+        u32  +0x154 (k53e, game server port)
+        str  +0x158 (k82e)
+
+    k46e at +0x64 is the room option string. CF5GameWnd::DoExActive
+    (Tet4.exe:0x4FDBC0) switches on its first character ('Y','N','R','S','H')
+    and, when the string is empty, falls back to SendAlterRoomOption("Y000MNN")
+    and a UI path that dereferences the current room scene. The client's own
+    AutoEnter request carries the requested option at +0x64 (for Single Mode it
+    is "N000S"), so the response must echo it; otherwise the room scene stays
+    null and the client faults at 0x4FE2D5.
+
+    k52e/k53e are the game endpoint. Other room metadata is echoed by
+    single_mode_auto_enter_reply below.
     """
     if not isinstance(game_host, bytes) or not game_host:
         raise ValueError("game_host must be a non-empty byte string")
@@ -499,6 +615,117 @@ def auto_enter_single_mode_to_c(
         + pack_string(values[10])
         + pack_u32(numbers[5])
         + pack_string(values[11])
+    )
+
+
+@dataclass(frozen=True)
+class CreateRoomRequest:
+    """Wire fields of Cmd_Channel_CreateRoomToS, in Serialize order.
+
+    Same field shape as AutoEnterSingleModeToS: eight strings and four uint32
+    values interleaved. The Single Mode auto-create path sends member id,
+    the requested room option at strings[3] ("N000S"), GameID at strings[5]
+    and channel identity at strings[6:8].
+    """
+
+    strings: tuple[bytes, ...]
+    integers: tuple[int, ...]
+
+
+def parse_create_room_request(payload: bytes) -> CreateRoomRequest:
+    """Parse Cmd_Channel_CreateRoomToS (0x0CA9895A)."""
+    r = Reader(payload)
+    if r.u32() != CREATE_ROOM_TOS:
+        raise ProtocolError("not Cmd_Channel_CreateRoomToS")
+    strings = []
+    integers = []
+    strings.append(r.string())
+    integers.append(r.u32())
+    strings.append(r.string())
+    strings.append(r.string())
+    strings.append(r.string())
+    integers.extend((r.u32(), r.u32()))
+    strings.append(r.string())
+    integers.append(r.u32())
+    strings.extend((r.string(), r.string(), r.string()))
+    if r.remaining():
+        raise ProtocolError(
+            f"unexpected {r.remaining()} trailing CreateRoomToS bytes"
+        )
+    return CreateRoomRequest(tuple(strings), tuple(integers))
+
+
+def create_room_to_c(
+    request: CreateRoomRequest,
+    room_id: int = 1,
+    game_host: bytes = GAME_SERVER_HOST,
+    game_port: int = GAME_SERVER_PORT,
+) -> bytes:
+    """Serialize Cmd_Channel_CreateRoomToC (0x0A80143A).
+
+    Tet4.exe's class constructor FUN_00438C90 and deserializer FUN_0043F580
+    establish this wire order (the converter FUN_00441E90 maps it to keys):
+
+        u32  message id
+        str  +0x0c  (unmapped)
+        u32  +0x28  (failcode; 0 is success)
+        str  +0x2c  (k2e)
+        str  +0x48  (k3e)
+        u32  +0x64  (k42e)
+        str  +0x68  (k67e)
+        str  +0x84  (k45e)
+        str  +0xa0  (k46e, room option)
+        u32  +0xbc  (k127e)
+        u32  +0xc0  (k66e, room id)
+        str  +0xc4  (k200e)
+        u32  +0xe0  (k69e)
+        str  +0xe4  (k22e)
+        str  +0x100 (k23e)
+        str  +0x11c (k24e)
+        str  +0x138 (k52e, game host)
+        str  +0x154 (unmapped)
+        u32  +0x170 (k53e, game port)
+        str  +0x174 (k82e)
+
+    The room option at +0xa0 is the field that CF5GameWnd::DoExActive and the
+    room-data scene selection consume. The Single Mode request already carries
+    the desired option at strings[3]; echo it so the room is created with the
+    same mode the client asked for.
+    """
+    if not isinstance(room_id, int) or not 0 <= room_id <= 0xFFFFFFFF:
+        raise ValueError("room_id must fit in uint32")
+    if not isinstance(game_host, bytes) or not game_host:
+        raise ValueError("game_host must be a non-empty byte string")
+    if not isinstance(game_port, int) or not 1 <= game_port <= 0xFFFFFFFF:
+        raise ValueError("game_port must be in 1..0xffffffff")
+    if len(request.strings) != 8:
+        raise ValueError("CreateRoomToS request must have eight strings")
+
+    room_option = request.strings[3] or b"N000S"
+    game_id = request.strings[5]
+    channel_sub = request.strings[6]
+    channel_id = request.strings[7]
+    return (
+        pack_u32(CREATE_ROOM_TOC)
+        + pack_string(b"")             # +0x0c unmapped
+        + pack_u32(0)                  # +0x28 failcode
+        + pack_string(b"")             # +0x2c k2e
+        + pack_string(b"")             # +0x48 k3e
+        + pack_u32(0)                  # +0x64 k42e
+        + pack_string(b"")             # +0x68 k67e
+        + pack_string(b"")             # +0x84 k45e
+        + pack_string(room_option)     # +0xa0 k46e
+        + pack_u32(0)                  # +0xbc k127e
+        + pack_u32(room_id)            # +0xc0 k66e
+        + pack_string(b"G")            # +0xc4 k200e
+        + pack_u32(0)                  # +0xe0 k69e
+        + pack_string(game_id)         # +0xe4 k22e
+        + pack_string(channel_sub)     # +0x100 k23e
+        + pack_string(channel_id)      # +0x11c k24e
+        + pack_string(game_host)       # +0x138 k52e
+        + pack_string(b"")             # +0x154 unmapped
+        + pack_u32(game_port)          # +0x170 k53e
+        + pack_string(b"")             # +0x174 k82e
     )
 
 
@@ -691,10 +918,13 @@ def _dispatch(session, conn, msg_id: int, payload: bytes) -> None:
             )
         elif msg_id == GET_ROOM_LIST_TOS:
             request = parse_get_room_list_request(payload)
-            session.send(conn, get_room_list_to_c())
+            session.send(
+                conn,
+                get_room_list_to_c(room_entries=(room_info_entry(),)),
+            )
             log.info(
-                "sent empty Cmd_Channel_GetRoomListToC "
-                "for keys=%r option=%d (0 rooms)",
+                "sent Cmd_Channel_GetRoomListToC for keys=%r option=%d "
+                "(1 single-mode room)",
                 request.strings,
                 request.option,
             )
@@ -723,17 +953,19 @@ def _dispatch(session, conn, msg_id: int, payload: bytes) -> None:
                 request.strings,
                 request.integers,
             )
-            # The button request copies GameID/k23e/k24e into strings
-            # 5..7 (+0xa8/+0xc4/+0xe0). The ToC converter maps those response
-            # fields to k22e/k23e/k24e and forwards k22e as k42e to
-            # fillEnterRoomParameter. Preserve these identity fields in the reply.
-            response_strings = [b""] * 12
-            response_strings[5:8] = request.strings[5:8]
+            # Echo the room identity fields, especially k46e at +0x64
+            # ("N000S"). CF5GameWnd::DoExActive reads it and only then picks
+            # the room window type; an empty k46e leaves the room scene null.
+            response_strings, response_integers = auto_enter_single_mode_reply(
+                request
+            )
             # Tet4.exe registers AutoEnterSingleModeToC (0x0DF37B3A)
             # with PC_RegisterX2M(..., NLayer=3, ...). The captured ToS
             # arrived after three LayerAlignment markers, so its ToC must
             # occupy the same layer slot rather than defaulting to layer 0.
-            response = auto_enter_single_mode_to_c(strings=tuple(response_strings))
+            response = auto_enter_single_mode_to_c(
+                strings=response_strings, integers=response_integers
+            )
             session.send(conn, layer_message(response, 3))
             log.info(
                 "sent Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToC "
@@ -742,6 +974,25 @@ def _dispatch(session, conn, msg_id: int, payload: bytes) -> None:
                 GAME_SERVER_HOST.decode("ascii"),
                 GAME_SERVER_PORT,
             )
+        elif msg_id == CREATE_ROOM_TOS:
+            request = parse_create_room_request(payload)
+            log.info(
+                "received Cmd_Channel_CreateRoomToS strings=%r integers=%r",
+                request.strings,
+                request.integers,
+            )
+            response = create_room_to_c(request)
+            session.send(conn, layer_message(response, 0))
+            session.send(conn, room_info_to_c())
+            log.info(
+                "sent Cmd_Channel_CreateRoomToC room_id=1 option=%r "
+                "game_id=%r endpoint=%s:%d",
+                request.strings[3],
+                request.strings[5],
+                GAME_SERVER_HOST.decode("ascii"),
+                GAME_SERVER_PORT,
+            )
+            log.info("sent Cmd_Channel_RoomInfoToC room_id=1 option=N000S")
         else:
             log.warning(
                 "unhandled channel application message id=0x%08x payload_len=%d",

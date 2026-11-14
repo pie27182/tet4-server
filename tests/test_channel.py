@@ -327,6 +327,82 @@ class AutoEnterSingleModeRequestTest(unittest.TestCase):
 
 
 
+class AutoEnterSingleModeReplyFieldsTest(unittest.TestCase):
+    def test_reply_preserves_room_option_and_identity_fields(self):
+        strings = (
+            b"test", b"", b"", b"N000S", b"custom-type",
+            b"TET4", b"sub-id", b"channel-id",
+        )
+        integers = (7, 8, 9, 10)
+        values, numbers = channel.auto_enter_single_mode_reply(
+            channel.AutoEnterSingleModeRequest(strings, integers)
+        )
+        self.assertEqual(len(values), 12)
+        self.assertEqual(values[1], b"")            # +0x2c k67e
+        self.assertEqual(values[2], b"")            # +0x48 k45e
+        self.assertEqual(values[3], b"N000S")       # +0x64 k46e
+        self.assertEqual(values[4], b"custom-type") # +0x88 k200e
+        self.assertEqual(values[5:8], strings[5:8])
+        self.assertEqual(values[8], b"")            # +0xfc success status
+        self.assertEqual(numbers[:4], integers)
+        self.assertEqual(len(numbers), 6)
+
+
+class CreateRoomMessageTest(unittest.TestCase):
+    def test_request_parse_and_reply_layout(self):
+        strings = (
+            b"test", b"", b"", b"N000S", b"", b"TET4", b"", b"1",
+        )
+        integers = (0, 0, 0, 0)
+        payload = (
+            channel.pack_u32(channel.CREATE_ROOM_TOS)
+            + channel.pack_string(strings[0])
+            + channel.pack_u32(integers[0])
+            + channel.pack_string(strings[1])
+            + channel.pack_string(strings[2])
+            + channel.pack_string(strings[3])
+            + channel.pack_u32(integers[1])
+            + channel.pack_u32(integers[2])
+            + channel.pack_string(strings[4])
+            + channel.pack_u32(integers[3])
+            + b"".join(channel.pack_string(v) for v in strings[5:])
+        )
+        request = channel.parse_create_room_request(payload)
+        self.assertEqual(request.strings, strings)
+        self.assertEqual(request.integers, integers)
+
+        r = Reader(channel.create_room_to_c(request))
+        self.assertEqual(r.u32(), channel.CREATE_ROOM_TOC)
+        self.assertEqual(r.string(), b"")       # +0x0c
+        self.assertEqual(r.u32(), 0)            # +0x28 failcode
+        self.assertEqual(r.string(), b"")       # +0x2c k2e
+        self.assertEqual(r.string(), b"")       # +0x48 k3e
+        self.assertEqual(r.u32(), 0)            # +0x64 k42e
+        self.assertEqual(r.string(), b"")       # +0x68 k67e
+        self.assertEqual(r.string(), b"")       # +0x84 k45e
+        self.assertEqual(r.string(), b"N000S")  # +0xa0 k46e room option
+        self.assertEqual(r.u32(), 0)            # +0xbc k127e
+        self.assertEqual(r.u32(), 1)            # +0xc0 k66e room id
+        self.assertEqual(r.string(), b"G")      # +0xc4 k200e
+        self.assertEqual(r.u32(), 0)            # +0xe0 k69e
+        self.assertEqual(r.string(), b"TET4")   # +0xe4 k22e
+        self.assertEqual(r.string(), b"")       # +0x100 k23e
+        self.assertEqual(r.string(), b"1")      # +0x11c k24e
+        self.assertEqual(r.string(), b"127.0.0.1")  # +0x138 k52e
+        self.assertEqual(r.string(), b"")       # +0x154 unmapped
+        self.assertEqual(r.u32(), 15002)        # +0x170 k53e
+        self.assertEqual(r.string(), b"")       # +0x174 k82e
+        self.assertEqual(r.remaining(), 0)
+
+    def test_reply_uses_n000s_fallback_when_option_is_empty(self):
+        request = channel.CreateRoomRequest((b"",) * 8, (0, 0, 0, 0))
+        r = Reader(channel.create_room_to_c(request))
+        r.u32()
+        r.string(); r.u32(); r.string(); r.string(); r.u32()
+        r.string(); r.string()
+        self.assertEqual(r.string(), b"N000S")
+
+
 class XlbpLayerMessageTest(unittest.TestCase):
     def test_layer_three_message_has_three_alignment_slots(self):
         message = channel.pack_u32(channel.AUTO_ENTER_SINGLE_MODE_TOC) + b"payload"
@@ -418,12 +494,15 @@ class AutoEnterDispatchTest(unittest.TestCase):
         channel._dispatch(
             session, object(), channel.AUTO_ENTER_SINGLE_MODE_TOS, payload
         )
-        response_strings = [b""] * 12
-        response_strings[5:8] = strings[5:8]
+        request = channel.AutoEnterSingleModeRequest(strings, integers)
+        response_strings, response_integers = channel.auto_enter_single_mode_reply(
+            request
+        )
         response = channel.auto_enter_single_mode_to_c(
             game_host=b"127.0.0.1",
             game_port=15002,
-            strings=tuple(response_strings),
+            strings=response_strings,
+            integers=response_integers,
         )
         expected_wire_body = channel.layer_message(response, 3)
         self.assertEqual(session.sent, [expected_wire_body])
@@ -435,18 +514,19 @@ class AutoEnterDispatchTest(unittest.TestCase):
         self.assertEqual(msg_id, channel.AUTO_ENTER_SINGLE_MODE_TOC)
         self.assertEqual(unwrapped, response)
 
-        # These three response fields feed k22e/k23e/k24e in the client
-        # converter; k22e is then passed to fillEnterRoomParameter as k42e.
+        # The response must preserve k46e at +0x64, the room option string
+        # that CF5GameWnd::DoExActive switches on. Without it the client falls
+        # back to "Y000MNN" and faults on a null room scene at 0x4FE2D5.
         r = Reader(unwrapped)
         self.assertEqual(r.u32(), channel.AUTO_ENTER_SINGLE_MODE_TOC)
         r.string()  # +0x0c
         r.u32()     # +0x28
         r.string()  # +0x2c
         r.string()  # +0x48
-        r.string()  # +0x64
+        self.assertEqual(r.string(), strings[3])  # +0x64 k46e room option
         r.u32()     # +0x80
         r.u32()     # +0x84
-        r.string()  # +0x88
+        self.assertEqual(r.string(), strings[4])  # +0x88 k200e
         r.u32()     # +0xa4
         self.assertEqual(
             tuple(r.string() for _ in range(3)),

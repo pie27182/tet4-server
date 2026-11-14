@@ -22,6 +22,24 @@ class SaveGameFrameTest(unittest.TestCase):
 
 
 
+class StartNewGameTest(unittest.TestCase):
+    def test_alias_info_vector_layout(self):
+        body = game.start_new_game_to_c(b"test", b"N000S", index=7)
+        r = Reader(body)
+        self.assertEqual(r.u32(), game.GAME_START_NEW_GAME_TOC)
+        self.assertEqual(r.u32(), 1)          # one _AliasInfo entry
+        self.assertEqual(r.string(), b"test")  # +0x0c member id
+        self.assertEqual(r.string(), b"N000S") # +0x28 room option
+        self.assertEqual(r.u32(), 7)           # +0x44
+        self.assertEqual(r.remaining(), 0)
+
+    def test_rejects_empty_identity(self):
+        with self.assertRaises(ValueError):
+            game.start_new_game_to_c(b"", b"N000S")
+        with self.assertRaises(ValueError):
+            game.start_new_game_to_c(b"test", b"")
+
+
 class GameRoomRequestTest(unittest.TestCase):
     def test_enter_room_request_wire_layout(self):
         strings = (

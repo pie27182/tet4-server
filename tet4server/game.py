@@ -23,6 +23,7 @@ POLY_MINO_PUT_TOS = 0x0CC4004A
 GAME_ENTER_ROOM_TOS = 0x09A5347A
 GAME_ALTER_ROOM_TOS = 0x0D31FDDA
 GAME_ENTER_ROOM_TOC = 0x0974DCEA
+GAME_START_NEW_GAME_TOC = 0x0F809B5A
 
 
 @dataclass(frozen=True)
@@ -73,6 +74,74 @@ class EnterRoomRequest:
     next_value: int
     final_strings: tuple[bytes, bytes]
     final_values: tuple[int, int]
+
+
+def start_new_game_svckor_to_c(member_id: bytes) -> bytes:
+    """Serialize the Korean-service StartNewGame vector payload.
+
+    Cmd_Room_StartNewGameSvcKorToC (HgCom3.dll:0x60145C20) carries a vector of
+    _MemberInfoStartNewGame entries (deserializer 0x60141EC0):
+
+        u32  message id (0xF809B5A on the game session)
+        u32  count
+        for each entry:
+            str  +0x08 (member id)
+            u8   +0x24
+            u8   +0x25
+            u8   +0x26
+
+    The HgCom3 converter FUN_60147870 turns each entry into k3e<i>,
+    k118e<i> and k119e<i> keys, which the game lobby model consumes when it
+    starts the Single Mode game.
+    """
+    if not isinstance(member_id, bytes) or not member_id:
+        raise ValueError("member_id must be a non-empty byte string")
+    return (
+        pack_u32(GAME_START_NEW_GAME_TOC)
+        + pack_u32(1)
+        + pack_string(member_id)
+        + bytes((0, 0, 0))
+    )
+
+
+def start_new_game_to_c(
+    member_id: bytes,
+    room_option: bytes,
+    index: int = 0,
+    message_id: int = GAME_START_NEW_GAME_TOC,
+) -> bytes:
+    """Serialize Cmd_Room_StartNewGameToC (0x0F809B5A).
+
+    Tet4.exe registers this id with converter FUN_00459BD0, which constructs
+    Cmd_Room_OrderTypeStartNewGameTetrisToC and reads a vector of _AliasInfo
+    entries (class constructor FUN_0044A020, deserializer FUN_0044A8D0):
+
+        u32  message id
+        u32  count
+        for each entry:
+            str  +0x0c (member id)
+            str  +0x28 (room option / mode string)
+            u32  +0x44
+
+    The converter looks up entry +0x0c in the room's member table and reads
+    bytes 0, 1 and 3 of the +0x28 string as mode flags. The client's own
+    EnterRoomToS carries exactly these values at middle_strings[0] ("N000S")
+    and final_strings[0] ("test"), so the server can echo them back when it
+    starts the Single Mode game.
+    """
+    if not isinstance(member_id, bytes) or not member_id:
+        raise ValueError("member_id must be a non-empty byte string")
+    if not isinstance(room_option, bytes) or not room_option:
+        raise ValueError("room_option must be a non-empty byte string")
+    if not isinstance(index, int) or not 0 <= index <= 0xFFFFFFFF:
+        raise ValueError("index must fit in uint32")
+    return (
+        pack_u32(message_id)
+        + pack_u32(1)                 # one _AliasInfo entry
+        + pack_string(member_id)      # +0x0c
+        + pack_string(room_option)    # +0x28 ("N000S")
+        + pack_u32(index)             # +0x44
+    )
 
 
 @dataclass(frozen=True)
@@ -228,12 +297,23 @@ def handle(conn: socket.socket, capture_dir: Path | None = None) -> None:
                     string_lengths,
                     saved is not None,
                 )
+                member_id = request.final_strings[0]
+                room_option = request.middle_strings[0]
                 session.send(conn, enter_room_to_c())
                 log.info(
                     "sent Cmd_Room_EnterRoomToC connection=%s "
                     "failcode=0 k1e_len=0 k2e_len=0",
                     connection_id,
                 )
+                if member_id and room_option:
+                    session.send(conn, start_new_game_svckor_to_c(member_id))
+                    log.info(
+                        "sent Cmd_Room_StartNewGameToC connection=%s "
+                        "member=%r option=%r entries=1 (svckor vector)",
+                        connection_id,
+                        member_id,
+                        room_option,
+                    )
             elif msg_id == GAME_ALTER_ROOM_TOS:
                 request = parse_alter_room_request(payload)
                 log.info(

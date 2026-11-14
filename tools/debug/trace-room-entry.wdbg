@@ -1,0 +1,33 @@
+# Capture the room-entry call chain after the Single Mode click.
+# Addresses are the client's load addresses: Tet4.exe 0x400000,
+# HgModel3.dll 0x60000000, HgCom3.dll 0x60100000.
+set $BreakOnFirstChance = 0
+break *0x60914fd0
+break *0x60914950
+break *0x6013c940
+break *0x6013c010
+break *0x4fdbc0
+break *0x4fe660
+break *0x4fc280
+break *0x4fe2d5
+c
+bt 8
+c
+bt 8
+c
+bt 8
+c
+bt 8
+c
+bt 8
+c
+bt 8
+c
+bt 8
+c
+bt 8
+c
+bt 8
+c
+bt 8
+quit

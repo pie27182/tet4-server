@@ -1,0 +1,21 @@
+# Verify RoomInfoToC reaches its converter and SetRoomInfo.
+set $BreakOnFirstChance = 0
+break *0x6013b850
+break *0x6090a650
+break *0x4fe660
+break *0x461e9d
+c
+bt 5
+c
+bt 5
+c
+bt 5
+c
+bt 5
+c
+bt 5
+c
+bt 5
+c
+bt 5
+quit

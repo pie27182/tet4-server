@@ -1,0 +1,11 @@
+# Follow the client past Msg_ConnectGameServer and capture why the game socket
+# closes: an unhandled exception with a backtrace, or a clean process exit.
+# Run with: env TIMEOUT=300 tools/debug/winedbg_batch.sh tools/debug/break-after-connect.wdbg
+set $BreakOnFirstChance = 0
+break *0x60914950
+c
+bt
+c
+bt
+info reg
+quit

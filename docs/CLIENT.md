@@ -385,13 +385,18 @@ The game endpoint is explicit in the response:
 
 For the local probe the server sets host `127.0.0.1`, port `15002`, leaves the status
 field empty (not `v2e`), and leaves remaining room metadata at constructor defaults.
-`tet4server/game.py` listens on that port, performs the secure handshake and logs
-the first client frames. It deliberately sends no game-level acknowledgements yet.
-The 2026-11-13 capture ended without any connection to port 15002 because the old
-server did not dispatch the nested request. After the LayerAlignment fix, the next
-live run must verify that the client accepts this response, connects to 15002, and
-completes the game-socket handshake. This remains a structurally valid route, not a
-verified playable room.
+`tet4server/game.py` listens on that port, performs the secure handshake and parses
+the first two room requests. The layer-3 AutoEnter fix and the game-socket handshake
+are live-verified. After `Cmd_Room_EnterRoomToS`, the server sends the recovered
+`Cmd_Room_EnterRoomToC` (`0x0974DCEA | k1e | failcode | k2e`); the client accepts
+the 24-byte reply and then sends `Cmd_Room_AlterRoomToS`.
+
+The client still faults at `Tet4.exe:0x004FE2D5` in `CF5GameWnd`
+(`mov ecx,[eax+0x70]`, `EAX=0`): the game scene `[0x64EBE8+0x8EC]` remains null.
+`EnterRoomToC` alone does not create it. The next target is the start-game container
+`Cmd_Room_OrderTypeStartNewGameTetrisToC` (`0x06FE5D0A`) and its nested
+`_SingleModeInfo` / `_TetrisMemberInfo` messages, which should initialize the scene
+and board. This is a verified connection and room-request path, not a playable room.
 
 `Cmd_ChannelOrderTypeSingleModeRoomInfoTetrisToC` (`0x04B61A2A`) has a smaller
 layout: `u32 id | string | u32 | u8` (`Serialize FUN_00443D90`). Its role in the

@@ -16,10 +16,15 @@ Working, verified with the real client (`tools/live_check.py`):
 - Secure channel handshake and both stream directions
 - Channel authorization, user id, channel entry, member list, room list and item state;
   the client reaches the channel screen with an empty room list
+- Single Mode AutoEnter, connection to the game socket on `15002`, and the 48-byte
+  secure handshake; the client sends `EnterRoomToS` and `AlterRoomToS`
+  (manual WineDbg/dumpcap run)
 
-Not yet working: live-verified AutoEnter/game-socket entry and Single Mode gameplay.
-The game listener still captures frames but does not send a start-game state or turn
-updates. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
+Not yet working: game-room scene initialization and Single Mode gameplay. The
+listener replies to `EnterRoomToS` with the recovered `EnterRoomToC`, but the
+client still faults at `Tet4.exe:0x004FE2D5` because the game scene
+(`[0x64EBE8+0x8EC]`) is null. The start-game state and turn updates are not
+implemented. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Quick start
 

@@ -1,0 +1,26 @@
+# Provenance levels for `metadata/*.tsv`.
+
+`observed`
+: Read directly from the binary: bytes, RTTI, a vtable entry, a decorated export,
+  or a live debugger stop. The address and the fact are not inferred.
+
+`derived`
+: Follows from observed facts. Example: slot 10 of the vtable at `0x5FA244`
+  points at `0x5870C0`, and that function writes `[this+0x8EC]`, so the role is
+  "scene creation" even though the original method name is not known.
+
+`provisional`
+: A working name or role for the reconstruction. It is useful for navigation but
+  must not be cited as the original name.
+
+`inferred`
+: A hypothesis that still needs a live run, a cross-reference, or a second
+  decompiler. Keep it out of `src/` until it becomes `observed` or `derived`.
+
+Rules:
+
+- Every address is a virtual address in the original image (image base `0x400000`
+  for `Tet4.exe`), not a file offset.
+- A `?` size means the function boundary was not confirmed; do not guess it.
+- `symbol` is unique per `(address, symbol)` pair; the same address may appear
+  once as a function and once as an instruction only when the role differs.

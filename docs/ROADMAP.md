@@ -172,6 +172,18 @@ response is accepted.
 - [ ] Verify the result screen, completion state, and clean return to the lobby.
 - [ ] Verify reconnect/restart after a completed or abandoned game.
 
+## Reconstruction track
+
+- [x] Exact VC9 SP1 compiler (`15.00.30729.01`) under wibo, compile-only,
+      verified with an i386 COFF object; see `docs/TOOLCHAIN.md`.
+- [x] `reconstruction/` scaffold with provenance tables and the scene slice.
+- [x] Pilot `GetTetSceneManager` (`FUN_005810D0`): opcode and operand shape match
+      the original after address relocation normalisation.
+- [ ] Recover `CTetSceneManager` fields and vtable method names from RTTI and call
+      sites.
+- [ ] Reconstruct the `CF5GameWnd` update path and the `k66e` mode selection.
+- [ ] Continue with room/start-game messages and the Tetris board.
+
 ## Engineering / regression tasks
 
 - [x] Live-run harness starts TPack, CDS, channel and game-socket services, records

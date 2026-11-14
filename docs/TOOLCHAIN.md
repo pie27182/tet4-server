@@ -52,6 +52,13 @@ PATH=/usr/bin:/bin ../wibo-x86_64 "$TC/VC/bin/cl.exe" /c /O2 /MT /Z7 \
 
 The result is an i386 COFF object; `objdump -f` reports `pe-i386`.
 
+## Language level
+
+VC9 is a C++03 compiler. Nested namespace definitions such as
+`namespace tet4::scene` and `nullptr` do not compile. Write
+`namespace tet4 { namespace scene { ... } }` and use `0`; this also matches the
+original client's language level.
+
 ## Limits
 
 - wibo 1.2.0 cannot run `link.exe` (it aborts on `kernel32!lstrcmpiW`). Use `/c`

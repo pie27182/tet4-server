@@ -92,9 +92,14 @@ serializer test proves layout, not that the client accepts the message.
       `u32 | str | str | u32 | u32 | str x4 | u32 | str | str | u32 | u32`;
       AlterRoomToS is `u32 | u32 | str x4`. The parser logs only string lengths
       and integer fields, not opaque string contents.
+- [x] Isolate the game-socket close: it is a page fault, not a timeout.
+      WineDbg stops at `Tet4.exe:0x004FE2D5` in `CF5GameWnd` (`FUN_004fdbc0`)
+      on `mov ecx,[eax+0x70]` with `EAX=0`; the game scene pointer
+      `[0x64EBE8 + 0x8EC]` is null.
 - [ ] Recover and implement the successful room-entry response and the required
-      room-info/member-list sequence. The client currently closes the game socket
-      after the two requests because the server sends no application response.
+      room-info/member-list sequence. Start from
+      `Cmd_Room_EnterRoomToC::Converter` (`HgCom3.dll:0x6013C940`), then verify
+      that the scene pointer is initialized instead of null.
 - [x] Recover the top-level `Cmd_ChannelOrderTypeSingleModeRoomInfoTetrisToC`
       layout (`u32 | string | u32 | u8`) and add a serializer test. Its role and
       values remain unverified; do not send it until the live sequence confirms it.

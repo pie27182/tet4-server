@@ -135,8 +135,13 @@ These layouts come from the original `HgCom3.dll` serializer/deserializer pairs
 (`FUN_6012ad90/FUN_6012aec0` and `FUN_6012bfe0/FUN_6012c080`). Their
 individual field meanings are not yet established. The listener now parses these
 two requests and logs only numeric fields and string lengths (not string contents).
-It still sends no game-level response; the successful room-entry reply, initial
-board, and per-turn updates remain to be recovered.
+It still sends no game-level response. The socket close is not a timeout: WineDbg
+catches a page fault at `Tet4.exe:0x004FE2D5` inside `CF5GameWnd`
+(`FUN_004fdbc0`), at `mov ecx,[eax+0x70]` with `EAX=0`. The dereferenced object is
+`[0x64EBE8 + 0x8EC]`, the game scene, which is still null because no room-entry
+reply has created it. The next target is `Cmd_Room_EnterRoomToC::Converter`
+(`HgCom3.dll:0x6013C940`); the successful room-entry reply, initial board, and
+per-turn updates remain to be recovered.
 
 The independent Tetris engine is not connected to the wire protocol. The nested
 `StartNewGameToC` messages, `_SingleModeInfo`, `_TetrisMemberInfo`, board

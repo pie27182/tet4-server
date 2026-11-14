@@ -152,3 +152,50 @@ socket is gone; it must not be treated as the original cause.
 5. The board/piece constants and scoring rules expected by the client's local
    game loop; these are not yet recovered.
 
+
+
+## AddMemberToC server-side probe
+
+The Tetris-specific command has now been reconstructed as a serializer candidate
+in `tet4server/single_mode.py` on branch
+`feat/single-mode-add-member-bootstrap`.
+
+- Application message ID: `0x0AB84D0A`.
+- Tet4.exe registration: `PC_RegisterX2M(0x0AB84D0A, 3, FUN_00456BC0, ...)`.
+  The reply therefore needs three leading `0x09D0057A` XLBP layer-alignment
+  markers. The HgCom3 layer-0 message with the same wire ID is a different
+  converter and must not be substituted.
+- The outer command writes the constructor's `&LAB_005216ca` field, then
+  nested `_TetrisMemberInfo` (type ID `0x0FFA613A`).
+- The member record contains the member-id string and a vector with one
+  `_SingleModeInfo` entry (type ID `0x0071FA1A`). The entry's first numeric
+  field at `+0x0c` is used as the game-model map key by `FUN_004ebf70`.
+  Slot/index `0` is the initial Single Mode candidate, not live-confirmed.
+- The serializer field orders are taken from `FUN_00453330`,
+  `FUN_00453360`, `FUN_0044d2a0`, `FUN_0044d370`,
+  `FUN_00459790`, `FUN_0044c8c0`, `FUN_0044c950`, and
+  `FUN_004596d0`.
+
+**Important limitation:** the default nested `_TetrisSchoolInfo` child at
+`+0x4c` is still a candidate. The code uses a zero/default `_UseAbleItem`
+record because its type and constructor are present in the same XDR family,
+but there is no live capture proving that this is the right child or that the
+zero/default profile is accepted. The outer tag `0x005216CA` is the address
+returned by the AddMember command's vfunc, and likewise needs live validation.
+
+To test without changing ordinary server behavior, the game handler sends this
+candidate only when started with:
+
+```sh
+TET4_EXPERIMENTAL_ADD_MEMBER_BOOTSTRAP=1 python -m tet4server
+```
+
+When enabled, the current sequence is `EnterRoomToC`, layer-3
+`AddMemberToC`, then the existing Korean-service start vector. The option is
+off by default so an unverified nested profile cannot silently destabilize
+normal runs.
+
+This is a bootstrap experiment, not a claim that Single Mode is playable yet.
+The game socket still needs a live validation of the packet and lifecycle;
+`PolyMinoPutToS` and `GameReportToS` remain capture-only, and the standalone
+Tetris engine is not yet connected to the original client's update messages.

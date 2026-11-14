@@ -38,7 +38,7 @@ if [ -f "$ROOT/fields/$NAME.tsv" ]; then
 fi
 mkdir -p "$PROJ" "$OUT"
 export XDG_CONFIG_HOME="$ROOT/work/xdg/config" XDG_CACHE_HOME="$ROOT/work/xdg/cache"
-"$GHIDRA" "$PROJ" "classes_${NAME}" -import "$MODULE" -overwrite \
+"$GHIDRA" "$PROJ" "classes_${NAME}" -max-cpu "${GHIDRA_MAX_CPU:-1}" -import "$MODULE" -overwrite \
     -scriptPath "$DECOMP_SCRIPTS" \
     -scriptPath "$MS_SCRIPTS" \
     -scriptPath "$ROOT/tools" \

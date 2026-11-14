@@ -179,9 +179,14 @@ before it.
 
 - [x] Exact VC9 SP1 compiler (`15.00.30729.01`) under wibo, compile-only, for
       later function matching; see `docs/TOOLCHAIN.md`.
-- [ ] Full REA decompilation of `Tet4.exe` into `work/decompiled-rea/Tet4.exe`.
-- [ ] Same for `HgCom3.dll`, `HgModel3.dll`, `HgCtr3.dll`, `HgSock3.dll` and the
-      remaining client modules.
+- [x] Full REA decompilation of `Tet4.exe`: 18,683 bodies, 1,062 external,
+      0 failed.
+- [x] Same for the protocol modules `HgCom3.dll`, `HgSock3.dll`, `HgModel3.dll`,
+      `HgCtr3.dll`, `CDSClientConnector.dll`, `TPackClientConnector.dll`,
+      `XInNetwork.dll`, `XStream.dll`.
+- [x] All 33 native Hangame modules: 79,521 indexed functions, 68,470 bodies,
+      11,049 external, 2 Ghidra failures. See `docs/DECOMPILATION.md`.
+- [ ] Decompile the .NET launcher `h-tetra.exe` to C# with ILSpy.
 - [ ] Build the class, field and vtable inventory from the complete dump.
 - [ ] Only then lay out the readable `src/`/`include/` tree.
 

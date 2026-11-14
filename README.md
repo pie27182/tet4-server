@@ -53,6 +53,8 @@ troubleshooting and every step: [`docs/REPRODUCE.md`](docs/REPRODUCE.md).
   generated C++03 skeletons.
 - [`docs/RECOVERY.md`](docs/RECOVERY.md) — the DLL-first recovery queue and the
   rules for readable class/field/method output.
+- [`docs/ALTERNATIVES.md`](docs/ALTERNATIVES.md) — faster class-recovery tools
+  (SuperGhidra, IDA, Binary Ninja, OOAnalyzer) and their trade-offs.
 - [`docs/CLIENT.md`](docs/CLIENT.md) — how the client works: ports, framing, TPack,
   CDS, secure channel, messages. Facts marked as seen on the wire or read from code.
 - [`docs/READING.md`](docs/READING.md) — how to read the reconstructed code, which

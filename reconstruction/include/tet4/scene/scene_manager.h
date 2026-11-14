@@ -22,5 +22,19 @@ extern CTetSceneManager* g_tet_scene_manager;
 // Original FUN_005810D0: mov eax, [0x64EBE8]; ret.
 CTetSceneManager* GetTetSceneManager();
 
+// Scene modes from FUN_004FC280 / FUN_004FE660.
+enum SceneMode {
+    kSceneModeNone = 0,
+    kSceneModeNormal = 1,
+    kSceneModeFlag = 2,
+    kSceneModeRace = 3,
+    kSceneModeSurvival = 4,
+    kSceneModeShadow = 5
+};
+
+// Decision slice of FUN_004FE660. The original also calls the app's scene
+// factory and CVisualManager::SetProject; those calls are not reconstructed yet.
+int SceneModeFromChar(char mode, int flag);
+
 }  // namespace scene
 }  // namespace tet4

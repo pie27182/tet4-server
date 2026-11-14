@@ -7,7 +7,7 @@ address	size	symbol	owner	role	provenance	evidence	notes
 0x5705d0	229	CTetSceneManager_Shadow::~CTetSceneManager_Shadow	CTetSceneManager_Shadow	destructor	observed	REA; restores vftable 0x5f9af4	
 0x56f6a0	?	CTetSceneManager_Shadow::CreateScene	CTetSceneManager_Shadow	slot 10 thunk	observed	REA: thunk to 0x5870c0	single-mode override
 0x4fc280	?	TetSceneManagerFactory	Tet4.exe	mode factory	derived	REA; switch 1..5; case 5 calls FUN_005707a0	argument is mode
-0x4fe660	?	SelectSceneManager	Tet4.exe	mode dispatcher	derived	REA; H->5, N/Y->1, R->3, S->4, non-zero flag->2	room mode character
+0x4fe660	?	SelectSceneManager	Tet4.exe	mode dispatcher	derived	REA; H->5, N/Y->1, R->3, S->4, non-zero flag->2	decision slice in SceneModeFromChar; factory call omitted
 0x4f9000	?	SelectRoomMode	Tet4.exe	room mode selection	derived	REA; CGameReg::Get(SHADOW), NYRSH array	uses k66e room type
 0x4fdbc0	2711	CF5GameWnd::Update	CF5GameWnd	render/update path	provisional	REA; fault at 0x4fe2d5 reads [0x64ebe8+0x8ec]	crash site; name provisional
 0x4fe2d5	3	CF5GameWnd::Update fault instruction	CF5GameWnd	instruction	observed	REA: mov ecx,[eax+0x70], EAX=0	fault when scene is null

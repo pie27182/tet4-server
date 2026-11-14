@@ -66,7 +66,7 @@ def validate(path: Path) -> list[str]:
         for column in ("symbol", "owner", "role", "evidence"):
             if not row[column].strip():
                 errors.append(f"{path}:{number}: empty {column}")
-        key = (row["address"], row["symbol"])
+        key = (row["address"], row["symbol"], row["owner"], row["role"])
         if key in seen:
             errors.append(f"{path}:{number}: duplicate {key}")
         seen.add(key)

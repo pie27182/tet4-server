@@ -177,8 +177,12 @@ response is accepted.
 - [x] Exact VC9 SP1 compiler (`15.00.30729.01`) under wibo, compile-only,
       verified with an i386 COFF object; see `docs/TOOLCHAIN.md`.
 - [x] `reconstruction/` scaffold with provenance tables and the scene slice.
+- [x] Full vtable map for `CTetSceneManager` (36 slots) and
+      `CTetSceneManager_Shadow` (37 slots) in `metadata/scene_vtable.tsv`.
 - [x] Pilot `GetTetSceneManager` (`FUN_005810D0`): opcode and operand shape match
       the original after address relocation normalisation.
+- [x] Decision slice of `FUN_004FE660` (`SceneModeFromChar`) reconstructed in C++03
+      and compiled with VC9 SP1.
 - [ ] Recover `CTetSceneManager` fields and vtable method names from RTTI and call
       sites.
 - [ ] Reconstruct the `CF5GameWnd` update path and the `k66e` mode selection.

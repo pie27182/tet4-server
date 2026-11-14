@@ -13,6 +13,11 @@ class ReconstructionMetadataTest(unittest.TestCase):
             validate(ROOT / "reconstruction/metadata/scene.tsv"), []
         )
 
+    def test_scene_vtable_is_valid(self):
+        table = ROOT / "reconstruction/metadata/scene_vtable.tsv"
+        self.assertEqual(validate(table), [])
+        self.assertEqual(len(table.read_text().splitlines()), 74)  # header + 73
+
     def test_rejects_unknown_provenance(self):
         with tempfile.TemporaryDirectory() as temp:
             table = Path(temp) / "bad.tsv"

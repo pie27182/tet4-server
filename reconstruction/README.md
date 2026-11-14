@@ -15,6 +15,10 @@ reconstruction/
   include/tet4/scene/      reviewed headers
   src/scene/               reviewed C++ for the scene slice
   metadata/                address, role and provenance tables
+    scene.tsv              scene functions and the crash site
+    scene_vtable.tsv       CTetSceneManager and Shadow vtable slots
+    provenance.md          legend for the tables
+  reports/                 subsystem status and open questions
   build/                   compile checks that use the original VC9 toolchain
 ```
 
@@ -79,6 +83,11 @@ c3               ret
 
 The opcode and operand shape match after normalising the absolute address. This
 is the pilot for the matching workflow; it does not yet prove the class layout.
+
+`SceneModeFromChar` reconstructs the decision slice of `FUN_004FE660`
+(`H -> Shadow`, `N/Y -> Normal`, `R -> Race`, `S -> Survival`). The original
+function also calls the scene factory and `CVisualManager::SetProject`; those
+calls are not reconstructed yet. See `reports/scene.md` for the subsystem status.
 
 ## Rules
 

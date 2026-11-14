@@ -96,10 +96,14 @@ serializer test proves layout, not that the client accepts the message.
       WineDbg stops at `Tet4.exe:0x004FE2D5` in `CF5GameWnd` (`FUN_004fdbc0`)
       on `mov ecx,[eax+0x70]` with `EAX=0`; the game scene pointer
       `[0x64EBE8 + 0x8EC]` is null.
-- [ ] Recover and implement the successful room-entry response and the required
-      room-info/member-list sequence. Start from
-      `Cmd_Room_EnterRoomToC::Converter` (`HgCom3.dll:0x6013C940`), then verify
-      that the scene pointer is initialized instead of null.
+- [x] Recover `Cmd_Room_EnterRoomToC` (`0x0974DCEA`, converter
+      `HgCom3.dll:0x6013C940`) and live-probe it after `EnterRoomToS`. The
+      24-byte reply is delivered, but the scene pointer remains null and the
+      `0x4FE2D5` fault persists; `EnterRoomToC` alone is not sufficient.
+- [ ] Recover the start-game container
+      `Cmd_Room_OrderTypeStartNewGameTetrisToC` (`0x06FE5D0A`) and the nested
+      scene/board messages, then verify that `[0x64EBE8+0x8EC]` is initialized
+      instead of null.
 - [x] Recover the top-level `Cmd_ChannelOrderTypeSingleModeRoomInfoTetrisToC`
       layout (`u32 | string | u32 | u8`) and add a serializer test. Its role and
       values remain unverified; do not send it until the live sequence confirms it.

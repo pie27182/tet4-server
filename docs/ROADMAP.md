@@ -109,15 +109,27 @@ serializer test proves layout, not that the client accepts the message.
       (`HgModel3.dll:0x6090A650`) reads `k66e` and calls
       `CRoomData::SetRoomType`; the RoomInfo converters carry `k66e`.
       `EnterRoomToC` does not, which explains the null scene.
-- [ ] Send a room-info response with `k66e="SHADOW"` (and the matching room
-      metadata) before or with AutoEnter, then verify that
-      `CTetSceneManager_Shadow` is selected and `[0x64EBE8+0x8EC]` is non-null.
+- [ ] Recover and test the exact Shadow room-type code in `k66e`. The room
+      selector `FUN_004F9000` compares the first byte of `CRoomData+0x30`
+      against `"NYRSH"`; the `SHADOW` registry flag enables `'H'`, and
+      `FUN_004FE660('H',0)` selects mode 5. Current `k66e="N000S"` starts
+      with `N` and does not identify a Shadow room. Do not use literal
+      `"SHADOW"` (starts with `S`, mode 4). Test an H-prefixed variant
+      (e.g. `H000S` as a controlled hypothesis), then verify
+      `FUN_004F9000 -> fillEnterRoomParameter -> lobbyState.moveNext`,
+      `CTetSceneManager_Shadow`, and non-null `[0x64EBE8+0x8EC]`.
 - [x] Recover the top-level `Cmd_ChannelOrderTypeSingleModeRoomInfoTetrisToC`
       layout (`u32 | string | u32 | u8`) and add a serializer test. Its role and
       values remain unverified; do not send it until the live sequence confirms it.
 - [ ] Recover the nested `_SingleModeInfo` (`0x0071FA1A`) fields.
 - [ ] Verify the real client transitions from the lobby to the Single Mode room screen
-      without a crash or indefinite wait.
+      without a crash or indefinite wait, and confirm that `FUN_004F9000` reaches
+      `lobbyState.moveNext` for the selected H-prefixed room.
+- [ ] After room transition, check whether the client sends
+      `Cmd_Room_StartNewGameToS` (`0x072585BA`) through
+      `CGameLobbyModel::Msg_SendRoomStartNewGame` (`HgModel3.dll:0x609173F0`);
+      defer the Korean `StartNewGameToC` response until this request only if the
+      live Single Mode trace confirms that ordering.
 
 The channel-side request was confirmed on wire, but the previous server version did
 not dispatch it because it appeared after LayerAlignment markers. The parser fix is

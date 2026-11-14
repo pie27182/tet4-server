@@ -282,6 +282,21 @@ matters, with `tools/disasm.py`:
 .venv/bin/python tools/disasm.py client/HgSock3.dll 0x606041d0 --count 20
 ```
 
+### 6.6 VC9 compiler for function-level matching
+
+`docs/TOOLCHAIN.md` fetches the exact MSVC 9.0.30729.01 compiler (VC9 SP1) and
+runs it under wibo in `work/toolchains/`. It is compile-only: `wibo` cannot run
+`link.exe`, and the pack has no MFC/ATL headers. Use `/c` for comparing one
+function's COFF, not for rebuilding the whole client. MinGW is not a substitute
+for byte matching: the code generator and ABI differ.
+
+```
+https_proxy=http://127.0.0.1:10808 tools/fetch_msvc9.sh
+```
+
+The download and the extracted toolchain are gitignored; the script verifies
+both SHA-256 checksums.
+
 ## 7. Current protocol boundary
 
 - **Channel progression is live-verified through item state.** The client accepts the

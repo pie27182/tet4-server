@@ -51,6 +51,8 @@ troubleshooting and every step: [`docs/REPRODUCE.md`](docs/REPRODUCE.md).
   CDS, secure channel, messages. Facts marked as seen on the wire or read from code.
 - [`docs/READING.md`](docs/READING.md) — how to read the reconstructed code, which
   names are original, and the reference documentation behind the tools.
+- [`docs/TOOLCHAIN.md`](docs/TOOLCHAIN.md) — the exact VC9 SP1 compiler for
+  function-level matching, the download script, and its limits.
 - [`docs/METHOD.md`](docs/METHOD.md) — the rules and the wrong turns.
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — what is done and what remains.
 - [`docs/SERVER.md`](docs/SERVER.md) — start the local protocol services and current Single Mode boundary.

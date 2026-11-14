@@ -15,14 +15,26 @@ for src in "$WORK/reconstructed" "$WORK/decompiled-classes" "$WORK/rtti" \
     fi
 done
 
-rm -rf "$OUT/ghidra" "$OUT/classes" "$OUT/rtti" "$OUT/rea-metadata"
-mkdir -p "$OUT/ghidra" "$OUT/classes" "$OUT/rtti" "$OUT/rea-metadata"
+rm -rf "$OUT/ghidra" "$OUT/ghidra-extra" "$OUT/classes" "$OUT/rtti" \
+       "$OUT/rea-metadata" "$OUT/framework"
+mkdir -p "$OUT/ghidra" "$OUT/ghidra-extra" "$OUT/classes" "$OUT/rtti" \
+         "$OUT/rea-metadata" "$OUT/framework"
 
 cp -a "$WORK/reconstructed/." "$OUT/ghidra/"
+# The older consolidated dump covers the modules that the newer
+# reconstructed/ export does not include; keep only those extras.
+for f in "$WORK"/decompiled/*.c "$WORK"/decompiled/*.index.tsv; do
+    [ -e "$f" ] || continue
+    base="$(basename "$f")"
+    if [ ! -e "$OUT/ghidra/$base" ]; then
+        cp -a "$f" "$OUT/ghidra-extra/"
+    fi
+done
 cp -a "$WORK/decompiled-classes/." "$OUT/classes/"
 cp -a "$WORK/rtti/." "$OUT/rtti/"
 cp -a "$WORK/decompiled-rea/SUMMARY.md" \
       "$WORK/decompiled-rea/all-functions.tsv" "$OUT/rea-metadata/"
+cp -a "$WORK/export/." "$OUT/framework/"
 
 # Reproducible archive: sorted names, fixed mtime/owner, no gzip timestamp.
 tar --sort=name --mtime='UTC 2020-01-01' --owner=0 --group=0 \

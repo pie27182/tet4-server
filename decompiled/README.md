@@ -24,6 +24,8 @@ not exact.
 | `rea-full.tar.gz` | Complete REA per-function dump for all 33 native modules | 24 MB compressed |
 | `rea-metadata/` | `all-functions.tsv` and `SUMMARY.md` from the same dump | 6.2 MB |
 | `ghidra/` | Consolidated Ghidra C/H/index for the key modules, including `Tet4.exe`, `HgCom3.dll`, `HgCtr3.dll`, `HgModel3.dll`, `HgSock3.dll`, `HgKor3.dll`, `TPackClientConnector.dll`, `XInNetwork.dll`, `XStream.dll`, `CDSClientConnector.dll` | 26 MB |
+| `ghidra-extra/` | Consolidated `.c`/`.index.tsv` for the 19 remaining modules (older export; no `.h`), so every native module has a single-file text dump | 16 MB |
+| `framework/` | Focused decompilation of `PC_ConvertM2X` / `PC_ConvertX2M` and the batch-format note | 16 KB |
 | `classes/` | Per-DLL class recovery: `*.h`, `*.c`, `*.index.tsv` for 32 modules | 71 MB |
 | `rtti/` | Class/vtable inventory, all 2,352 vtables and 33,871 slots, plus 30 generated skeleton headers and name maps | 5.9 MB |
 
@@ -35,6 +37,9 @@ The full REA archive contains:
 - 2 functions whose bodies could not be written
   (`HgTool3.dll CMyInfoCtrl::OnPaint` at `0x60721170` and
   `IRIA.dll FUN_10002430` at `0x10002430`).
+
+`rea-full.tar.gz` SHA-256:
+`725a2c88266849778fd70a42a533d16f2ce3561575a10ae400ac2b4ae1a42d8b`.
 
 Extract it with:
 
@@ -64,9 +69,11 @@ The largest class files are `HanVM3d.dll.h` (about 1.7 MB / 1,068 classes) and
 3. `ghidra/Tet4.exe.c` — the main client logic.
 4. `ghidra/HgCom3.dll.c`, `HgModel3.dll.c`, `HgCtr3.dll.c` — protocol classes,
    lobby models and controllers.
-5. `classes/<module>.h` — recovered fields, `this` types and signatures for a
+5. `ghidra-extra/<module>.c` — consolidated text for the remaining 19 modules
+   (`GAS`, `HGF5V`, `HgView3`, `HgDlg3`, `IRIA`, `neon`, DirectX wrappers, etc.).
+6. `classes/<module>.h` — recovered fields, `this` types and signatures for a
    specific DLL.
-6. `rea-full.tar.gz` — per-function fallback when the consolidated file is
+7. `rea-full.tar.gz` — per-function fallback when the consolidated file is
    hard to navigate.
 
 The REA dump is the canonical per-function record. The consolidated `ghidra/`

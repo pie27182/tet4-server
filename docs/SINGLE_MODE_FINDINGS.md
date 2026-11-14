@@ -152,3 +152,39 @@ socket is gone; it must not be treated as the original cause.
 5. The board/piece constants and scoring rules expected by the client's local
    game loop; these are not yet recovered.
 
+## PR #22 layer-3 AddMemberToC live probe (2026-11-15)
+
+Branch `feat/single-mode-add-member-bootstrap` was run against the original
+client with `TET4_EXPERIMENTAL_ADD_MEMBER_BOOTSTRAP=1`.
+
+What was confirmed:
+
+- The layer-3 framing is accepted: `FUN_00456BC0` (the registered
+  `0x0AB84D0A` converter) is reached.
+- The outer sequence `0x0AB84D0A | 0x5216CA | nested member` is parsed far
+  enough to call `FUN_00432280`, the local-member branch that is supposed to
+  populate the game model.
+- The main-scene fault `0x461E9D` does not occur in this run because the
+  client dies earlier, inside the AddMember handling.
+
+What failed:
+
+- The client faults at `0x4FBBB4` (`movb (%eax),%dl`, EAX=0) immediately after
+  `FUN_00432280`. This is a null string read in the member/profile handling,
+  not a layer or framing error.
+- The current candidate sends empty profile strings and a zero/default nested
+  record. The AddMember converter consumes many profile keys
+  (`k3e`, `k23e`, `k24e`, `k7e`, `k8e`, `k11e`, `k10e`, `k12e`,
+  `k26e`..`k35e`, `k37e`, `k38e`, `k102e`, `k151e`, `k201e`, `k153e<i>`);
+  at least one of them is dereferenced and must not be null.
+- The original PR candidate also used a wrong `_TetrisSchoolInfo` shape
+  (`_UseAbleItem` child and repeated nested type ids). The serializer at
+  `FUN_00443390/FUN_00443400` shows the actual nested school fields are:
+  one byte, one string, one u32, one u16. Nested IMessage fields do not repeat
+  their type identifiers. This correction alone did not remove the
+  `0x4FBBB4` fault, so the missing profile fields are still the blocker.
+
+Conclusion: AddMemberToC is the right message class and the layer-3 route is
+correct, but the payload is not accepted yet. A real capture or full field
+semantics for the member profile are required before this can be called a
+working bootstrap.

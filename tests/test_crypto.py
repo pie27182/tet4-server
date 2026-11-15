@@ -3,8 +3,8 @@ import unittest
 
 from tet4server import crypto
 
-# Captured from the real client, run16 (raw/*.bin): the 48-byte client share,
-# then the 108 bytes the client sent after our 48-byte reply.
+# run16: the client's 48-byte share and the 108 bytes it sent after the server's
+# share, which was the plaintext 0, 1, ..., 23 as little-endian u16.
 CLIENT_SHARE = bytes.fromhex(
     "d33bdf696bac88168ab62b1761a3cd381b62aabf1a11925193e07fbd57b8d564"
     "f6f24c23084ed3aa5ccdf2c3c964fc4a")
@@ -13,40 +13,49 @@ CLIENT_FIRST_FRAME = bytes.fromhex(
     "ab8017a3409722ad676475f65e3dad9df2ef5b0c95e76dfeeace45a4f3b2030"
     "f320938a8dd1dc27eb9807fcef8e35a80c409124dd8805413ff096144ca5728f"
     "f5823341936d2dd78967cd29ba")
-# Our reply in run16 was TEA(<24H range(24)).
-SERVER_PLAIN = struct.pack("<24H", *range(24))
+RUN16_SERVER_PLAIN = struct.pack("<24H", *range(24))
 
 
-class MtTest(unittest.TestCase):
-    def test_init_by_array_reference_vector(self):
-        mt = crypto.MT19937.by_array([0x123, 0x234, 0x345, 0x456])
-        self.assertEqual(mt.next32(), 1067595299)
+class CaptureTest(unittest.TestCase):
+    def test_run16_first_frame_decrypts_to_auth_request(self):
+        master = crypto.master_key(CLIENT_SHARE, crypto.seal_share(RUN16_SERVER_PLAIN))
+        plain = crypto.upstream_cipher(master).decrypt(CLIENT_FIRST_FRAME)
+        self.assertEqual(struct.unpack(">I", plain[:4])[0], len(plain) - 4)
+        self.assertEqual(plain[4:8], b"XLBP")
+        self.assertEqual(plain[8:12].hex(), "0365c03a")  # Cmd_AuthToS
+        self.assertIn(b"TicketAuthByMemberId", plain)
 
 
-class TeaTest(unittest.TestCase):
-    def test_roundtrip_share(self):
-        plain = bytes(range(48))
-        self.assertEqual(crypto.decrypt_share(crypto.encrypt_share(plain)), plain)
+class PrimitiveTest(unittest.TestCase):
+    def test_mt19937_init_by_array_reference_output(self):
+        # First genrand_int32() of the reference mt19937ar.c after
+        # init_by_array({0x123, 0x234, 0x345, 0x456}).
+        self.assertEqual(crypto.MT19937([0x123, 0x234, 0x345, 0x456]).next32(), 1067595299)
 
+    def test_share_round_trip(self):
+        plain = crypto.new_share()
+        self.assertEqual(len(plain), crypto.SHARE_SIZE)
+        self.assertEqual(crypto.open_share(crypto.seal_share(plain)), plain)
 
-class StreamTest(unittest.TestCase):
-    def test_encrypt_then_decrypt_with_mirror_state(self):
-        master = list(range(1, 13))
-        msg = bytes(range(200))
-        ct = crypto.Stream.from_master(master, "encrypt_to_client").encrypt(msg)
-        self.assertNotEqual(ct, msg)
-        self.assertEqual(crypto.Stream.from_master(master, "encrypt_to_client").decrypt(ct), msg)
+    def test_both_sides_derive_the_same_master_key(self):
+        client, server = crypto.seal_share(crypto.new_share()), crypto.seal_share(crypto.new_share())
+        self.assertEqual(crypto.master_key(client, server), crypto.master_key(client, server))
+        self.assertEqual(len(crypto.master_key(client, server)), 12)
 
-    def test_run16_first_frame_decrypts_to_xlbp(self):
-        server_wire = crypto.encrypt_share(SERVER_PLAIN)
-        master = crypto.master_words(CLIENT_SHARE, server_wire)
-        frame = crypto.Stream.from_master(master, "decrypt_client").decrypt(CLIENT_FIRST_FRAME)
-        length = struct.unpack(">I", frame[:4])[0]
-        self.assertEqual(length, 104)
-        self.assertEqual(frame[4:8], b"XLBP")
-        self.assertEqual(frame[8:12].hex(), "0365c03a", "Cmd_AuthToS")
-        self.assertIn(b"TET4", frame)
-        self.assertIn(b"TicketAuthByMemberId", frame)
+    def test_each_direction_decrypts_what_its_peer_encrypts(self):
+        master = tuple(range(1, 13))
+        data = bytes(range(256)) * 3  # several blocks and a partial one
+        for make in (crypto.upstream_cipher, crypto.downstream_cipher):
+            sealed = make(master).encrypt(data)
+            self.assertNotEqual(sealed, data)
+            self.assertEqual(make(master).decrypt(sealed), data)
+
+    def test_cipher_state_carries_across_calls(self):
+        master = tuple(range(1, 13))
+        data = bytes(range(100))
+        whole = crypto.downstream_cipher(master).encrypt(data)
+        pieces = crypto.downstream_cipher(master)
+        self.assertEqual(pieces.encrypt(data[:13]) + pieces.encrypt(data[13:]), whole)
 
 
 if __name__ == "__main__":

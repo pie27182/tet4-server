@@ -1,4 +1,0 @@
-# RTTI-derived names for XDebug.dll.
-0x67403af0	std::basic_streambuf<char,std::char_traits<char>_>::uflow
-0x67407d4f	std::locale::_Locimp::`scalar_deleting_destructor'
-0x674093be	type_info::`scalar_deleting_destructor'

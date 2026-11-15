@@ -1,3 +1,0 @@
-class	type_descriptor	complete_object_locator	vtable	slots	bases	inheritance
-_com_error	0x1000b078	0x10009888	0x100091d0	1	_com_error	0x0
-type_info	0x1000b130	0x100098d0	0x1000920c	1	type_info	0x0

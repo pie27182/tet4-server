@@ -1,6 +1,6 @@
 # tet4-server
 
-A local server for the 2012 Hangame Tetris client, `Tet4.exe` 1.3.4. The client
+Multiplayer server for the 2012 Hangame Tetris client, `Tet4.exe` 1.3.4. The client
 stays unmodified apart from its TPack host names. The server implements the
 protocol the client already speaks, reconstructed from captured traffic and the
 client's code. [`docs/PROTOCOL.md`](docs/PROTOCOL.md) describes the protocol and

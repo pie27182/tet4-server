@@ -1,17 +1,21 @@
 __pycache__/
-*.pyc
 .venv/
-*.log
-*.pcap
-*.bin
-/captures/
-/game/
-*.exe
-*.dll
 
-# Local working data: the game client and everything derived from it.
-# Put your own copy in client/; the rest is created by the tools.
+# Your client copy and everything derived from it stay local. Captures,
+# traces and logs contain session tickets.
 /client
 /client-patched
+/traces
+*.exe
+*.dll
+*.pcap
+*.pcapng
+*.jsonl
+*.log
+*.bin
+
+# Working folders of earlier tool versions.
 /work
 /live-runs
+/captures
+/game

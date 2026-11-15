@@ -21,6 +21,14 @@ Single Mode plays end to end with the real client (Wine, headless under Xvfb):
 The client runs the game; the server keeps the records. Ultra opens after 500
 games, counted over all modes, as the client requires.
 
+With a database the server requires accounts: players register and log in with a
+name and password through `tools/client.py play`, and records are ranked across
+all players. [`docs/DEPLOY.md`](docs/DEPLOY.md) sets this up on a VPS.
+
+Not implemented: multiplayer rooms (versus, team and item battles), the shop,
+items, guilds, friends and chat. Their messages are not recovered yet; the client
+sends some of them and gets no reply.
+
 ## Running
 
 Python 3.10 or newer, standard library only.
@@ -34,9 +42,11 @@ python3 -m tet4server
 ```
 
 This listens on 127.0.0.1: TPack 10454, CDS 15000, channel 15001, game 15002.
-`--records FILE` keeps the Single Mode records and play counts in FILE across
-restarts; without it they last until the server stops. `--trace FILE` appends
-every decrypted message to FILE.
+Any account name is accepted and records last until the server stops.
+`--db FILE` keeps accounts and records in an SQLite file and requires a login (the
+account service listens on 15010); `--host` and `--public-host` set the address
+to listen on and the one announced to clients. `--trace FILE` appends every
+decrypted message to FILE.
 
 To run the client against it, copy your client folder into `client/` (it is
 git-ignored), then check it, make the patched copy and start it under Wine in a
@@ -55,9 +65,10 @@ python3 tools/client.py run
 ```
 
 `check` compares every file with the client's own `files.sha256.json`. `patch`
-writes `client-patched/`, whose `Tet4.exe` connects to the local TPack server.
-`run` starts it with the test account in `tools/bootstrap-sample.txt` and the
-Korean locale. The lobby shows the 내 아이템, 상점 and 싱글모드 (Single Mode) buttons.
+writes `client-patched/`, whose `Tet4.exe` connects to the local TPack server
+(`--host` for another server). `run` starts it with the test account in
+`tools/bootstrap-sample.txt` and the Korean locale; against a server with
+accounts, `play --server ADDRESS [--register]` logs in and starts it instead. The lobby shows the 내 아이템, 상점 and 싱글모드 (Single Mode) buttons.
 
 ## Layout
 
@@ -68,9 +79,10 @@ tet4server/  the server
   tpack.py     account service          cds.py      channel directory
   channel.py   channel service          game.py     game service
   lobby.py     rooms, records           server.py   listeners and command line
+  accounts.py  accounts, tickets, database, account service
 tests/       captured vectors, layouts, and a scripted client session
 tools/       client.py, the sample bootstrap, a winedbg command file
-docs/        PROTOCOL.md, DEBUGGING.md
+docs/        PROTOCOL.md, DEBUGGING.md, DEPLOY.md
 ```
 
 The decompiled client and the analysis scripts used to recover the protocol are

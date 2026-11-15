@@ -120,6 +120,7 @@ class Session:
                  handshake_delay: float = 0.0):
         self.service = service
         host, port = writer.get_extra_info("peername")[:2]
+        self.host = host
         self.peer = f"{host}:{port}"
         self._reader = reader
         self._writer = writer

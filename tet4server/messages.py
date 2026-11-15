@@ -81,6 +81,15 @@ class EnterChannel:
     k24e: bytes
 
 
+def read_auth(r: Reader) -> tuple[bytes, bytes]:
+    """AuthToS: u32 id | i64 | str account | i64 | str | str game | str ticket (the
+    bootstrap's k300e) | str method. Returns the account and the ticket."""
+    r.u64()
+    account = r.string()
+    r.u64(), r.string(), r.string()
+    return account, r.string()
+
+
 def read_enter_channel(r: Reader) -> EnterChannel:
     """Channel_EnterChannelByUserIdToS (converter 0x60138E50):
     u64 k601e | str k3e | str k22e | str k23e | str k24e | str k149e | u32 k167e |
@@ -168,13 +177,14 @@ def room_info(room: Room) -> bytes:
 
 # --- Channel replies ---------------------------------------------------------
 
-def auth_to_c() -> bytes:
+def auth_to_c(result: int = 0) -> bytes:
     """AuthToC (Serialize 0x601356E0): u32 id | _KeyType (i64 | str | i64 | str | str)
-    | str | str | i32 k161e. k161e = 0 is success (converter 0x6013F8B0)."""
+    | str | str | i32 k161e. k161e = 0 is success (converter 0x6013F8B0); any other
+    value stops the client at a notice dialog."""
     return b"".join([
         u32(Msg.AuthToC),
         i64(0), string(b""), i64(0), string(b""), string(b""),
-        string(b""), string(b""), i32(0),
+        string(b""), string(b""), i32(result),
     ])
 
 

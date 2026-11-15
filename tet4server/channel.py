@@ -1,18 +1,26 @@
-"""Channel service: login replies, lobby lists and Single Mode room creation."""
+"""Channel service: login, lobby lists and Single Mode room creation."""
+import asyncio
 import dataclasses
+import logging
 
 from . import messages as m
 from .lobby import Lobby
 from .messages import Endpoint, Msg
 from .xdr import Reader
+from .accounts import Database
 from .xlbp import Session, serve_messages
+
+log = logging.getLogger("tet4.channel")
 
 
 class ChannelConnection:
-    def __init__(self, session: Session, lobby: Lobby, game: Endpoint):
+    def __init__(self, session: Session, lobby: Lobby, game: Endpoint,
+                 db: Database | None = None):
         self.session = session
         self.lobby = lobby
         self.game = game
+        self.db = db
+        self.account: bytes | None = None    # set by a valid ticket when db is set
         self.member_id: bytes | None = None
         self.auto_enter: m.RoomRequest | None = None
         self.handlers = {
@@ -32,17 +40,37 @@ class ChannelConnection:
         finally:
             if self.member_id:
                 self.lobby.close_rooms_of(self.member_id)
+            if self.account:
+                self.lobby.log_out(self.account, self.session.host)
+
+    def _claim(self, member_id: bytes) -> bytes:
+        """The member this connection acts as; with accounts, only the logged-in one."""
+        if self.db and member_id != self.account:
+            raise ConnectionRefusedError(f"{member_id!r} is not the logged-in account")
+        return member_id
 
     async def on_auth(self, r: Reader) -> None:
+        if self.db is None:
+            await self.session.send(m.auth_to_c())
+            return
+        account, ticket = m.read_auth(r)
+        valid = await asyncio.to_thread(self.db.check_ticket, account.decode("latin-1"),
+                                        ticket.decode("latin-1"))
+        if not valid:
+            await self.session.send(m.auth_to_c(result=1))
+            raise ConnectionRefusedError(f"invalid ticket for {account!r}")
+        self.account = account
+        self.lobby.log_in(account, self.session.host)
+        log.info("%s logged in as %r", self.session.peer, account)
         await self.session.send(m.auth_to_c())
 
     async def on_get_user_id(self, r: Reader) -> None:
-        self.member_id = r.string()
+        self.member_id = self._claim(r.string())
         await self.session.send(m.get_user_id_to_c(self.member_id))
 
     async def on_enter_channel(self, r: Reader) -> None:
         request = m.read_enter_channel(r)
-        self.member_id = request.member_id
+        self.member_id = self._claim(request.member_id)
         # MetpInfo(4).k23e/k24e come back from this reply; Msg_SendEnterRoom needs them.
         await self.session.send(m.enter_channel_to_c(request.k23e, request.k24e))
         # The player's own record (layer 0, found by SGlobalInfo::MyData()) and its

@@ -1,11 +1,12 @@
-"""Rooms and Single Mode records, shared by the channel and game services."""
+"""Rooms, logged-in players and Single Mode records, shared by the channel and game
+services."""
+import asyncio
 import itertools
-import json
 import logging
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
 
+from .accounts import Database
 from .messages import FORTY_LINES, TOP, GameReport, Room, RoomRequest, SingleMode
 
 log = logging.getLogger("tet4.lobby")
@@ -18,15 +19,31 @@ class _Played:
 
 
 class Lobby:
-    def __init__(self, records: Path | None = None):
-        """`records`: a JSON file that keeps Single Mode records across restarts."""
+    def __init__(self, db: Database | None = None):
+        """With `db`, records are loaded from and written to the database."""
         self._rooms: dict[int, Room] = {}
         self._played: dict[tuple[bytes, int], _Played] = {}
-        self._path = records
-        if records and records.exists():
-            for e in json.loads(records.read_text(encoding="utf-8")):
-                self._played[(e["member"].encode("latin-1"), e["mode"])] = _Played(
-                    e["plays"], [(value, date.encode()) for value, date in e["top"]])
+        self._online: dict[bytes, str] = {}   # logged-in member -> client address
+        self._db = db
+        for name, mode, plays, top in db.load_single_mode() if db else []:
+            self._played[(name.encode("latin-1"), mode)] = _Played(
+                plays, [(value, date.encode()) for value, date in top])
+
+    @property
+    def requires_login(self) -> bool:
+        """With a database, players must log in with an account's ticket."""
+        return self._db is not None
+
+    def log_in(self, member_id: bytes, host: str) -> None:
+        self._online[member_id] = host
+
+    def log_out(self, member_id: bytes, host: str) -> None:
+        if self._online.get(member_id) == host:
+            del self._online[member_id]
+
+    def online_from(self, member_id: bytes, host: str) -> bool:
+        """Whether the member is logged in on a channel connection from `host`."""
+        return self._online.get(member_id) == host
 
     def rooms(self) -> list[Room]:
         return sorted(self._rooms.values(), key=lambda room: room.number)
@@ -50,7 +67,7 @@ class Lobby:
         rank = bests.index(own.top[0][0]) + 1 if own.top else 0
         return SingleMode(own.top, own.plays, rank, len(bests))
 
-    def add_game(self, report: GameReport) -> SingleMode:
+    async def add_game(self, report: GameReport) -> SingleMode:
         """Count a finished game and keep its result among the best TOP. Higher scores
         are better; in 40 lines the value is a time and only cleared runs count."""
         played = self._played.setdefault((report.member_id, report.mode), _Played())
@@ -63,14 +80,8 @@ class Lobby:
             kept = entry in played.top
         log.info("%r mode %d: %d%s", report.member_id, report.mode, report.value,
                  ", kept among the best" if kept else "")
-        if self._path:
-            self._save()
+        if self._db:
+            await asyncio.to_thread(
+                self._db.save_single_mode, report.member_id.decode("latin-1"), report.mode,
+                played.plays, [(value, date.decode()) for value, date in played.top])
         return self.single_mode(report.member_id, report.mode)
-
-    def _save(self) -> None:
-        entries = [{"member": member.decode("latin-1"), "mode": mode, "plays": p.plays,
-                    "top": [[value, date.decode()] for value, date in p.top]}
-                   for (member, mode), p in self._played.items()]
-        tmp = self._path.with_name(self._path.name + ".tmp")
-        tmp.write_text(json.dumps(entries, indent=1), encoding="utf-8")
-        tmp.replace(self._path)

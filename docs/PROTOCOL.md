@@ -141,12 +141,15 @@ CreateRoomToS                     -> CreateRoomToC, RoomInfoToC
 
 The client then connects to the game socket (section 7).
 
-**Cmd_AuthToS** 0x0365C03A: the account, `TET4`, the bootstrap's 32-character
-`k300e` and `TicketAuthByMemberId`, with u32 fields between them. **wire** The
-server does not check it.
+**Cmd_AuthToS** 0x0365C03A: `u32 id | i64 | str account | i64 | str | str TET4 |
+str ticket | str TicketAuthByMemberId`, the ticket being the bootstrap's `k300e`.
+**wire** Without a database the server does not check it; with one, the ticket
+must be one the account service issued to that account (`tet4server/accounts.py`).
 **Cmd_AuthToC** 0x008500CA: `u32 id | i64 | str | i64 | str | str | str | str |
 i32 k161e`, the five fields after the ID being a `_KeyType` (Serialize 0x601356E0).
-k161e 0 is success (converter 0x6013F8B0). Sent zero and empty. **live**
+k161e 0 is success (converter 0x6013F8B0); with any other value the client stops
+at an empty `알려드립니다` notice. Sent zero and empty, or k161e 1 for a refused
+ticket, after which the server closes the connection. **live**
 
 **Cmd_Channel_GetUserIdByMemberIdToS** 0x0FAB330A: `u32 id | str member`. **wire**
 **Cmd_Channel_GetUserIdToC** 0x0A80E29A: `u32 id | i64 | str k3e | str k2e |
@@ -363,7 +366,7 @@ for the layout and the readers below, **live** for each field's effect.
 The server keeps, per player and mode, the plays and the best five; only 40 lines
 runs that were cleared count as records. It ranks a player's best among the
 players it knows and dates records `YYYY.MM.DD` (the client's own date format is
-not known). Records live in memory, or in a JSON file with `--records FILE`. The
+not known). Records live in memory, or in the SQLite database with `--db FILE`. The
 profile at channel entry and every game report carry them.
 
 ## 9. Debugging

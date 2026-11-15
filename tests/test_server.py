@@ -8,6 +8,7 @@ from pathlib import Path
 
 from tet4server import crypto
 from tet4server import messages as m
+from tet4server.accounts import Database
 from tet4server.lobby import Lobby
 from tet4server.messages import GameReport, Msg
 from tet4server.server import Ports, Services
@@ -83,16 +84,16 @@ def room_request(msg_id: int) -> bytes:
         u32(0), u32(0), string(b""), u32(0), string(b"TET4"), string(b""), string(b"1")])
 
 
-class RecordTest(unittest.TestCase):
-    def play(self, lobby: Lobby, games, member: bytes = MEMBER) -> None:
+class RecordTest(unittest.IsolatedAsyncioTestCase):
+    async def play(self, lobby: Lobby, games, member: bytes = MEMBER) -> None:
         for mode, value, completed in games:
-            lobby.add_game(GameReport(member, mode, value, completed))
+            await lobby.add_game(GameReport(member, mode, value, completed))
 
-    def test_best_five_per_mode(self):
+    async def test_best_five_per_mode(self):
         lobby = Lobby()
-        self.play(lobby, [(0, 300, True), (0, 100, True), (0, 200, True), (0, 50, True),
-                          (0, 50, True), (0, 40, True), (1, 9000, True), (1, 7000, True),
-                          (1, 5000, False), (2, 0, True)])
+        await self.play(lobby, [(0, 300, True), (0, 100, True), (0, 200, True), (0, 50, True),
+                                (0, 50, True), (0, 40, True), (1, 9000, True), (1, 7000, True),
+                                (1, 5000, False), (2, 0, True)])
         marathon, forty, ultra = (lobby.single_mode(MEMBER, mode) for mode in range(3))
         self.assertEqual([v for v, _ in marathon.top], [300, 200, 100, 50, 50])
         self.assertEqual([v for v, _ in forty.top], [7000, 9000])  # lower is better
@@ -100,21 +101,22 @@ class RecordTest(unittest.TestCase):
         self.assertEqual((ultra.top, ultra.rank), ([], 0))
         self.assertEqual(lobby.single_mode(b"other", 0), m.SingleMode([], 0, 0, 1))
 
-    def test_rank_among_players(self):
+    async def test_rank_among_players(self):
         lobby = Lobby()
-        self.play(lobby, [(0, 500, True), (1, 4000, True)], member=b"first")
-        self.play(lobby, [(0, 300, True), (1, 3000, True)])
+        await self.play(lobby, [(0, 500, True), (1, 4000, True)], member=b"first")
+        await self.play(lobby, [(0, 300, True), (1, 3000, True)])
         self.assertEqual(lobby.single_mode(MEMBER, 0)[2:], (2, 2))
         self.assertEqual(lobby.single_mode(MEMBER, 1)[2:], (1, 2))
 
-    def test_records_file(self):
+    async def test_records_survive_in_the_database(self):
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "records.json"
-            self.play(Lobby(path), [(0, 300, True), (1, 7000, False)])
-            again = Lobby(path)
+            db = Database(Path(tmp) / "tet4.db")
+            await self.play(Lobby(db), [(0, 300, True), (1, 7000, False)])
+            again = Lobby(db)
             marathon = again.single_mode(MEMBER, 0)
             self.assertEqual(([v for v, _ in marathon.top], marathon.plays), ([300], 1))
             self.assertEqual(again.single_mode(MEMBER, 1).plays, 1)
+            db.close()
 
 
 class ServiceTest(unittest.IsolatedAsyncioTestCase):

@@ -30,7 +30,12 @@ class GameConnection:
                 self.lobby.close_rooms_of(self.member_id)
 
     async def on_enter_room(self, r: Reader) -> None:
-        self.member_id = m.read_enter_room(r)
+        member_id = m.read_enter_room(r)
+        # The game socket carries no ticket: with accounts, the member must be logged
+        # in on a channel connection from the same address.
+        if self.lobby.requires_login and not self.lobby.online_from(member_id, self.session.host):
+            raise ConnectionRefusedError(f"{member_id!r} is not logged in from {self.session.host}")
+        self.member_id = member_id
         await self.session.send(m.enter_room_to_c())
         # The player joins the room: this seats it in the game.
         await self.session.send(m.room_add_member_to_c(self.member_id))
@@ -45,7 +50,10 @@ class GameConnection:
     async def on_game_report(self, r: Reader) -> None:
         # Sent at game over; the reply carries the mode's updated standing.
         report = m.read_game_report(r)
-        standing = self.lobby.add_game(report)
+        if report.member_id != self.member_id:
+            log.warning("%s: report for %r ignored", self.session.peer, report.member_id)
+            return
+        standing = await self.lobby.add_game(report)
         await self.session.send(m.single_mode_game_report_to_c(report, standing), layer=3)
 
     async def on_exit_room(self, r: Reader) -> None:

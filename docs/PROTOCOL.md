@@ -327,6 +327,8 @@ Starting should send StartNewGameToS, which the server now answers; not yet trie
 
 ## 9. Debugging
 
+The full procedure for recording a run is in [`DEBUGGING.md`](DEBUGGING.md).
+
 - `python3 -m tet4server --trace traces/session.jsonl` appends every decrypted
   batch as one JSON line: time, service, peer, direction, layer, message name and
   the batch in hex. Traces contain the session ticket.

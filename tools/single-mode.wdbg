@@ -1,0 +1,69 @@
+# winedbg command file for the Single Mode path. Run from the client folder:
+#   winedbg --file ../tools/single-mode.wdbg Tet4.exe "$(cat ../tools/bootstrap-sample.txt)"
+# Every stop prints a backtrace and the registers, then continues.
+set $BreakOnFirstChance = 0
+info share
+# Channel side: AutoEnter, CreateRoom and RoomInfo converters, SetRoomInfo
+break *0x00445f60
+break *0x00441e90
+break *0x6013b850
+break *0x6090a650
+# Game side: EnterRoom request and reply, AddMember (layer 3), StartNewGame
+break *0x60914fd0
+break *0x6013c940
+break *0x00456bc0
+break *0x609173f0
+break *0x60147870
+break *0x60a090d0
+# The main body start and the known faults
+break *0x00460dd0
+break *0x004fbbb4
+c
+bt
+info reg
+c
+bt
+info reg
+c
+bt
+info reg
+c
+bt
+info reg
+c
+bt
+info reg
+c
+bt
+info reg
+c
+bt
+info reg
+c
+bt
+info reg
+c
+bt
+info reg
+c
+bt
+info reg
+c
+bt
+info reg
+c
+bt
+info reg
+c
+bt
+info reg
+c
+bt
+info reg
+c
+bt
+info reg
+c
+bt
+info reg
+quit

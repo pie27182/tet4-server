@@ -71,8 +71,8 @@ tet4server/  the server
   channel.py   channel service          game.py     game service
   lobby.py     rooms                    server.py   listeners and command line
 tests/       captured vectors, layouts, and a scripted client session
-tools/       client.py and the sample bootstrap
-docs/        PROTOCOL.md
+tools/       client.py, the sample bootstrap, a winedbg command file
+docs/        PROTOCOL.md, DEBUGGING.md
 ```
 
 The decompiled client and the analysis scripts used to recover the protocol are

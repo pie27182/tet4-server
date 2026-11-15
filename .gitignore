@@ -6,6 +6,8 @@ __pycache__/
 /client
 /client-patched
 /traces
+/runs
+*.tar.gz
 *.exe
 *.dll
 *.pcap

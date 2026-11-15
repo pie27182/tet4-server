@@ -167,3 +167,58 @@ flow and is not the `MyData()` bootstrap path.
 
 This keeps the original encrypted transport intact while making the application
 protocol observable and testable.
+
+
+### Game-event service dispatcher / AddMember null-service fault
+
+The 2026-11-15 A/B/C runs show the same post-refill 0x004FBBB4 fault
+regardless of the order of AddMember and SvcKor. The failing stack returns to
+HgCtr3.dll:0x602091B5, which is the return site of the registered
+CFunctor::Call at 0x602091AF. The true God()->Call fallback starts at
+0x602091BA. Do not treat 0x602091AF as the fallback.
+
+The network receive path first checks the embedded
+CGlobalGameEvent::FntDispatchService functor. If it is bound, it calls
+CFunctor::Call(parser); otherwise it uses the fallback service map. The
+explicit client binding site is Tet4.exe:0x004FF390
+(CTetGameWnd constructor), which assigns a CMFunctor<CTetGameWnd> for
+LAB_004FD9E0 to the functor returned by FntDispatchService() (the
+CGlobalGameEvent + 0x18 slot, accessor alias 0x60112AA0). Live GDB confirms
+that this binding runs before AddMember.
+
+Use the full GDB scenario:
+
+    TET4_EARLY_ADD_MEMBER_ID=test \
+    TET4_SKIP_SVCKOR=1 \
+    TET4_TRACE_JSONL=live-runs/early-addmember/trace.jsonl \
+    python3 -m tet4server --log-level DEBUG
+
+Start winedbg with its GDB proxy, then connect:
+
+    winedbg --gdb --port 31337 --no-start ./Tet4.exe "$BOOT"
+    gdb -q -batch -x tools/debug/game-event-dispatch.gdb
+
+The scenario captures CGlobalGameEvent and its dynamic FntDispatchService
+slot, the CTetGameWnd constructor, the layer converters, AddMember
+(`0x00456BC0`), the game-model insert (`0x004EC400`), the vector refill
+(`0x00461C50`), the registered dispatcher call (`0x602091AF`), the true
+fallback (`0x602091BA`), the parser getters, and
+CTetSingleMainBody::Start (`0x00460DD0`).
+
+`TET4_GDB_ADD_MEMBER_HEADER=1` is a memory-only diagnostic: it sets a missing
+AddMember parser header to `"s1e"`/`"c5e"` before the dispatcher runs. It is
+useful to prove the header hypothesis and is not a server or client fix.
+`tools/debug/catch-addmember-fastfail.gdb` catches the later MSVCR90
+`_invoke_watson` fast-fail after `Msg_AddRoomMember`.
+
+Interpretation:
+- The registration runs; the dispatcher is non-null and is called. A null
+  parser service/command inside `FUN_004FBB90` is a converter-header problem,
+  not an unbound-dispatcher problem.
+- A layer-3-only AddMember batch reaches the converter but leaves the header
+  null. The layer-0 room base supplies `s4e`/`c5e` and the room keys.
+- The two-layer candidate is still unverified: live GDB showed only the
+  layer-0 converter invoked in that frame, while the layer-3 converter was
+  not reached.
+
+The experiment is read-only: it changes no client or server protocol behavior.

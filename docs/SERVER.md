@@ -184,3 +184,77 @@ implementation.
 
 See [`ROADMAP.md`](ROADMAP.md) for the live acceptance criteria. Serializer tests and
 a successful socket handshake alone do not establish gameplay.
+
+
+## 2026-11-15 — live-isolated AddMemberToC wire
+
+The AddMemberToC experiment has a corrected, live-accepted wire candidate. Its
+layer-3 application body is:
+
+    0x0AB84D0A | XDR string(member_id) | 87-byte opaque profile suffix
+
+The previous candidate incorrectly inserted the command tag 0x005216CA and
+the _TetrisMemberInfo type ID 0x0FFA613A before the member string. WineDbg
+showed the client then treating one of those words as the string length. The
+corrected fixture omits both words. The nested suffix is intentionally kept
+opaque: its internal fields have not been recovered, and the only live-tested
+member ID is "test".
+
+With the corrected message on the game socket (15002), WineDbg confirmed:
+
+- the converter at Tet4.exe:0x00456BC0 runs;
+- the first member string is decoded as "test";
+- FUN_004EC400 inserts the local member;
+- FUN_00461C50 is called again and refills the main-body vector.
+
+The isolation runs distinguish three cases:
+
+- Old tagged/type-ID candidate, AddMember only: the second stop at
+  0x004FBBB4 has EAX=0 and faults.
+- SvcKor only: both observed 0x004FBBB4 stops have non-null EAX; execution
+  proceeds to the separate scene-update fault at 0x00461E9D.
+- Corrected AddMember only (TET4_SKIP_SVCKOR=1): insertion and vector refill
+  are reached without the later null 0x004FBBB4 stop in that run.
+- Corrected AddMember followed by SvcKor: insertion/refill occur, then a
+  subsequent 0x004FBBB4 stop has EAX=0. The failing event is therefore an
+  interaction in the combined sequence; the exact event source is unresolved.
+- Sending the corrected Tetris-specific message on the channel connection
+  also inserts the member, but then crashes in msvcr90+0x3B9F0 through
+  msvcp90/HgCom3. Keep this Tetris-specific layer-3 message on game port 15002.
+
+The server keeps AddMemberToC opt-in with
+TET4_EXPERIMENTAL_ADD_MEMBER_BOOTSTRAP=1. Set TET4_SKIP_SVCKOR=1 as well to
+reproduce the corrected AddMember-only case. Without these variables, the
+server's existing SvcKor-only behavior is unchanged.
+
+This does not yet start CTetSingleMainBody::Start (0x00460DD0), and it does
+not establish a playable game. The next task is to isolate the null event in
+the corrected AddMember + SvcKor sequence, then return to the independent
+0x00461E9D scene-initialization blocker.
+
+
+For the ordering probe, set TET4_SVCKOR_BEFORE_ADD_MEMBER=1 together with
+TET4_EXPERIMENTAL_ADD_MEMBER_BOOTSTRAP=1 to send SvcKor before AddMemberToC.
+The default order remains AddMemberToC then SvcKor. TET4_SKIP_SVCKOR=1 still
+suppresses SvcKor entirely. These switches are for isolating the event-parser
+fault and do not change the default server behavior.
+
+### Early AddMember ordering (diagnostic)
+
+`TET4_EARLY_ADD_MEMBER_ID=<local-member-id>` sends the experimental
+AddMemberToC after EnterRoomToS and before EnterRoomToC. The ID is compared
+with EnterRoomToS `final_strings[0]`; on mismatch nothing is sent and the
+normal post-EnterRoom AddMemberToC is suppressed. The default behavior is
+unchanged when the variable is absent.
+
+`TET4_EARLY_ADD_MEMBER_BASE=1` additionally selects the unverified two-layer
+candidate: a layer-0 `Cmd_Room_AddMemberToC` base followed by two alignment
+markers and the layer-3 87-byte extension. Live GDB shows that the layer-0
+room converter and the `s4e`/`c5e` dispatcher run, but the layer-3 converter
+is not reached in the same frame. This candidate does not start the game and
+must not be described as a working room/game bootstrap.
+
+The complete live scenario is
+`tools/debug/game-event-dispatch.gdb`. It captures the dispatcher registration,
+the AddMember insert/refill, the registered `CFunctor::Call` at 0x602091AF
+(not the fallback), the null service read and `CTetSingleMainBody::Start`.

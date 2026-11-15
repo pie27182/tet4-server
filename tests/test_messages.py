@@ -100,7 +100,7 @@ class ReplyLayoutTest(unittest.TestCase):
         self.assertEqual(fields[1], 0)                            # failcode
         self.assertEqual((fields[7], fields[9]), (b"N000S", 7))   # k46e, k66e
         self.assertEqual(fields[12:15], [b"TET4", b"", b"1"])     # k22e, k23e, k24e
-        self.assertEqual((fields[15], fields[17]), (b"127.0.0.1", 15002))
+        self.assertEqual((fields[15], fields[16], fields[17]), (b"", b"127.0.0.1", 15002))
 
     def test_start_new_game_lists_the_members(self):
         fields = parse(m.start_new_game_to_c([b"test"]), "u32 s u8 u8 u8")

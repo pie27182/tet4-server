@@ -51,6 +51,14 @@ class SecureClient:
         await self.writer.wait_closed()
 
 
+# Cmd_Channel_CreateRoomToS as the client sent it after AutoEnter: the room title
+# (EUC-KR), an empty room option and k200e "G".
+TITLE = bytes.fromhex("c7e0bab9c7d120c7cfb7e7b5c7bcbcbfe4")
+CREATE_ROOM_CAPTURED = bytes.fromhex(
+    "0ca9895a0000000474657374000000000000000000000011" + TITLE.hex()
+    + "0000000000000000000000000000000147000000000000000454455434000000000000000131")
+
+
 def room_request(msg_id: int) -> bytes:
     """AutoEnterSingleModeRoomTetrisToS / CreateRoomToS as the Single Mode button fills them."""
     return b"".join([
@@ -142,11 +150,12 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((fields[4], fields[6]), (b"N000S", 0))
         self.assertEqual(fields[15:17], [b"127.0.0.1", self.ports.game])
 
-        await channel.send(room_request(Msg.Channel_CreateRoomToS))
+        await channel.send(CREATE_ROOM_CAPTURED)
         reply = await self.expect(channel, Msg.Channel_CreateRoomToC)
         fields = parse(reply.body, "s u32 s s u32 s s s u32 u32 s u32 s s s s s u32 s")
-        self.assertEqual((fields[7], fields[9]), (b"N000S", 1))
-        self.assertEqual((fields[15], fields[17]), (b"127.0.0.1", self.ports.game))
+        self.assertEqual((fields[6], fields[7], fields[9], fields[10]),
+                         (TITLE, b"N000S", 1, b"G"))  # option from AutoEnter
+        self.assertEqual((fields[16], fields[17]), (b"127.0.0.1", self.ports.game))
         reply = await self.expect(channel, Msg.Channel_RoomInfoToC)
         self.assertEqual(parse(reply.body, ROOM_INFO)[3], 1)
         self.assertEqual(await self.room_numbers(channel), [1])
@@ -173,6 +182,24 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn({"service": "channel", "dir": "in", "layer": 3,
                        "name": "Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToS"},
                       [{k: rec[k] for k in ("service", "dir", "layer", "name")} for rec in records])
+
+    async def test_plain_frames_before_the_handshake_are_ignored(self):
+        # As captured: EnterRoomToS in the clear, then the share, then the same
+        # EnterRoomToS encrypted. Only the encrypted one may be answered, or the
+        # reply would be taken as part of the server's share.
+        reader, writer = await asyncio.open_connection("127.0.0.1", self.ports.game)
+        enter = b"".join([
+            u32(Msg.Room_EnterRoomToS), u32(1), string(b""), string(b""), u32(0), u32(0),
+            string(b"N000S"), string(b""), string(b""), string(b""), u32(0),
+            string(MEMBER), string(b""), u32(0), u32(0)])
+        writer.write(frame(MAGIC + enter))
+        share = crypto.seal_share(crypto.new_share())
+        writer.write(share)
+        server_share = await asyncio.wait_for(reader.readexactly(crypto.SHARE_SIZE), TIMEOUT)
+        game = SecureClient(reader, writer, crypto.master_key(share, server_share))
+        await game.send(enter)
+        await self.expect(game, Msg.Room_EnterRoomToC)
+        await game.close()
 
     async def test_bad_frame_closes_only_that_connection(self):
         broken = await SecureClient.connect(self.ports.channel)

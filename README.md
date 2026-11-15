@@ -13,17 +13,17 @@ Confirmed with the real client:
 - TPack login, the CDS channel directory, and the secure socket in both directions;
 - channel entry: authorization, user id, channel info, the player's own member
   record, and the member, room and item lists. The client reaches the lobby;
-- Single Mode: AutoEnter, room creation, the game socket and EnterRoom.
+- Single Mode: AutoEnter, room creation, the game socket and EnterRoom; with the
+  debug patch the Single Mode screen opens (headless Wine 9 under Xvfb).
 
-Not working: the game does not start. After EnterRoomToC the client crashes in its
-Single Mode scene (`Tet4.exe` 0x00461E9D) because nothing registers the player in
-its game model. The message that should, a two-layer `Cmd_Channel_AddMemberToC`,
-is not recovered yet; see [section 8](docs/PROTOCOL.md#8-where-single-mode-stops).
+Not working: the game does not start. The client crashes in its Single Mode
+scene (`Tet4.exe` 0x00461E9D), and with that crash patched out it crashes again
+when Start is pressed, because nothing registers the player in its game model. The
+message that should, a two-layer `Cmd_Channel_AddMemberToC`, is not recovered yet;
+see [section 8](docs/PROTOCOL.md#8-where-single-mode-stops).
 
-Changed to follow the client's code and not yet run against it: the `_RoomInfo`
-record in `RoomInfoToC` and the room list, `CreateRoomToC` echoing the client's
-`k200e`, and `StartNewGameToC` as the answer to `StartNewGameToS` instead of a push
-after `EnterRoomToC`.
+Not yet seen in a live run: `StartNewGameToC` as the answer to `StartNewGameToS`
+(the client crashes before sending it).
 
 ## Running
 

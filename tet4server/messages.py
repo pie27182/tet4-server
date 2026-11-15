@@ -242,7 +242,9 @@ def create_room_to_c(room: Room, game: Endpoint) -> bytes:
     """Channel_CreateRoomToC (Deserialize 0x0043F580, Tet4.exe converter 0x00441E90):
     u32 id | str | u32 failcode | str k2e | str k3e | u32 k42e | str k67e | str k45e |
     str k46e | u32 k127e | u32 k66e | str k200e | u32 k69e | str k22e | str k23e |
-    str k24e | str k52e | str | u32 k53e | str k82e."""
+    str k24e | str | str k52e | u32 k53e | str k82e. The host is the string right
+    before the port, as in the AutoEnter reply: with it one string earlier the
+    client reconnected to an empty host."""
     f = room.fields
     return b"".join([
         u32(Msg.Channel_CreateRoomToC),
@@ -250,7 +252,7 @@ def create_room_to_c(room: Room, game: Endpoint) -> bytes:
         u32(f.k42e), string(f.k67e), string(f.k45e), string(f.k46e),
         u32(f.k127e), u32(room.number), string(f.k200e), u32(f.k69e),
         string(f.k22e), string(f.k23e), string(f.k24e),
-        string(game.host.encode("ascii")), string(b""), u32(game.port), string(b""),
+        string(b""), string(game.host.encode("ascii")), u32(game.port), string(b""),
     ])
 
 

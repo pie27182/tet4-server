@@ -60,7 +60,9 @@ def room_request(msg_id: int) -> bytes:
 
 class ServiceTest(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        self.trace = Path(tempfile.mkdtemp()) / "trace.jsonl"
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.trace = Path(tmp.name) / "trace.jsonl"
         self.services = await Services(ports=Ports(0, 0, 0, 0), trace=self.trace).start()
         self.addAsyncCleanup(self.services.close)
         self.ports = self.services.ports

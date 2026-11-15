@@ -132,7 +132,11 @@ class Session:
             batch = payload[4:]
             if self._tracer:
                 self._tracer.record(self, "in", batch)
-            message = decode_batch(batch)
+            try:
+                message = decode_batch(batch)
+            except ProtocolError as exc:
+                log.warning("%s %s: skipped batch: %s", self.service, self.peer, exc)
+                continue
             if message is not None:
                 return message
             log.debug("%s %s: batch of layer markers only", self.service, self.peer)

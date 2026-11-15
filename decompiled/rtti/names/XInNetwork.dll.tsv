@@ -1,5 +1,0 @@
-# RTTI-derived names for XInNetwork.dll.
-0x1000880c	XWaitableObject::Close
-0x10008812	XWaitableObject::Detach
-0x10008818	XWaitableObject::Attach
-0x100089b9	type_info::`scalar_deleting_destructor'

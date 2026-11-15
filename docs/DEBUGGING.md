@@ -167,3 +167,52 @@ flow and is not the `MyData()` bootstrap path.
 
 This keeps the original encrypted transport intact while making the application
 protocol observable and testable.
+
+
+### Game-event service dispatcher / AddMember null-service fault
+
+The 2026-11-15 A/B/C runs show the same post-refill 0x004FBBB4 fault
+regardless of the order of AddMember and SvcKor. The failing stack returns to
+HgCtr3.dll:0x602091B5, the fallback God()->Call in
+CNetworkController::OnSocketReceive.
+
+The network receive path first checks the embedded
+CGlobalGameEvent::FntDispatchService functor. If it is bound, it calls
+CFunctor::Call(parser); otherwise it uses the fallback service map. The
+explicit client binding site found so far is Tet4.exe:0x004FF390
+(CTetGameWnd constructor), which assigns a CMFunctor<CTetGameWnd> for
+LAB_004FD9E0 to the functor returned by FntDispatchService() (the
+CGlobalGameEvent + 0x18 slot, accessor alias 0x60112AA0).
+
+To capture whether that constructor runs before the game packet, use the
+ordered breakpoint file:
+
+    TIMEOUT=300 tools/debug/winedbg_batch.sh tools/debug/break-game-event-dispatch.wdbg
+
+Run the server separately with the corrected AddMember-only experiment:
+
+    mkdir -p live-runs/dispatch-probe
+    TET4_EXPERIMENTAL_ADD_MEMBER_BOOTSTRAP=1 \
+    TET4_SKIP_SVCKOR=1 \
+    TET4_TRACE_JSONL=live-runs/dispatch-probe/trace.jsonl \
+    python3 -m tet4server --log-level DEBUG \
+    2>&1 | tee live-runs/dispatch-probe/server.log
+
+The breakpoint sequence distinguishes CTetGameWnd construction,
+CFunctor::operator=, the FntDispatchService accessor, CFunctor::Call,
+the fallback at 0x602091B0, and the parser's service/command getters
+(0x60105380 / 0x6011D5E0). The parser getter at 0x60105380 is also
+symbolized as CMetpParser::GetService and returns CMetpParser+0x20;
+GetCommand at 0x6011D5E0 returns CMetpParser+0x24.
+
+Interpretation:
+- If FUN_004FF390 and CFunctor::operator= do not run before the packet,
+  but OnSocketReceive reaches 0x602091B0, the game-window dispatcher is
+  not registered when AddMember arrives.
+- If CFunctor::Call is reached, inspect the callback stack and the parser
+  service/command values instead; do not assume the same fallback path.
+- If the constructor runs and binds the functor, but CFunctor::Get is still
+  null later, inspect the CFunctor object at CGlobalGameEvent+0x18 for
+  replacement/clearing between construction and receive.
+
+The experiment is read-only: it changes no client or server protocol behavior.

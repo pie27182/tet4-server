@@ -154,48 +154,93 @@ socket is gone; it must not be treated as the original cause.
 
 
 
-## AddMemberToC server-side probe
+## AddMemberToC server-side probe — current accepted candidate
 
-The Tetris-specific command has now been reconstructed as a serializer candidate
-in `tet4server/single_mode.py` on branch
-`feat/single-mode-add-member-bootstrap`.
+The original tagged/type-ID candidate described in the earlier experiment was
+superseded by the 2026-11-15 isolated live runs and the serializer update in
+PR #22.
 
-- Application message ID: `0x0AB84D0A`.
-- Tet4.exe registration: `PC_RegisterX2M(0x0AB84D0A, 3, FUN_00456BC0, ...)`.
-  The reply therefore needs three leading `0x09D0057A` XLBP layer-alignment
-  markers. The HgCom3 layer-0 message with the same wire ID is a different
-  converter and must not be substituted.
-- The outer command writes the constructor's `&LAB_005216ca` field, then
-  nested `_TetrisMemberInfo` (type ID `0x0FFA613A`).
-- The member record contains the member-id string and a vector with one
-  `_SingleModeInfo` entry (type ID `0x0071FA1A`). The entry's first numeric
-  field at `+0x0c` is used as the game-model map key by `FUN_004ebf70`.
-  Slot/index `0` is the initial Single Mode candidate, not live-confirmed.
-- The serializer field orders are taken from `FUN_00453330`,
-  `FUN_00453360`, `FUN_0044d2a0`, `FUN_0044d370`,
-  `FUN_00459790`, `FUN_0044c8c0`, `FUN_0044c950`, and
-  `FUN_004596d0`.
+The currently accepted layer-3 body is:
 
-**Important limitation:** the default nested `_TetrisSchoolInfo` child at
-`+0x4c` is still a candidate. The code uses a zero/default `_UseAbleItem`
-record because its type and constructor are present in the same XDR family,
-but there is no live capture proving that this is the right child or that the
-zero/default profile is accepted. The outer tag `0x005216CA` is the address
-returned by the AddMember command's vfunc, and likewise needs live validation.
+    0x0AB84D0A | XDR string(member_id) | 87-byte opaque suffix
 
-To test without changing ordinary server behavior, the game handler sends this
-candidate only when started with:
+Do not prepend 0x005216CA or 0x0FFA613A: the old candidate caused the client
+to treat those words as the first string length. The 87-byte suffix is still
+opaque, and the live test used member ID test.
 
-```sh
-TET4_EXPERIMENTAL_ADD_MEMBER_BOOTSTRAP=1 python -m tet4server
-```
+The corrected packet is sent only on game port 15002, behind
+TET4_EXPERIMENTAL_ADD_MEMBER_BOOTSTRAP=1. The default server behavior remains
+unchanged. A/B/C isolation confirms the corrected message reaches
+FUN_00456BC0 -> FUN_00432280 -> FUN_004EC400, inserts the local member and
+triggers another FUN_00461C50 refill. It does not yet make the client start
+the game or display the board.
 
-When enabled, the current sequence is `EnterRoomToC`, layer-3
-`AddMemberToC`, then the existing Korean-service start vector. The option is
-off by default so an unverified nested profile cannot silently destabilize
-normal runs.
+TET4_SKIP_SVCKOR=1 reproduces AddMember-only; TET4_SVCKOR_BEFORE_ADD_MEMBER=1
+reverses the two messages. Neither order fixes the post-refill dispatch failure.
+docs/ROADMAP.md and the current tet4server/single_mode.py contain the
+maintained implementation details.
 
-This is a bootstrap experiment, not a claim that Single Mode is playable yet.
-The game socket still needs a live validation of the packet and lifecycle;
-`PolyMinoPutToS` and `GameReportToS` remain capture-only, and the standalone
-Tetris engine is not yet connected to the original client's update messages.
+
+## 2026-11-15 — A/B/C isolation: dispatch registration, not packet order
+
+The three runs on commit acb6a86 separate the failures:
+
+- A, corrected AddMember only: FUN_004EC400 and the second FUN_00461C50
+  are reached; a later 0x004FBBB4 dereference faults with EAX=0.
+- B, AddMember then SvcKor: this run loses the race to the independent
+  0x00461E9D scene-update fault before AddMember is dispatched. It is not
+  evidence about the AddMember handler.
+- C, SvcKor then corrected AddMember: the member is inserted and the vector
+  refilled, then the same 0x004FBBB4 null dereference occurs.
+- None reaches CTetSingleMainBody::Start (0x00460DD0).
+
+The A and C traces therefore rule out message order as the fix. The failure is
+after the AddMember converter and the vector refill.
+
+### What the 0x004FBBB4 stack says
+
+The null-fault register snapshot has EAX=0, ECX=0x005F29F0,
+EDX=0x6011D5E0; the return address on the stack is HgCtr3.dll:0x602091B5.
+
+FUN_004FBB90 reads the IParam service and command through virtual slots 2 and 3.
+For CMetpParser, the service getter is the 0x60105380 implementation (also
+aliased in the decompilation as CFrameworkException::GetErrorCode); it returns
+the parser's offset_0x20. CMetpParser::GetCommand at 0x6011D5E0 returns
+offset_0x24. The fault at 0x004FBBB4 is the subsequent dereference of the
+service pointer, so the evidence says that GetService() returned null for
+this parser. It is not evidence that the AddMember member-id string is null.
+
+### The missing dispatcher registration candidate
+
+CNetworkController::OnSocketReceive (HgCtr3.dll:0x60208ED0) has two paths
+for the Tetris game service:
+
+1. It asks GInfo()->GameEvent()->FntDispatchService() for a CFunctor.
+   If CFunctor::Get() returns a non-null callback, it invokes
+   CFunctor::Call(parser).
+2. If the functor is empty, it falls back to God()->Call(...). The call
+   instruction at 0x602091B0 returns at 0x602091B5.
+
+The AddMember null-fault stack contains return address 0x602091B5, so this
+run took the fallback path: FntDispatchService had no callback bound at that
+moment.
+
+The explicit binding site found in Tet4.exe is FUN_004FF390, the
+CTetGameWnd constructor. It creates a CMFunctor<CTetGameWnd> for
+LAB_004FD9E0 and assigns it to CGlobalGameEvent::FntDispatchService() through
+CFunctor::operator=(IFunctor*) at HgCom3.dll:0x6010C8F0. The same
+constructor registers the separate onAddRmMember and onDelRmMember events
+with God(). FntDispatchService() returns the embedded functor at
+CGlobalGameEvent + 0x18 (accessor alias 0x60112AA0); the
+CGlobalGameEvent constructor initially leaves that functor empty.
+
+This is now the leading hypothesis: the CTetGameWnd service dispatcher has
+not been constructed/bound before the incoming AddMember packet, so
+OnSocketReceive takes the generic fallback with a parser whose service
+field is null. The exact timing must still be verified live; do not patch the
+server payload or reorder messages again based on this hypothesis alone.
+
+Use tools/debug/break-game-event-dispatch.wdbg to establish whether
+FUN_004FF390 and the CFunctor assignment occur before the game packet,
+whether CFunctor::Call is reached, and what CMetpParser::GetService
+returns at the failing dispatch.

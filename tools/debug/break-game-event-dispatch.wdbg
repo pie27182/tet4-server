@@ -1,0 +1,84 @@
+# Trace the game-window service dispatcher and the null parser service.
+# Tet4.exe: CTetGameWnd construction / callback target
+# HgCom3.dll: CFunctor and CMetpParser
+# HgCtr3.dll: CNetworkController::OnSocketReceive
+set $BreakOnFirstChance = 0
+
+break *0x004ff390
+break *0x6010c8f0
+break *0x60112aa0
+break *0x6020916a
+break *0x6010c920
+break *0x602091b0
+break *0x004fd9e0
+break *0x004fbb90
+break *0x60105380
+break *0x6011d5e0
+break *0x004fbbb4
+break *0x00460dd0
+
+c
+bt 10
+info reg
+x /32x $esp
+x /8x $ecx
+
+c
+bt 10
+info reg
+x /16x $esp
+x /8x $ecx
+
+c
+bt 10
+info reg
+x /16x $esp
+x /8x $ecx+0x18
+
+c
+bt 10
+info reg
+x /64x $esp
+
+c
+bt 10
+info reg
+x /16x $esp
+x /8x $ecx
+
+c
+bt 10
+info reg
+x /24x $esp
+
+c
+bt 10
+info reg
+x /24x $esp
+x /8x $ecx
+
+c
+bt 10
+info reg
+x /24x $esp
+x /8x $ecx
+
+c
+bt 10
+info reg
+x /8x $ecx+0x20
+
+c
+bt 10
+info reg
+x /8x $ecx+0x24
+
+c
+bt 10
+info reg
+x /32x $esp
+
+c
+bt 10
+info reg
+quit

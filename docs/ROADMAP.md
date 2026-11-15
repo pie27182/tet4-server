@@ -120,8 +120,14 @@ serializer test proves layout, not that the client accepts the message.
       0x0FFA613A member type ID; WineDbg reaches FUN_004EC400 and a second
       FUN_00461C50 refill for the local test member. The remaining 87-byte profile
       suffix is opaque and has only been tested with member ID "test".
-- [ ] Resolve the null event at Tet4.exe:0x004FBBB4 when corrected AddMemberToC
-      is followed by StartNewGameSvcKorToC; the exact event source is not known.
+- [ ] Verify the game-event dispatcher before changing AddMember/SvcKor:
+      AddMember-only and both message orders reach the same post-refill
+      0x004FBBB4 fault. The return address 0x602091B5 identifies the
+      CNetworkController::OnSocketReceive fallback after an empty
+      CGlobalGameEvent::FntDispatchService functor. Its identified binding site
+      is CTetGameWnd constructor FUN_004FF390; use
+      tools/debug/break-game-event-dispatch.wdbg to confirm whether it runs
+      before the first game packet.
 - [ ] Recover the nested `_SingleModeInfo` (`0x0071FA1A`) fields and decode the
       opaque AddMemberToC profile suffix.
 - [ ] Verify the real client transitions from the lobby to the Single Mode room screen

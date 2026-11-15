@@ -205,12 +205,17 @@ EDX=0x6011D5E0; the return address on the stack is HgCtr3.dll:0x602091B5.
 FUN_004FBB90 reads the IParam service and command through virtual slots 2 and 3.
 For CMetpParser, the service getter is the 0x60105380 implementation (also
 aliased in the decompilation as CFrameworkException::GetErrorCode); it returns
-the parser's offset_0x20. CMetpParser::GetCommand at 0x6011D5E0 returns
-offset_0x24. The fault at 0x004FBBB4 is the subsequent dereference of the
+the parser's offset_0x24. CMetpParser::GetCommand at 0x6011D5E0 returns
+offset_0x28. The fault at 0x004FBBB4 is the subsequent dereference of the
 service pointer, so the evidence says that GetService() returned null for
 this parser. It is not evidence that the AddMember member-id string is null.
 
-### The missing dispatcher registration candidate
+### The missing dispatcher registration candidate (superseded)
+
+**Correction (2026-11-15):** this hypothesis is wrong. `0x602091AF` is the
+registered `CFunctor::Call`; `0x602091B5` is its return address. The true
+`God()->Call` fallback starts at `0x602091BA`. The dispatcher is registered
+and is called. See the late-run section at the end of this file.
 
 CNetworkController::OnSocketReceive (HgCtr3.dll:0x60208ED0) has two paths
 for the Tetris game service:
@@ -221,9 +226,9 @@ for the Tetris game service:
 2. If the functor is empty, it falls back to God()->Call(...). The call
    instruction at 0x602091B0 returns at 0x602091B5.
 
-The AddMember null-fault stack contains return address 0x602091B5, so this
-run took the fallback path: FntDispatchService had no callback bound at that
-moment.
+The AddMember null-fault stack contains return address 0x602091B5. That is
+the return address of the registered dispatcher call at 0x602091AF, not the
+fallback. FntDispatchService was bound at that moment.
 
 The explicit binding site found in Tet4.exe is FUN_004FF390, the
 CTetGameWnd constructor. It creates a CMFunctor<CTetGameWnd> for
@@ -234,13 +239,88 @@ with God(). FntDispatchService() returns the embedded functor at
 CGlobalGameEvent + 0x18 (accessor alias 0x60112AA0); the
 CGlobalGameEvent constructor initially leaves that functor empty.
 
-This is now the leading hypothesis: the CTetGameWnd service dispatcher has
-not been constructed/bound before the incoming AddMember packet, so
-OnSocketReceive takes the generic fallback with a parser whose service
-field is null. The exact timing must still be verified live; do not patch the
-server payload or reorder messages again based on this hypothesis alone.
+This hypothesis was disproved by the late run: the constructor and the
+registration both happen, and the dispatcher is called. The null service is
+inside `FUN_004FBB90`, reached through the registered target.
 
 Use tools/debug/break-game-event-dispatch.wdbg to establish whether
 FUN_004FF390 and the CFunctor assignment occur before the game packet,
 whether CFunctor::Call is reached, and what CMetpParser::GetService
 returns at the failing dispatch.
+
+
+## 2026-11-15 — early AddMember ordering and dispatcher identity
+
+The server now supports a diagnostic early-send ordering:
+
+    TET4_EARLY_ADD_MEMBER_ID=test TET4_SKIP_SVCKOR=1 python3 -m tet4server
+
+The AddMemberToC body is sent after EnterRoomToS is parsed and **before**
+EnterRoomToC. The configured ID must equal the local member in
+EnterRoomToS; a mismatch is refused and the normal post-EnterRoom send is
+suppressed. The default server behavior is unchanged when the variable is
+absent. Tests cover the matching, mismatch, default and duplicate-suppression
+cases.
+
+The live run with the original layer-3 87-byte body reached, in order:
+
+    0x00456BC0  AddMemberToC converter
+    0x004EC400  game-model insert
+    0x00461C50  vector refill
+    0x602091AF  registered game dispatcher CFunctor::Call
+    0x004FBBB4  FUN_004FBB90 service dereference
+
+The registered dispatcher target was non-null (`0x01DBFAE0` in that run), the
+controller name was `"game"`, and the parser service/command fields were both
+zero. This is a deterministic AddMember-specific failure, not the scene race.
+
+### Correction: 0x602091AF is not the fallback
+
+`0x602091AF` is the `CFunctor::Call` of the registered game dispatcher. The
+return address `0x602091B5` is its return site. The true `God()->Call`
+fallback begins at `0x602091BA`. The earlier "unbound dispatcher" conclusion
+is therefore retracted: registration happens and the dispatcher is called.
+
+The null is because the layer-3 converter does not set the parser header.
+Setting the missing header in GDB memory to `"s1e"`/`"c5e"` bypassed the
+`0x004FBBB4` fault and reached
+`CGameLobbyModel::Msg_AddRoomMember` (`HgModel3.dll:0x60915600`). The next
+failure was a fast-fail (`0xC0000409`) at `0x60915756` because key `k57e` was
+missing. This proves the header is necessary, but not sufficient: the room
+member profile keys are also required.
+
+### Two AddMember message classes
+
+The client has two distinct layer-0 converters:
+
+- `Cmd_Channel_AddMemberToC` `0x0AB84D0A` -> `HgCom3.dll:0x60139BC0`,
+  header `s1e`/`c5e`.
+- `Cmd_Room_AddMemberToC` `0x0619233A` -> `HgCom3.dll:0x6013A060`,
+  header `s4e`/`c5e`, keys including `k50e`, `k57e`, `k58e`, `k3e`.
+
+Tet4.exe separately registers the same `0x0AB84D0A` id at **layer 3** to
+`FUN_00456BC0`. That converter inserts the local member into the game model,
+but it does not call `CMetpParser::ApplyHeader` and does not expose the room
+keys. The accepted 87-byte body is therefore a Tetris layer-3 extension, not
+the complete room-member message.
+
+A diagnostic two-layer batch is available with
+`TET4_EARLY_ADD_MEMBER_BASE=1`. It sends a layer-0 room base followed by two
+alignment markers and the layer-3 extension. The layer-0 room converter is
+reached and dispatches with a valid `s4e`/`c5e` header, but the layer-3
+converter is **not** invoked in the same frame yet. The pair is therefore
+unverified and must not be treated as a working bootstrap. Sending SvcKor
+after the room base reaches its converter (`HgCom3.dll:0x60147870`) and the
+dispatcher, but still does not call `CTetSingleMainBody::Start` (`0x00460DD0`).
+
+### Next
+
+1. Determine whether `PC_ConvertX2M` accepts more than one populated layer in
+   one XLBP frame, or whether the room base and Tetris extension must use a
+   different framing/order.
+2. Recover the remaining room-member keys and the full profile semantics;
+   `k57e` is confirmed mandatory, and the empty-string defaults are only a
+   diagnostic placeholder.
+3. Re-run `tools/debug/game-event-dispatch.gdb` and confirm whether the
+   layer-3 converter can be reached after a valid room base without losing the
+   header.

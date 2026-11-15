@@ -238,3 +238,23 @@ TET4_EXPERIMENTAL_ADD_MEMBER_BOOTSTRAP=1 to send SvcKor before AddMemberToC.
 The default order remains AddMemberToC then SvcKor. TET4_SKIP_SVCKOR=1 still
 suppresses SvcKor entirely. These switches are for isolating the event-parser
 fault and do not change the default server behavior.
+
+### Early AddMember ordering (diagnostic)
+
+`TET4_EARLY_ADD_MEMBER_ID=<local-member-id>` sends the experimental
+AddMemberToC after EnterRoomToS and before EnterRoomToC. The ID is compared
+with EnterRoomToS `final_strings[0]`; on mismatch nothing is sent and the
+normal post-EnterRoom AddMemberToC is suppressed. The default behavior is
+unchanged when the variable is absent.
+
+`TET4_EARLY_ADD_MEMBER_BASE=1` additionally selects the unverified two-layer
+candidate: a layer-0 `Cmd_Room_AddMemberToC` base followed by two alignment
+markers and the layer-3 87-byte extension. Live GDB shows that the layer-0
+room converter and the `s4e`/`c5e` dispatcher run, but the layer-3 converter
+is not reached in the same frame. This candidate does not start the game and
+must not be described as a working room/game bootstrap.
+
+The complete live scenario is
+`tools/debug/game-event-dispatch.gdb`. It captures the dispatcher registration,
+the AddMember insert/refill, the registered `CFunctor::Call` at 0x602091AF
+(not the fallback), the null service read and `CTetSingleMainBody::Start`.

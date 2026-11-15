@@ -29,12 +29,17 @@ ROOM_INFO = "u32 s u32 u32 u8 s s u32 s s u32 u32 u32 u32"
 class BatchTest(unittest.TestCase):
     def test_layer_slots_are_alignment_markers(self):
         body = u32(Msg.Room_OrderTypeAutoEnterSingleModeRoomTetrisToS) + b"fields"
-        batch = encode_batch(body, layer=3)
+        batch = encode_batch({3: body})
         self.assertEqual(batch, u32(Msg.LayerAlignment) * 3 + body)
         message = decode_batch(batch)
         self.assertEqual(
             (message.layer, message.id, message.body),
             (3, Msg.Room_OrderTypeAutoEnterSingleModeRoomTetrisToS, body))
+
+    def test_two_layers_share_one_batch(self):
+        generic, tetris = u32(Msg.Channel_GetMemberInfoToC) + b"0", u32(Msg.Channel_GetMemberInfoToC) + b"3"
+        self.assertEqual(encode_batch({0: generic, 3: tetris}),
+                         generic + u32(Msg.LayerAlignment) * 2 + tetris)
 
     def test_marker_only_batch_has_no_message(self):
         self.assertIsNone(decode_batch(u32(Msg.LayerAlignment)))

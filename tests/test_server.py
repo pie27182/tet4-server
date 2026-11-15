@@ -7,7 +7,9 @@ import unittest
 from pathlib import Path
 
 from tet4server import crypto
-from tet4server.messages import Msg
+from tet4server import messages as m
+from tet4server.lobby import Lobby
+from tet4server.messages import GameReport, Msg
 from tet4server.server import Ports, Services
 from tet4server.xdr import Reader, frame, read_frame, string, u8, u32, u64
 from tet4server.xlbp import MAGIC, Message, decode_batch, encode_batch
@@ -35,7 +37,7 @@ class SecureClient:
         self.rx = crypto.downstream_cipher(master)
 
     async def send(self, body: bytes, layer: int = 0) -> None:
-        payload = MAGIC + encode_batch(body, layer)
+        payload = MAGIC + encode_batch({layer: body})
         self.writer.write(self.tx.encrypt(u32(len(payload)) + payload))
         await self.writer.drain()
 
@@ -59,11 +61,60 @@ CREATE_ROOM_CAPTURED = bytes.fromhex(
     + "0000000000000000000000000000000147000000000000000454455434000000000000000131")
 
 
+def game_report(mode: int, value: int, completed: bool) -> bytes:
+    """Room_OrderTypeSingleModeGameReportTetrisToS as the client builds it at game over."""
+    return b"".join([
+        u32(Msg.Room_OrderTypeSingleModeGameReportTetrisToS), string(MEMBER), string(b""),
+        string(b"1"), string(b""), u32(mode), u32(value), u8(completed), u32(0) * 3])
+
+
+def read_single_mode_info(r: Reader) -> tuple:
+    """mode, rank, ranked, values, dates, result, plays."""
+    mode, _, rank, ranked = r.u32(), r.u32(), r.u32(), r.u32()
+    values = [r.u32() for _ in range(r.u32())]
+    dates = [r.string() for _ in range(r.u32())]
+    return mode, rank, ranked, values, dates, r.u32(), r.u32()
+
+
 def room_request(msg_id: int) -> bytes:
     """AutoEnterSingleModeRoomTetrisToS / CreateRoomToS as the Single Mode button fills them."""
     return b"".join([
         u32(msg_id), string(MEMBER), u32(0), string(b""), string(b""), string(b"N000S"),
         u32(0), u32(0), string(b""), u32(0), string(b"TET4"), string(b""), string(b"1")])
+
+
+class RecordTest(unittest.TestCase):
+    def play(self, lobby: Lobby, games, member: bytes = MEMBER) -> None:
+        for mode, value, completed in games:
+            lobby.add_game(GameReport(member, mode, value, completed))
+
+    def test_best_five_per_mode(self):
+        lobby = Lobby()
+        self.play(lobby, [(0, 300, True), (0, 100, True), (0, 200, True), (0, 50, True),
+                          (0, 50, True), (0, 40, True), (1, 9000, True), (1, 7000, True),
+                          (1, 5000, False), (2, 0, True)])
+        marathon, forty, ultra = (lobby.single_mode(MEMBER, mode) for mode in range(3))
+        self.assertEqual([v for v, _ in marathon.top], [300, 200, 100, 50, 50])
+        self.assertEqual([v for v, _ in forty.top], [7000, 9000])  # lower is better
+        self.assertEqual((marathon.plays, forty.plays, ultra.plays), (6, 3, 1))
+        self.assertEqual((ultra.top, ultra.rank), ([], 0))
+        self.assertEqual(lobby.single_mode(b"other", 0), m.SingleMode([], 0, 0, 1))
+
+    def test_rank_among_players(self):
+        lobby = Lobby()
+        self.play(lobby, [(0, 500, True), (1, 4000, True)], member=b"first")
+        self.play(lobby, [(0, 300, True), (1, 3000, True)])
+        self.assertEqual(lobby.single_mode(MEMBER, 0)[2:], (2, 2))
+        self.assertEqual(lobby.single_mode(MEMBER, 1)[2:], (1, 2))
+
+    def test_records_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "records.json"
+            self.play(Lobby(path), [(0, 300, True), (1, 7000, False)])
+            again = Lobby(path)
+            marathon = again.single_mode(MEMBER, 0)
+            self.assertEqual(([v for v, _ in marathon.top], marathon.plays), ([300], 1))
+            self.assertEqual(again.single_mode(MEMBER, 1).plays, 1)
 
 
 class ServiceTest(unittest.IsolatedAsyncioTestCase):
@@ -133,6 +184,10 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((strings[2], strings[7]), (b"", b"1"))
         reply = await self.expect(channel, Msg.Channel_GetMemberInfoToC)
         self.assertEqual(Reader(reply.body[4:]).string(), MEMBER)
+        # Layer 3 of the same batch: the Tetris profile, one record list per mode.
+        generic = len(m.get_member_info_to_c(MEMBER))
+        self.assertEqual(reply.body[generic:generic + 12],
+                         u32(Msg.LayerAlignment) * 2 + u32(Msg.Channel_GetMemberInfoToC))
 
         await channel.send(u32(Msg.Channel_GetMemberListToS) + string(b"TET4") + string(b"") + string(b"1"))
         await self.expect(channel, Msg.Channel_GetMemberListToC)
@@ -166,10 +221,34 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
             string(b"N000S"), string(b""), string(b""), string(b""), u32(0),
             string(MEMBER), string(b""), u32(0), u32(0)]))
         await self.expect(game, Msg.Room_EnterRoomToC)
+        reply = await self.expect(game, Msg.Room_AddMemberToC)
+        fields = parse(reply.body, "s s u32 s s s s u32 s u64 u64" + " u32" * 6
+                       + " s u32 s s s s u32 u32 u32")
+        self.assertEqual((fields[0], fields[2], fields[3]), (MEMBER, 0, MEMBER))  # host, seat, k3e
         await game.send(u32(Msg.Room_AlterRoomToS) + u32(0) + string(b"") * 4)
         await game.send(u32(Msg.Room_StartNewGameToS) + string(b"v6e"))
         reply = await self.expect(game, Msg.Room_StartNewGameToC)
         self.assertEqual(parse(reply.body, "u32 s u8 u8 u8")[:2], [1, MEMBER])
+
+        # Game over: the reply carries the mode's records, now with this score.
+        await game.send(game_report(0, 246, True), layer=3)
+        reply = await self.expect(game, Msg.Room_OrderTypeSingleModeGameReportTetrisToC, layer=3)
+        r = Reader(reply.body)
+        r.u32(), r.string(), r.string()
+        self.assertEqual(r.u32(), 0)                    # result: success
+        self.assertEqual(r.string(), MEMBER)            # _TetrisMemberGameReport
+        r.take(20 + 5 + 48 + 1)
+        r.u8(), r.string(), r.u32(), r.take(2)          # _TetrisSchoolInfo
+        r.take(16)
+        mode, rank, ranked, values, dates, result, plays = read_single_mode_info(r)
+        self.assertEqual((mode, rank, ranked, values, result, plays, r.remaining()),
+                         (0, 1, 1, [246, 0, 0, 0, 0], 246, 1, 0))
+        self.assertRegex(dates[0], rb"^\d{4}\.\d\d\.\d\d$")
+
+        # The exit button, as captured: the client leaves once the player is deleted.
+        await game.send(bytes.fromhex("0510821a0000000000000000000000047465737400000000"))
+        reply = await self.expect(game, Msg.Room_DeleteMemberToC)
+        self.assertEqual(parse(reply.body, "s s u32 s s")[3], MEMBER)
 
         await game.close()
         for _ in range(100):

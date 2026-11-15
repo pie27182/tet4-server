@@ -45,8 +45,14 @@ class ChannelConnection:
         self.member_id = request.member_id
         # MetpInfo(4).k23e/k24e come back from this reply; Msg_SendEnterRoom needs them.
         await self.session.send(m.enter_channel_to_c(request.k23e, request.k24e))
-        # The client's own member record, which SGlobalInfo::MyData() looks up.
-        await self.session.send(m.get_member_info_to_c(request.member_id))
+        # The player's own record (layer 0, found by SGlobalInfo::MyData()) and its
+        # Tetris profile (layer 3, read by the Single Mode scene).
+        member = request.member_id
+        await self.session.send_layers({
+            0: m.get_member_info_to_c(member),
+            3: m.get_member_info_tetris(
+                member, [self.lobby.single_mode(member, mode) for mode in range(m.SINGLE_MODES)]),
+        })
 
     async def on_get_member_list(self, r: Reader) -> None:
         await self.session.send(m.get_member_list_to_c())

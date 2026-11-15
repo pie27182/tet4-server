@@ -48,6 +48,10 @@ def u8(value: int) -> bytes:
     return struct.pack(">B", value)
 
 
+def u16(value: int) -> bytes:
+    return struct.pack(">H", value)
+
+
 def u32(value: int) -> bytes:
     return struct.pack(">I", value)
 

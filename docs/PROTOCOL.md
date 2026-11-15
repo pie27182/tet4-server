@@ -119,7 +119,8 @@ So the pair (ID, layer) identifies a message (0x060BC39A at layer 0 is HgCom3's
 GetMemberInfoToC, at layer 3 a Tet4.exe extension with another converter), one
 batch cannot combine message types, and a slot whose converter is not registered
 consumes nothing. The server reads the first populated slot of each batch and
-sends one populated slot per batch.
+sends one populated slot per batch, except GetMemberInfoToC, which fills layers 0
+and 3 (section 6). **live**
 
 ## 6. Channel messages
 
@@ -129,7 +130,7 @@ layer 0 except AutoEnter: **live**
 ```
 AuthToS                           -> AuthToC
 GetUserIdByMemberIdToS            -> GetUserIdToC
-EnterChannelByUserIdToS           -> EnterChannelToC, GetMemberInfoToC
+EnterChannelByUserIdToS           -> EnterChannelToC, GetMemberInfoToC   layers 0 and 3
 GetMemberListToS                  -> GetMemberListToC
 GetRoomListToS                    -> GetRoomListToC
 GetItemStateToS                   -> GetItemStateToC
@@ -171,6 +172,15 @@ client's own CMemberData from k3e. SGlobalInfo::MyData() finds that record by
 GData `k602e`; without it MyData() is null and Msg_SendEnterRoom faults. The member
 list cannot stand in: Msg_FillMemberList skips the own row while MyData() is null.
 Sent with k3e = the member id, everything else empty. **live**
+Its layer-3 slot, in the same batch, is Tet4.exe's
+Cmd_Channel_OrderTypeGetMemberInfoTetrisToC (Deserialize 0x004598C0, converter
+0x00459E20): `u32 id | _TetrisMemberInfo | _EmblemInventoryInfo |
+_AliasInventoryInfo | vector | vector`. _TetrisMemberInfo is `str member |
+_TetrisSchoolInfo (u8 | str | u32 | u16) | u32 x2 | str | 12 bytes | str x2 | u64 |
+vector<_SingleModeInfo>`, an inventory `vector | str | u32`. The converter stores
+the Tetris profile in the game model (FUN_004EC400); the Single Mode scene reads
+one _SingleModeInfo per mode every frame (FUN_00461E70, FUN_00461FA0) and faults at
+0x00461E9D without them. Sent with the player's records (section 8). **live**
 
 **Cmd_Channel_GetMemberListToS** 0x0AE3BBDA: `u32 id | str k22e | str k23e |
 str k24e`. **wire**
@@ -241,20 +251,30 @@ Cmd_Shop_GetInventoryInfoToS 0x04762CEA.
 
 ## 7. Game messages
 
-The client connects twice. The AutoEnter reply starts the first connection
-(`connGameSvr`); the client completes the handshake on it, closes it when
-CreateRoomToC arrives, and connects again. On the second connection it sometimes
-sends EnterRoomToS in plain before its share, then the share, then the same
-EnterRoomToS encrypted. The server ignores plain frames before the handshake:
-until then the client takes the first 48 bytes it receives as the server's share.
-**live**, under Wine; in those runs the client later shows
-`알수 없는 오류가 발생했습니다` ("an unknown error occurred"), an exception caught in
-a window message handler whose cause is open.
+The client opens the game socket twice for one room: the AutoEnter reply starts a
+connection (`connGameSvr`), and CreateRoomToC closes it and connects again
+(CSwitch2LobbyController::Net_Channel_CreateRoom, HgCtr3 0x6020A170). The secure
+socket reports a connection only once it is keyed (CHgSecureSocket::OnReceive
+0x606040C0 posts 0x7E9), and that report sends EnterRoomToS
+(Net_Game_SocketConnect 0x6020A020). If the first connection is keyed before the
+client handles CreateRoomToC, its report is still queued when the socket object
+reconnects: EnterRoomToS goes out in plain on the new connection before its share,
+the client enters twice, and an MFC exception shows `알수 없는 오류가 발생했습니다`.
+**live**, in about half of the runs while the server answered shares at once. The
+server answers game shares after 0.2 s (`GAME_HANDSHAKE_DELAY`), so the client
+drops the first connection unkeyed, within milliseconds. **live**, every run since.
+Plain frames before a share are still ignored.
 
 ```
-EnterRoomToS      -> EnterRoomToC
-AlterRoomToS         (no reply)
-StartNewGameToS   -> StartNewGameToC
+EnterRoomToS                                -> EnterRoomToC, AddMemberToC
+AlterRoomToS                                   (no reply)
+StartNewGameToS                             -> StartNewGameToC
+PolyMinoPutTetrisToS                layer 3    (no reply, one per piece)
+SingleModeGameReportTetrisToS       layer 3 -> SingleModeGameReportTetrisToC  layer 3
+GameReportToS                                  (no reply)
+  (Enter or 다시도전: StartNewGameToS again; ESC or 확인: the mode selection)
+ExitRoomToS                                 -> DeleteMemberToC
+SetSpeedLevelTetris                 layer 3    (no reply); the client closes the socket
 ```
 
 **Cmd_Room_EnterRoomToS** 0x09A5347A: `u32 id | u32 | str | str | u32 | u32 |
@@ -263,83 +283,88 @@ Deserialize 0x6012AEC0), sent by CGameLobbyModel::Msg_SendEnterRoom (0x60914FD0)
 k46e (the room option) and k3e (the member id) are placed by their captured
 values. **wire**
 **Cmd_Room_EnterRoomToC** 0x0974DCEA: `u32 id | str k1e | u32 failcode | str k2e`
-(converter 0x6013C940). Sent with failcode 0. **live**: the client then sends
-AlterRoomToS.
+(converter 0x6013C940). Sent with failcode 0. **live**
+**Cmd_Room_AddMemberToC** 0x0619233A, sent next: `u32 id | str k50e | str k57e |
+u32 k58e | str k3e | str k7e | str k8e | str k11e | u32 k10e | str k12e | u64 k34e |
+u64 k13e | u32 k26e-k31e | str k32e | u32 k33e | str k102e | str k37e | str k38e |
+str k52e | u32 k53e | u32 k35e | vector k153e` (Deserialize 0x6012FC50, converter
+0x6013A060, header `s4e/c5e`). k50e is the host, k58e the seat, k3e the member.
+CGameLobbyModel::Msg_AddRoomMember (0x60915600) seats the player in the game
+(CTetMainBody::AddGamer; without a player, Start faults at 0x004E0A00) and copies
+its counts k26e-k31e into MetpInfo 3 and 7. CF5ChannelLobbyView::
+Evt_ChannelLobby_OnUserExitGameRoom (HGF5V 0x60A06080) reads k26e from both when the
+player leaves; without them it throws `CMetpParserRet.Get()::NoValue` and the client
+quits. Cmd_Room_GetMemberListToC 0x03753C2A seats the player too but sets neither.
+**live**
 **Cmd_Room_AlterRoomToS** 0x0D31FDDA: `u32 id | u32 | str x4` (Serialize 0x6012BFE0,
 Deserialize 0x6012C080). **wire**
 
 **Cmd_Room_StartNewGameToS** 0x072585BA: `u32 id | str k59e`. CTetSingleMainBody::
 Start (0x00460DD0) calls CF5GameWnd::SendStartNewGame (HGF5V 0x60A09D70), and
-Msg_SendRoomStartNewGame (HgModel3 0x609173F0) sends this on the game socket with
-k59e `v6e`. **code**
+Msg_SendRoomStartNewGame (HgModel3 0x609173F0) sends this with k59e `v6e`. **live**
 **Cmd_Room_StartNewGameToC** 0x0F809B5A in HgCom3's layer-0 form (converter
 0x60147870): `u32 id | vector<str member | u8 | u8 | u8>`, keys k25e (the count),
 k3e<i>, k118e<i> and k119e<i>. It leads through Net_StartNewGame (HgCtr3 0x60207880)
-to CF5GameWnd::Evt_OnStartNewGame (HGF5V 0x60A090D0). The server answers
-StartNewGameToS with one entry, the member who entered the room. **live** for the
-layout (a copy pushed after EnterRoomToC reached both functions), **code** for
-answering the request.
+to CF5GameWnd::Evt_OnStartNewGame (HGF5V 0x60A090D0). Sent with one entry, the
+player. **live**: the game starts.
 
-Received without a reply, both layer 3: Cmd_Room_OrderTypeSingleModePolyMinoPutTetrisToS
-0x0CC4004A, `u32 id | u32 x4`, and Cmd_Room_OrderTypeSingleModeGameReportTetrisToS
-0x05BCDF3A, `u32 id | str x4 | u32 x2 | u8 | u32 x3`. Their counterparts
-Cmd_Room_OrderTypeSingleModeGameReportTetrisToC 0x0EE1D56A (converter 0x00450940) and
-Cmd_Channel_OrderTypeSingleModeResultMemberTetrisToC 0x0928E8BA are not recovered.
-**code**
+**Cmd_Room_OrderTypeSingleModePolyMinoPutTetrisToS** 0x0CC4004A, layer 3: `u32 id |
+u32 x4`, one per piece. **wire**
 
-## 8. Where Single Mode stops
+**Cmd_Room_OrderTypeSingleModeGameReportTetrisToS** 0x05BCDF3A, layer 3, built at game
+over (FUN_00461CC0 → 0x00461770, Serialize 0x004623A0): `u32 id | str member |
+str k23e | str k24e | str k42e | u32 mode | u32 value | u8 completed | u32 x3`. The
+value is the score, in 40 lines the time in 1/100 s (the main body's timer at
++0x240); completed says whether 40 lines were cleared and is always set in the other
+modes. **live**
+**Cmd_Room_OrderTypeSingleModeGameReportTetrisToC** 0x0EE1D56A, layer 3 (Deserialize
+0x00443BB0, converter 0x00450940): `u32 id | str | str | u32 result |
+_TetrisMemberGameReport | _SingleModeInfo`. With result 0 the client replaces the
+mode's records with the _SingleModeInfo, updates the profile (FUN_00432360) and
+shows the result screen (0x0045CB30); it then sends GameReportToS. The
+_TetrisMemberGameReport (`str | u32 x5 | u8 x5 | u32 x5 | f32 | u32 x2 | f32 |
+u32 x3 | u8 | _TetrisSchoolInfo | u32 x4`, Deserialize 0x004436F0) is not read and
+is sent empty. **live**
+**Cmd_Room_GameReportToS** 0x0B81FF1A, HgCom3's generic report (`v11e`, score 0). Its
+reply Cmd_Room_GameReportToC 0x0EC0F66A (`u32 id | str | u32 failcode |
+vector<_MemberScoreReport>`, header `s4e/c32e`) only refreshes money and points
+(Msg_GameReport, HgModel3 0x60918C70); the client goes on without it. **live**
 
-The client runs the game loop itself: its Single Mode scene has the mode
-selection, HOLD and NEXT, and the score, and it reports pieces (PolyMinoPut) and
-results (GameReport) to the server. Nothing recovered so far shows the server
-computing the game.
+**Cmd_Room_ExitRoomToS** 0x0510821A, the 나가기 button: `u32 id` and fields the
+server does not read. **wire**
+**Cmd_Room_DeleteMemberToC** 0x0E50895A: `u32 id | str k50e | str k57e | u32 k58e |
+str k3e | str k8e` (Deserialize 0x60132A20, converter 0x6013CB60, header `s4e/c6e`).
+When k3e is the player, Msg_DeleteRoomMember (0x60915FC0) disconnects the game
+socket and returns to the lobby. **live**
+Cmd_Room_OrderTypeSetSpeedLevelTetris 0x0F5DE7AA, layer 3, follows; no reply.
+**wire**
 
-After EnterRoomToC the client crashes in CTetSingleScene::Update (0x00462600):
-FUN_00461E70 faults at 0x00461E9D (`mov edx,[ebp+0x2c]` with EBP 0), and
-FUN_00461FA0 at 0x00462009 when the first call is skipped. **live** Both index the
-main body's vectors at +0x268 and +0x29C, which FUN_00461C50 fills from the game
-model's player map (FUN_004EB0C0). The map is empty: no player was registered.
-**code**
+## 8. Single Mode records
 
-Players are registered by the layer-3 Tet4.exe converter of
-**Cmd_Channel_AddMemberToC** 0x0AB84D0A: FUN_00456BC0, FUN_00432280 and
-FUN_004EC400, which inserts the local member and calls FUN_00461C50. The path reads
-the keys k3e, k23e, k24e, k7e, k8e, k11e, k10e, k12e, k26e to k35e, k37e, k38e,
-k102e, k151e, k201e and k153e<i>. **code** Experiments whose code was not kept:
-**live**
+**_SingleModeInfo**, nested (Deserialize 0x004596D0): `u32 mode | u32 | u32 rank |
+u32 ranked | vector<u32> values | vector<str> dates | u32 result | u32 plays`. **code**
+for the layout and the readers below, **live** for each field's effect.
 
-- A layer-3-only batch `0x0AB84D0A | str member | 87 opaque bytes` on the game
-  socket reaches FUN_00456BC0, inserts the member and refills the vectors. The next
-  dispatch then faults at 0x004FBBB4: the layer-3 converter applies no Metp header,
-  so the parser's service is null. Setting the header to `s1e/c5e` in the debugger
-  got past the fault to CGameLobbyModel::Msg_AddRoomMember (0x60915600), which
-  failed on a missing `k57e`.
-- A batch of a layer-0 Cmd_Room_AddMemberToC (0x0619233A) and the layer-3 extension
-  reached only the layer-0 converter. That follows from section 5: the receiver
-  looked up 0x0619233A, which has no layer-3 converter.
+- mode: 0 Marathon, 1 40 lines, 2 Ultra.
+- values and dates: the best results, best first, as shown on the 내기록 tab
+  (FUN_00461FA0, which shows the dates as they are). The client always reads five
+  and compares a finished game with the first, so there are always five; 0 is an
+  empty slot. Higher scores are better; in 40 lines lower times are, and game over
+  shows NEW RECORD on its own comparison (FUN_00461CC0).
+- rank and ranked: the result screen shows the rank and rank / ranked as a
+  percentage (0x0045CB30, `%d`, `%0.2f`); the right panel shows the same.
+- result: this game's score or time on the result screen (FUN_0045CA20, 0x0045C200).
+- plays: games played in the mode. FUN_00460230 adds the plays of all modes to the
+  multiplayer games (MyData +0x130, +0x134, +0x138); Ultra opens at 500, or with
+  item T10006.
+- The u32 after mode only enters the 40 lines best-time display (FUN_00461E70);
+  sent as 0.
 
-The next candidate is therefore one batch with ID 0x0AB84D0A in both slots: a
-layer-0 Cmd_Channel_AddMemberToC (HgCom3 converter 0x60139BC0, header `s1e/c5e`)
-for the header and member keys, two markers, and the layer-3 extension for the
-game model. Neither part's fields are recovered. **code**
-
-StartNewGame has the same shape: Tet4.exe also registers 0x0F809B5A at layer 3
-(FUN_00459BD0, `vector<_AliasInfo: str member | str option | u32>`). An earlier
-test that sent this vector at layer 0 reached HgCom3's converter instead. **code**
-
-Open:
-
-1. The fields of both AddMemberToC layers, and when to send it (after EnterRoomToC
-   is the natural point).
-2. The "unknown error" after a plain EnterRoomToS (section 7).
-3. GameReportToC and the result message, once a game runs.
-
-`tools/client.py patch --debug-single-scene` removes both update calls. The Single
-Mode screen then renders with its start button (게임시작, or Enter). **live**
-Pressing it enters CTetSingleMainBody::Start (0x00460DD0), which crashes before it
-sends StartNewGameToS: FUN_005727c0 returns the current seat's player from a
-six-slot array (`slots[this+0x1C]`), the slot is empty, and FUN_004E0A00 reads
-`[0+0x814]` at 0x004E0A00. **live** It is the same missing player registration.
+The server keeps, per player and mode, the plays and the best five; only 40 lines
+runs that were cleared count as records. It ranks a player's best among the
+players it knows and dates records `YYYY.MM.DD` (the client's own date format is
+not known). Records live in memory, or in a JSON file with `--records FILE`. The
+profile at channel entry and every game report carry them.
 
 ## 9. Debugging
 
@@ -359,6 +384,9 @@ The full procedure for recording a run is in [`DEBUGGING.md`](DEBUGGING.md).
   DLLs must load; forcing builtin msvcr90, msvcp90 or mfc90 stops it from starting.
   The tested prefix had vcrun2008 and Korean fonts; a fresh Wine 9 prefix with no
   extras also runs it, headless under Xvfb included.
+- Headless, under Xvfb, run a window manager (twm works). Outside a game the client
+  reads Enter, ESC and the arrow keys with GetAsyncKeyState (FUN_00461930), and only
+  while its main window is active.
 - The text of a Windows message box: set `RelayInclude` under
   `HKCU\Software\Wine\Debug` to `user32.MessageBoxA;user32.MessageBoxW` and run
   with `WINEDEBUG=+relay`; the strings are CP949.
@@ -371,10 +399,10 @@ Notes in this repository's history concluded otherwise on these points:
 - CreateRoomToC's host is the string right before the port, and its room option
   comes from AutoEnter, not from CreateRoomToS.
 - RoomInfoToC has no second ID before its _RoomInfo.
-- 0x602091AF is the registered CFunctor::Call, returning to 0x602091B5; the
-  God()->Call fallback starts at 0x602091BA. The AddMember fault is a missing
-  parser header, not an unbound dispatcher.
-- The `_AliasInfo` StartNewGame "never dispatches" result came from sending it at
-  layer 0.
+- The Single Mode scene does not need Cmd_Channel_AddMemberToC: it needs the Tetris
+  profile in layer 3 of GetMemberInfoToC, and the game socket's Cmd_Room_AddMemberToC
+  seats the player.
+- The "unknown error" after entering Single Mode is the first game connection's
+  stale connect report, not a reply the server got wrong.
 - The lobby row `1 (0/100)` appears when the client refreshes CDS after abandoning
   a channel connection; it does not mean the channel was entered.

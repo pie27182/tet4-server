@@ -1,4 +1,6 @@
 """Channel service: login replies, lobby lists and Single Mode room creation."""
+import dataclasses
+
 from . import messages as m
 from .lobby import Lobby
 from .messages import Endpoint, Msg
@@ -12,6 +14,7 @@ class ChannelConnection:
         self.lobby = lobby
         self.game = game
         self.member_id: bytes | None = None
+        self.auto_enter: m.RoomRequest | None = None
         self.handlers = {
             (0, Msg.AuthToS): self.on_auth,
             (0, Msg.Channel_GetUserIdByMemberIdToS): self.on_get_user_id,
@@ -58,10 +61,16 @@ class ChannelConnection:
         # Echo the requested room with room number 0 and the game endpoint; the
         # client then creates the room itself with CreateRoomToS.
         request = m.read_room_request(r)
+        self.auto_enter = request
         await self.session.send(m.auto_enter_single_mode_to_c(request, self.game), layer=3)
 
     async def on_create_room(self, r: Reader) -> None:
         request = m.read_room_request(r)
+        # The CreateRoomToS that follows AutoEnter leaves the room option empty;
+        # the room gets the mode the client asked for in AutoEnter.
+        if not request.k46e and self.auto_enter:
+            request = dataclasses.replace(request, k46e=self.auto_enter.k46e)
+        self.auto_enter = None
         room = self.lobby.create_room(self.member_id or request.member_id, request)
         await self.session.send(m.create_room_to_c(room, self.game))
         await self.session.send(m.room_info_to_c(room))

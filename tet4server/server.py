@@ -94,7 +94,7 @@ class Services:
     def _secure(self, service: str, connection: Callable[[Session], object]):
         async def handler(reader, writer):
             try:
-                session = await Session.accept(service, reader, writer, self._tracer)
+                session = Session(service, reader, writer, self._tracer)
                 await connection(session).run()
             except (ProtocolError, ConnectionError, asyncio.IncompleteReadError) as exc:
                 log.info("%s connection closed: %s", service, str(exc) or type(exc).__name__)

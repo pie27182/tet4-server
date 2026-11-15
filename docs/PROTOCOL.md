@@ -209,19 +209,24 @@ k46e's first letter, and with k46e empty the room scene stays null (fault at
 0x004FE2D5). The server echoes the request's room fields, so the room number is 0.
 **live**: the client then sends CreateRoomToS.
 
-**Cmd_Channel_CreateRoomToS** 0x0CA9895A: the room fields, captured with the
-member, `N000S`, `TET4`, an empty k23e and k24e `1`. **wire**
+**Cmd_Channel_CreateRoomToS** 0x0CA9895A, sent right after AutoEnter (also when
+AutoEnter names a room): the room fields, captured with the member, the title
+`행복한 하루되세요` in k45e (CP949), an **empty** k46e, k200e `G`, `TET4`, an empty
+k23e and k24e `1`. **wire** The server gives the room the k46e of the preceding
+AutoEnter request; with an empty option the client fails to enter the room. **live**
 **Cmd_Channel_CreateRoomToC** 0x0A80143A (Tet4.exe converter 0x00441E90): `u32 id |
 str | u32 failcode | str k2e | str k3e | u32 k42e | str k67e | str k45e | str k46e |
 u32 k127e | u32 k66e | str k200e | u32 k69e | str k22e | str k23e | str k24e |
-str k52e | str | u32 k53e | str k82e` (Deserialize 0x0043F580). Sent with failcode
-0, the request's room fields, a new room number and the game server. **live**: the
-client connects to the game socket. (Earlier versions sent k200e `G`, with no
-recorded reason; it now echoes the client's value.)
+str | str k52e | u32 k53e | str k82e` (Deserialize 0x0043F580). The host is the
+string right before the port, as in the AutoEnter reply: with it one string earlier
+the client reconnected to an empty host, which resolves to its own machine name.
+Sent with failcode 0, the room fields, a new room number and the game server.
+**live**: the client reconnects to the game socket and enters the room.
 **Cmd_Channel_RoomInfoToC** 0x0A680DDA, sent next: `u32 id | _RoomInfo`. Its
 Deserialize (0x601309F0) sets the embedded _RoomInfo's nested flag, so no second ID
 follows. Converter 0x6013B850 (header `s1e/c13e`) leads to SetRoomInfo
-(0x6090A650), which adds the room to the client's room list. **code**
+(0x6090A650), which adds the room to the client's room list. **code**; the client
+accepts it and enters the room. **live**
 
 **_RoomInfo**, always nested (Serialize 0x60126AC0, Deserialize 0x60126C10, keys
 from 0x6013B850): `u32 k42e | str k45e | u32 k127e | u32 k66e | u8 k68e | str k46e |
@@ -235,6 +240,16 @@ u32`, whose reply 0x0C3B49AA fills the profile dialog (Tet4.exe 0x00459EF0); and
 Cmd_Shop_GetInventoryInfoToS 0x04762CEA.
 
 ## 7. Game messages
+
+The client connects twice. The AutoEnter reply starts the first connection
+(`connGameSvr`); the client completes the handshake on it, closes it when
+CreateRoomToC arrives, and connects again. On the second connection it sometimes
+sends EnterRoomToS in plain before its share, then the share, then the same
+EnterRoomToS encrypted. The server ignores plain frames before the handshake:
+until then the client takes the first 48 bytes it receives as the server's share.
+**live**, under Wine; in those runs the client later shows
+`알수 없는 오류가 발생했습니다` ("an unknown error occurred"), an exception caught in
+a window message handler whose cause is open.
 
 ```
 EnterRoomToS      -> EnterRoomToC
@@ -316,14 +331,15 @@ Open:
 
 1. The fields of both AddMemberToC layers, and when to send it (after EnterRoomToC
    is the natural point).
-2. Why the client closed the game socket shortly after EnterRoomToC and showed
-   `제한 시간에 걸렸습니다` ("time limit exceeded"). Those runs also pushed an
-   unsolicited StartNewGameToC, which the server no longer does.
+2. The "unknown error" after a plain EnterRoomToS (section 7).
 3. GameReportToC and the result message, once a game runs.
 
 `tools/client.py patch --debug-single-scene` removes both update calls. The Single
 Mode screen then renders with its start button (게임시작, or Enter). **live**
-Starting should send StartNewGameToS, which the server now answers; not yet tried.
+Pressing it enters CTetSingleMainBody::Start (0x00460DD0), which crashes before it
+sends StartNewGameToS: FUN_005727c0 returns the current seat's player from a
+six-slot array (`slots[this+0x1C]`), the slot is empty, and FUN_004E0A00 reads
+`[0+0x814]` at 0x004E0A00. **live** It is the same missing player registration.
 
 ## 9. Debugging
 
@@ -332,21 +348,28 @@ The full procedure for recording a run is in [`DEBUGGING.md`](DEBUGGING.md).
 - `python3 -m tet4server --trace traces/session.jsonl` appends every decrypted
   batch as one JSON line: time, service, peer, direction, layer, message name and
   the batch in hex. Traces contain the session ticket.
-- winedbg runs the client under a debugger. Non-interactively:
-  `winedbg --file cmds.txt Tet4.exe "<bootstrap>"` from the client folder, with
-  lines such as `set $BreakOnFirstChance = 0`, `break *0x60147870`, `c` and `bt`.
+- winedbg runs the client under a debugger. Non-interactively, from the client
+  folder: `winedbg ./Tet4.exe "<bootstrap>" < cmds.txt`, with lines such as
+  `set $BreakOnFirstChance = 0`, `break *0x60147870`, `c` and `bt` (Wine 9's
+  `--file` fails to open the file, and the program needs the `./`).
   For gdb: `winedbg --gdb --no-start --port 38002 Tet4.exe "<bootstrap>"`, then
   `target remote localhost:38002` with `set architecture i386`. Check that a DLL
   is mapped at its preferred base before breaking on its addresses.
 - Wine: run from the client folder with `LANG=ko_KR.UTF-8`. The client's own VC90
   DLLs must load; forcing builtin msvcr90, msvcp90 or mfc90 stops it from starting.
-  The tested prefix had vcrun2008 and Korean fonts.
+  The tested prefix had vcrun2008 and Korean fonts; a fresh Wine 9 prefix with no
+  extras also runs it, headless under Xvfb included.
+- The text of a Windows message box: set `RelayInclude` under
+  `HKCU\Software\Wine\Debug` to `user32.MessageBoxA;user32.MessageBoxW` and run
+  with `WINEDEBUG=+relay`; the strings are CP949.
 
 ## 10. Corrected conclusions
 
 Notes in this repository's history concluded otherwise on these points:
 
 - k66e is the u32 room number, not a room-type string; the mode is in k46e.
+- CreateRoomToC's host is the string right before the port, and its room option
+  comes from AutoEnter, not from CreateRoomToS.
 - RoomInfoToC has no second ID before its _RoomInfo.
 - 0x602091AF is the registered CFunctor::Call, returning to 0x602091B5; the
   God()->Call fallback starts at 0x602091BA. The AddMember fault is a missing

@@ -1,5 +1,5 @@
-# winedbg command file for the Single Mode path. Run from the client folder:
-#   winedbg --file ../tools/single-mode.wdbg Tet4.exe "$(cat ../tools/bootstrap-sample.txt)"
+# winedbg commands for the Single Mode path. Run from the client folder:
+#   winedbg ./Tet4.exe "$(cat ../tools/bootstrap-sample.txt)" < ../tools/single-mode.wdbg
 # Every stop prints a backtrace and the registers, then continues.
 set $BreakOnFirstChance = 0
 info share

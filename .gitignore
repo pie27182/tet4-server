@@ -4,7 +4,7 @@ __pycache__/
 # Your client copy and everything derived from it stay local. Captures,
 # traces and logs contain session tickets.
 /client
-/client-patched
+/client-*
 /traces
 /runs
 *.tar.gz

@@ -87,35 +87,73 @@ class Tracer:
         self._file.close()
 
 
+class _Clear:
+    """The cipher of a connection that skipped the handshake."""
+
+    @staticmethod
+    def encrypt(data: bytes) -> bytes:
+        return data
+
+    decrypt = encrypt
+
+
 class Session:
-    """One client connection after the handshake."""
+    """One client connection.
+
+    The client's share normally comes first and every frame after it is
+    encrypted. On the game socket the client sometimes sends a plain frame before
+    its share and sends it again, encrypted, after the handshake. Such frames get
+    no reply: until the handshake the client takes the first 48 bytes it receives
+    as the server's share.
+    """
 
     def __init__(self, service: str, reader: asyncio.StreamReader,
-                 writer: asyncio.StreamWriter, master, tracer: Tracer | None = None):
+                 writer: asyncio.StreamWriter, tracer: Tracer | None = None):
         self.service = service
         host, port = writer.get_extra_info("peername")[:2]
         self.peer = f"{host}:{port}"
         self._reader = reader
         self._writer = writer
-        self._rx = crypto.upstream_cipher(master)
-        self._tx = crypto.downstream_cipher(master)
+        self._pending = b""
+        self._rx = self._tx = _Clear()
+        self._keyed = False
         self._tracer = tracer
 
-    @classmethod
-    async def accept(cls, service: str, reader: asyncio.StreamReader,
-                     writer: asyncio.StreamWriter, tracer: Tracer | None = None) -> "Session":
-        """Answer the client's share with a fresh one of ours."""
-        client_share = await reader.readexactly(crypto.SHARE_SIZE)
+    async def _read(self, n: int) -> bytes:
+        chunk, self._pending = self._pending[:n], self._pending[n:]
+        if len(chunk) < n:
+            chunk += await self._reader.readexactly(n - len(chunk))
+        return chunk
+
+    async def _handshake(self, client_share: bytes) -> None:
+        """Answer the client's share with a fresh one of ours and key both directions."""
         server_share = crypto.seal_share(crypto.new_share())
-        writer.write(server_share)
-        await writer.drain()
-        return cls(service, reader, writer, crypto.master_key(client_share, server_share), tracer)
+        self._writer.write(server_share)
+        await self._writer.drain()
+        master = crypto.master_key(client_share, server_share)
+        self._rx = crypto.upstream_cipher(master)
+        self._tx = crypto.downstream_cipher(master)
+        self._keyed = True
 
     async def receive(self) -> Message | None:
         """The next message from the client; None once it has closed the connection."""
         while True:
             try:
-                header = await self._reader.readexactly(4)
+                if not self._keyed:
+                    head = await self._read(8)
+                    if head[4:] != MAGIC:
+                        rest = await self._read(crypto.SHARE_SIZE - len(head))
+                        await self._handshake(head + rest)
+                        continue
+                    (length,) = struct.unpack(">I", head[:4])
+                    if not len(MAGIC) <= length <= MAX_FRAME:
+                        raise ProtocolError(f"bad frame length {length}")
+                    plain = head[4:] + await self._read(length - len(MAGIC))
+                    message = decode_batch(plain[4:])
+                    log.info("%s %s: ignored plain %s before the handshake", self.service,
+                             self.peer, describe(message.id) if message else "batch")
+                    continue
+                header = await self._read(4)
             except asyncio.IncompleteReadError as exc:
                 if exc.partial:
                     raise ProtocolError("connection closed inside a frame header") from None
@@ -124,7 +162,7 @@ class Session:
             if not len(MAGIC) <= length <= MAX_FRAME:
                 raise ProtocolError(f"bad frame length {length}")
             try:
-                payload = self._rx.decrypt(await self._reader.readexactly(length))
+                payload = self._rx.decrypt(await self._read(length))
             except asyncio.IncompleteReadError:
                 raise ProtocolError("connection closed inside a frame") from None
             if payload[:4] != MAGIC:

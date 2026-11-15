@@ -83,8 +83,11 @@ Each run is a separate folder.
    the Terminal 3 command with:
 
    ```bash
-   cd client-patched && LANG=ko_KR.UTF-8 LC_ALL=ko_KR.UTF-8 winedbg --file ../tools/single-mode.wdbg Tet4.exe "$(cat ../tools/bootstrap-sample.txt)" 2>&1 | tee "../$RUN/winedbg.log"
+   cd client-patched && LANG=ko_KR.UTF-8 LC_ALL=ko_KR.UTF-8 winedbg ./Tet4.exe "$(cat ../tools/bootstrap-sample.txt)" < ../tools/single-mode.wdbg 2>&1 | tee "../$RUN/winedbg.log"
    ```
+
+   (The commands go on standard input: Wine 9's `winedbg --file` fails to open
+   the file.)
 
    The file prints the loaded modules (`info share`; check that every DLL sits at
    its preferred base), then a backtrace and registers at each stop on the Single

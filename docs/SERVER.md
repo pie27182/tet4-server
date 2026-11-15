@@ -231,3 +231,10 @@ This does not yet start CTetSingleMainBody::Start (0x00460DD0), and it does
 not establish a playable game. The next task is to isolate the null event in
 the corrected AddMember + SvcKor sequence, then return to the independent
 0x00461E9D scene-initialization blocker.
+
+
+For the ordering probe, set TET4_SVCKOR_BEFORE_ADD_MEMBER=1 together with
+TET4_EXPERIMENTAL_ADD_MEMBER_BOOTSTRAP=1 to send SvcKor before AddMemberToC.
+The default order remains AddMemberToC then SvcKor. TET4_SKIP_SVCKOR=1 still
+suppresses SvcKor entirely. These switches are for isolating the event-parser
+fault and do not change the default server behavior.

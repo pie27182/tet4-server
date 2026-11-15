@@ -308,27 +308,29 @@ def handle(conn: socket.socket, capture_dir: Path | None = None) -> None:
                     connection_id,
                 )
                 if member_id and room_option:
-                    # This layer-3 wire layout was accepted by the live client:
-                    # message ID | member-id string | opaque 87-byte profile suffix.
-                    # Keep it opt-in until the profile suffix and the follow-up
-                    # SvcKor interaction are fully understood.
-                    if os.environ.get("TET4_EXPERIMENTAL_ADD_MEMBER_BOOTSTRAP") == "1":
-                        bootstrap = single_mode.layered_add_member_to_c_candidate(member_id)
-                        session.send(conn, bootstrap)
-                        log.warning(
-                            "sent experimental live-probed AddMemberToC "
-                            "connection=%s member_id_len=%d layer=%d",
-                            connection_id,
-                            len(member_id),
-                            single_mode.ADD_MEMBER_LAYER,
-                        )
-                    if os.environ.get("TET4_SKIP_SVCKOR") == "1":
-                        log.warning(
-                            "skipped Cmd_Room_StartNewGameSvcKorToC connection=%s "
-                            "(TET4_SKIP_SVCKOR=1)",
-                            connection_id,
-                        )
-                    else:
+                    def send_add_member() -> None:
+                        # This layer-3 wire layout was accepted by the live client:
+                        # message ID | member-id string | opaque 87-byte suffix.
+                        # Keep it opt-in while the profile fields are unresolved.
+                        if os.environ.get("TET4_EXPERIMENTAL_ADD_MEMBER_BOOTSTRAP") == "1":
+                            bootstrap = single_mode.layered_add_member_to_c_candidate(member_id)
+                            session.send(conn, bootstrap)
+                            log.warning(
+                                "sent experimental live-probed AddMemberToC "
+                                "connection=%s member_id_len=%d layer=%d",
+                                connection_id,
+                                len(member_id),
+                                single_mode.ADD_MEMBER_LAYER,
+                            )
+
+                    def send_svckor() -> None:
+                        if os.environ.get("TET4_SKIP_SVCKOR") == "1":
+                            log.warning(
+                                "skipped Cmd_Room_StartNewGameSvcKorToC connection=%s "
+                                "(TET4_SKIP_SVCKOR=1)",
+                                connection_id,
+                            )
+                            return
                         session.send(conn, start_new_game_svckor_to_c(member_id))
                         log.info(
                             "sent Cmd_Room_StartNewGameSvcKorToC connection=%s "
@@ -337,6 +339,15 @@ def handle(conn: socket.socket, capture_dir: Path | None = None) -> None:
                             len(member_id),
                             len(room_option),
                         )
+
+                    # Default order stays AddMember -> SvcKor. Reverse it only
+                    # for the live ordering probe; both options remain opt-in.
+                    if os.environ.get("TET4_SVCKOR_BEFORE_ADD_MEMBER") == "1":
+                        send_svckor()
+                        send_add_member()
+                    else:
+                        send_add_member()
+                        send_svckor()
             elif msg_id == GAME_ALTER_ROOM_TOS:
                 request = parse_alter_room_request(payload)
                 log.info(

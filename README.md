@@ -1,10 +1,14 @@
 # tet4-server
 
-A local server for the 2012 Hangame Tetris client, `Tet4.exe` 1.3.4. The client
-stays unmodified apart from its TPack host names. The server implements the
-protocol the client already speaks, reconstructed from captured traffic and the
-client's code. [`docs/PROTOCOL.md`](docs/PROTOCOL.md) describes the protocol and
-the evidence for every reply.
+An online server for the 2012 Hangame Tetris client, `Tet4.exe` 1.3.4, run on any
+Linux host or VPS for players connecting over the internet. Players register and
+log in with an account; the server keeps their records in a database and ranks
+them across everyone on the server. The client stays unmodified apart from its
+TPack host names, which point at the server.
+
+The server implements the protocol the client already speaks, reconstructed from
+captured traffic and the client's code. [`docs/PROTOCOL.md`](docs/PROTOCOL.md)
+describes the protocol and the evidence for every reply.
 
 ## Status
 
@@ -65,8 +69,8 @@ python3 tools/client.py run
 ```
 
 `check` compares every file with the client's own `files.sha256.json`. `patch`
-writes `client-patched/`, whose `Tet4.exe` connects to the local TPack server
-(`--host` for another server). `run` starts it with the test account in
+writes `client-patched/`, whose `Tet4.exe` connects to the TPack server on this machine
+(`--host ADDRESS` for a server elsewhere). `run` starts it with the test account in
 `tools/bootstrap-sample.txt` and the Korean locale; against a server with
 accounts, `play --server ADDRESS [--register]` logs in and starts it instead. The lobby shows the 내 아이템, 상점 and 싱글모드 (Single Mode) buttons.
 

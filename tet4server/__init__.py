@@ -1,2 +1,1 @@
-"""Local server for the original Hangame Tetris client (Tet4.exe)."""
-__version__ = "0.0.1"
+"""Local server for the 2012 Hangame Tetris client (Tet4.exe)."""

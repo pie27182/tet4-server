@@ -1,41 +1,29 @@
 import unittest
 
 from tet4server import cds
-from tet4server.xdr import Reader, pack_u32, pack_string
+from tet4server.messages import Endpoint
+from tet4server.xdr import Reader
 
-# Request header as captured in run15/run16: id, tid=1, table "COMMON".
-REQUEST_HEAD = bytes.fromhex("05740f6a" "00000001" "00000006" "434f4d4d4f4e")
+# Request captured in run15/run16: CDS_ReqSelect, tid 1, table "COMMON".
+SELECT_COMMON = bytes.fromhex("05740f6a" "00000001" "00000006" "434f4d4d4f4e")
+CHANNEL = Endpoint("127.0.0.1", 15001)
 
 
 class CdsTest(unittest.TestCase):
-    def test_parse_request_returns_tid_and_table(self):
-        tid, table = cds.parse_request(REQUEST_HEAD)
-        self.assertEqual((tid, table), (1, b"COMMON"))
+    def test_reply_echoes_tid_and_puts_host_and_port_in_columns_3_and_4(self):
+        r = Reader(cds.answer(SELECT_COMMON, CHANNEL))
+        self.assertEqual((r.u32(), r.u32(), r.u32()), (cds.SELECT_REPLY, 1, 0))
+        columns = [r.string() for _ in range(r.u32())]
+        self.assertEqual(columns, [c.encode() for c in cds.COLUMNS])
+        self.assertEqual(r.u32(), 1)
+        row = [r.string() for _ in range(r.u32())]
+        self.assertEqual(r.remaining(), 0)
+        self.assertEqual(row[3:5], [b"127.0.0.1", b"15001"])
+        self.assertEqual(columns[3:5], [b"ChannelIP", b"ChannelPort"])
 
-    def test_response_echoes_tid_with_zero_error(self):
-        reply = cds.build_response(tid=1)
-        body = Reader(reply[4:])
-        self.assertEqual(body.u32(), cds.RESPONSE_ID)
-        self.assertEqual(body.u32(), 1, "key must be the request tid")
-        self.assertEqual(body.u32(), 0, "error must be 0")
-        self.assertEqual(body.u32(), len(cds.COLUMNS))
-        for name in cds.COLUMNS:
-            self.assertEqual(body.string(), name.encode())
-
-    def test_host_and_port_sit_in_columns_3_and_4(self):
-        row = cds.DEFAULT_ROWS[0]
-        self.assertEqual(row[cds.COLUMNS.index("ChannelIP")], "127.0.0.1")
-        self.assertEqual(row[cds.COLUMNS.index("ChannelPort")], "15001")
-
-    def test_row_count_and_row_layout(self):
-        reply = cds.build_response(tid=7)
-        body = Reader(reply[4:])
-        body.u32(); body.u32(); body.u32()          # id, tid, error
-        self.assertEqual(body.u32(), len(cds.COLUMNS))
-        for _ in cds.COLUMNS:
-            body.string()
-        self.assertEqual(body.u32(), len(cds.DEFAULT_ROWS))
-        self.assertEqual(body.u32(), len(cds.DEFAULT_ROWS[0]))
+    def test_other_requests_get_no_reply(self):
+        with self.assertLogs("tet4.cds", "WARNING"):
+            self.assertIsNone(cds.answer(bytes.fromhex("01020304"), CHANNEL))
 
 
 if __name__ == "__main__":

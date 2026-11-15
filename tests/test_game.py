@@ -1,9 +1,42 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
-from tet4server import game
+from tet4server import channel, game, single_mode
 from tet4server.xdr import ProtocolError, Reader, pack_string, pack_u32
+
+
+def enter_room_payload(member_id: bytes = b"test", room_option: bytes = b"N000S") -> bytes:
+    """Build one minimal EnterRoomToS body with the local member in final_strings[0]."""
+    return (
+        pack_u32(game.GAME_ENTER_ROOM_TOS)
+        + pack_u32(1)
+        + pack_string(b"") + pack_string(b"")
+        + pack_u32(0) + pack_u32(0)
+        + pack_string(room_option)
+        + pack_string(b"") + pack_string(b"") + pack_string(b"")
+        + pack_u32(0)
+        + pack_string(member_id) + pack_string(b"")
+        + pack_u32(0) + pack_u32(0)
+    )
+
+
+class RecordingSession:
+    """Deliver one queued game frame, then close; record every reply."""
+
+    def __init__(self, frames):
+        self.frames = list(frames)
+        self.sent = []
+
+    def read_frame(self, conn):
+        if not self.frames:
+            raise OSError("test connection closed")
+        return self.frames.pop(0)
+
+    def send(self, conn, body):
+        self.sent.append(body)
 
 
 class SaveGameFrameTest(unittest.TestCase):
@@ -176,6 +209,102 @@ class SingleModeGameRequestTest(unittest.TestCase):
         payload = pack_u32(game.POLY_MINO_PUT_TOS) + b"\x00" * 17
         with self.assertRaises(ProtocolError):
             game.parse_poly_mino_put_request(payload)
+
+
+class EarlyAddMemberOrderingTest(unittest.TestCase):
+    def run_handle(self, env: dict[str, str], member_id: bytes = b"test"):
+        session = RecordingSession(
+            [(game.GAME_ENTER_ROOM_TOS, enter_room_payload(member_id))]
+        )
+        conn = mock.Mock()
+        with (
+            mock.patch.dict(os.environ, env, clear=True),
+            mock.patch.object(game.channel, "handshake", return_value=session),
+        ):
+            game.handle(conn)
+        return session.sent
+
+    @staticmethod
+    def message_ids(bodies):
+        return [channel.unwrap_layer_alignment(body)[0] for body in bodies]
+
+    def test_matching_early_member_precedes_enter_room(self):
+        sent = self.run_handle(
+            {
+                "TET4_EARLY_ADD_MEMBER_ID": "test",
+                "TET4_SKIP_SVCKOR": "1",
+            }
+        )
+        self.assertEqual(
+            self.message_ids(sent),
+            [single_mode.ADD_MEMBER_TO_C, game.GAME_ENTER_ROOM_TOC],
+        )
+        self.assertEqual(
+            sent[0][:12],
+            pack_u32(channel.LAYER_ALIGNMENT) * single_mode.ADD_MEMBER_LAYER,
+        )
+        _, body = channel.unwrap_layer_alignment(sent[0])
+        reader = Reader(body)
+        self.assertEqual(reader.u32(), single_mode.ADD_MEMBER_TO_C)
+        self.assertEqual(reader.string(), b"test")
+
+    def test_mismatched_early_member_is_not_sent(self):
+        sent = self.run_handle(
+            {
+                "TET4_EARLY_ADD_MEMBER_ID": "other",
+                "TET4_SKIP_SVCKOR": "1",
+            }
+        )
+        self.assertEqual(self.message_ids(sent), [game.GAME_ENTER_ROOM_TOC])
+
+    def test_default_behavior_remains_enter_room_then_svckor(self):
+        sent = self.run_handle({})
+        self.assertEqual(
+            self.message_ids(sent),
+            [game.GAME_ENTER_ROOM_TOC, game.GAME_START_NEW_GAME_TOC],
+        )
+
+    def test_normal_opt_in_keeps_post_enter_room_order(self):
+        sent = self.run_handle(
+            {
+                "TET4_EXPERIMENTAL_ADD_MEMBER_BOOTSTRAP": "1",
+                "TET4_SKIP_SVCKOR": "1",
+            }
+        )
+        self.assertEqual(
+            self.message_ids(sent),
+            [game.GAME_ENTER_ROOM_TOC, single_mode.ADD_MEMBER_TO_C],
+        )
+
+    def test_base_mode_sends_two_layer_pair_before_enter_room(self):
+        sent = self.run_handle(
+            {
+                "TET4_EARLY_ADD_MEMBER_ID": "test",
+                "TET4_EARLY_ADD_MEMBER_BASE": "1",
+                "TET4_SKIP_SVCKOR": "1",
+            }
+        )
+        self.assertEqual(
+            self.message_ids(sent),
+            [single_mode.ROOM_ADD_MEMBER_TO_C, game.GAME_ENTER_ROOM_TOC],
+        )
+        self.assertEqual(
+            sent[0],
+            single_mode.layered_add_member_pair_candidate(b"test"),
+        )
+
+    def test_early_mode_suppresses_duplicate_post_enter_room_add(self):
+        sent = self.run_handle(
+            {
+                "TET4_EARLY_ADD_MEMBER_ID": "test",
+                "TET4_EXPERIMENTAL_ADD_MEMBER_BOOTSTRAP": "1",
+                "TET4_SKIP_SVCKOR": "1",
+            }
+        )
+        self.assertEqual(
+            self.message_ids(sent),
+            [single_mode.ADD_MEMBER_TO_C, game.GAME_ENTER_ROOM_TOC],
+        )
 
 
 if __name__ == "__main__":

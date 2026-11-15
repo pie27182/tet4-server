@@ -46,5 +46,40 @@ class AddMemberToCProbeTest(unittest.TestCase):
                     single_mode.add_member_to_c_candidate(member_id)
 
 
+class AddMemberPairProbeTest(unittest.TestCase):
+    def test_room_base_body_field_order_and_member_id(self):
+        body = single_mode.room_base_add_member_to_c_candidate(b"test")
+        reader = Reader(body)
+        self.assertEqual(reader.u32(), single_mode.ROOM_ADD_MEMBER_TO_C)
+        self.assertEqual((reader.string(), reader.string()), (b"test", b"test"))
+        reader.u32()  # k58e
+        self.assertEqual(
+            [reader.string() for _ in range(4)],
+            [b"test", b"", b"", b""],
+        )
+        reader.u32()  # k10e
+        reader.string()  # k12e
+        reader.take(16)  # two i64 fields
+        for _ in range(6):
+            reader.u32()
+        reader.string()  # k34e
+        reader.u32()  # k33e
+        for _ in range(4):
+            reader.string()
+        reader.u32()  # k53e
+        reader.u32()  # k35e
+        self.assertEqual(reader.u32(), 0)  # k153e vector count
+        self.assertEqual(reader.remaining(), 0)
+
+    def test_pair_has_two_alignment_markers_between_layers(self):
+        base = single_mode.room_base_add_member_to_c_candidate(b"test")
+        extension = single_mode.add_member_to_c_candidate(b"test")
+        pair = single_mode.layered_add_member_pair_candidate(b"test")
+        self.assertTrue(pair.startswith(base))
+        separator = pack_u32(channel.LAYER_ALIGNMENT) * 2
+        self.assertEqual(pair[len(base):len(base) + 8], separator)
+        self.assertEqual(pair[len(base) + 8:], extension)
+
+
 if __name__ == "__main__":
     unittest.main()

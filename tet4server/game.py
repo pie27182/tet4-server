@@ -65,6 +65,36 @@ def enter_room_to_c(
     )
 
 
+def early_add_member_to_c(member_id: bytes) -> bytes | None:
+    """Build the diagnostic AddMemberToC that precedes EnterRoomToC.
+
+    ``TET4_EARLY_ADD_MEMBER_ID`` names the local player expected in
+    EnterRoomToS. The early send is refused when the configured ID does not
+    match, so this probe cannot add a different member than the room's local
+    player. The caller must suppress the normal post-EnterRoom AddMemberToC
+    whenever the early mode is active.
+
+    ``TET4_EARLY_ADD_MEMBER_BASE=1`` selects the diagnostic two-layer batch:
+    a layer-0 Cmd_Room_AddMemberToC base body followed by the accepted layer-3
+    87-byte extension. The default remains the layer-3-only body.
+    """
+    configured = os.environ.get("TET4_EARLY_ADD_MEMBER_ID")
+    if not configured:
+        return None
+    configured_id = configured.encode("utf-8")
+    if configured_id != member_id:
+        log.warning(
+            "skipped early AddMemberToC: TET4_EARLY_ADD_MEMBER_ID does not match "
+            "the EnterRoomToS local member (configured_len=%d local_len=%d)",
+            len(configured_id),
+            len(member_id),
+        )
+        return None
+    if os.environ.get("TET4_EARLY_ADD_MEMBER_BASE") == "1":
+        return single_mode.layered_add_member_pair_candidate(member_id)
+    return single_mode.layered_add_member_to_c_candidate(member_id)
+
+
 @dataclass(frozen=True)
 class EnterRoomRequest:
     """Opaque EnterRoomToS fields, retained in their exact wire order."""
@@ -301,6 +331,19 @@ def handle(conn: socket.socket, capture_dir: Path | None = None) -> None:
                 )
                 member_id = request.final_strings[0]
                 room_option = request.middle_strings[0]
+                early_mode = bool(os.environ.get("TET4_EARLY_ADD_MEMBER_ID"))
+                if early_mode:
+                    early_body = early_add_member_to_c(member_id)
+                    if early_body is not None:
+                        session.send(conn, early_body)
+                        log.warning(
+                            "sent early AddMemberToC before Cmd_Room_EnterRoomToC "
+                            "connection=%s member_id_len=%d layer=%d base_pair=%s",
+                            connection_id,
+                            len(member_id),
+                            single_mode.ADD_MEMBER_LAYER,
+                            os.environ.get("TET4_EARLY_ADD_MEMBER_BASE") == "1",
+                        )
                 session.send(conn, enter_room_to_c())
                 log.info(
                     "sent Cmd_Room_EnterRoomToC connection=%s "
@@ -312,6 +355,13 @@ def handle(conn: socket.socket, capture_dir: Path | None = None) -> None:
                         # This layer-3 wire layout was accepted by the live client:
                         # message ID | member-id string | opaque 87-byte suffix.
                         # Keep it opt-in while the profile fields are unresolved.
+                        if early_mode:
+                            log.warning(
+                                "skipped post-EnterRoom AddMemberToC connection=%s "
+                                "(TET4_EARLY_ADD_MEMBER_ID is active)",
+                                connection_id,
+                            )
+                            return
                         if os.environ.get("TET4_EXPERIMENTAL_ADD_MEMBER_BOOTSTRAP") == "1":
                             bootstrap = single_mode.layered_add_member_to_c_candidate(member_id)
                             session.send(conn, bootstrap)

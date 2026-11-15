@@ -188,3 +188,55 @@ Conclusion: AddMemberToC is the right message class and the layer-3 route is
 correct, but the payload is not accepted yet. A real capture or full field
 semantics for the member profile are required before this can be called a
 working bootstrap.
+
+## AddMemberToC isolation and wire correction (2026-11-15)
+
+The earlier probe conclusion is superseded: the null `0x4FBBB4` was not caused
+by missing profile strings. Two isolated runs separated the messages.
+
+### A/B isolation
+
+| Run | AddMemberToC | SvcKor | `0x4FBBB4` | Outcome |
+|---|---|---|---|---|
+| A | yes | no | first valid, second `EAX=0` | fault at `0x4FBBB4` |
+| B | no | yes | two valid (`EAX=0x1656CF00`, `0x1656D040`) | no null fault; `0x461E9D` scene fault |
+
+The null dereference is therefore produced by AddMemberToC handling, not by
+`StartNewGameSvcKorToC`.
+
+### Correct wire
+
+The working candidate omits the command tag `0x005216CA` and the member type id
+`0x0FFA613A`. The client's AddMember deserializer expects the member id string
+immediately after the message id:
+
+```
+09d0057a 09d0057a 09d0057a   # three layer-3 alignment markers
+0ab84d0a                     # Cmd_Channel_OrderTypeAddMemberTetrisToC
+00000004 74657374            # member id "test" at _TetrisMemberInfo +0x0c
+...                          # remaining member fields
+```
+
+Measured evidence: `FUN_00459790` reads `_TetrisMemberInfo` with its `+4` flag
+already set to 1, so it skips the `+8` type field and reads the id string at
+`+0x0c`. With the tag present the raw length read at `0x42C7A3` was
+`0xCA165200`; with only the tag removed it was `0x3A61FA0F` (the member type
+id). With both removed the id parsed as `"test"`, `FUN_00432280` compared it
+with the self id successfully, `FUN_004EC400` inserted the member, and
+`FUN_00461C50` refilled the main-body vector.
+
+### Remaining blocker
+
+After `FUN_004EC400` and the `FUN_00461C50` refill, the client still dispatches
+an internal event whose parser has null command/target strings and faults at
+`0x004FBBB4` (`movb (%eax),%dl`, `EAX=0`). This is after the member is already
+in the model, so it is a client-side event/context problem, not a wire-format or
+layer problem.
+
+Sending the corrected message on the channel connection also inserts the member
+but crashes in `msvcr90+0x3B9F0` through `msvcp90` and `HgCom3+0x18429` before
+`CTetSingleMainBody::Start`. `0x00460DD0` (`Start`) was not reached in any run.
+
+PR #22 remains a draft. The member-record wire is now understood; the next task
+is the event dispatch/registration that runs immediately after the insert, or a
+different delivery point that does not take the fallback handler at `0x4FBB90`.

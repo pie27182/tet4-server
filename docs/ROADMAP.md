@@ -115,7 +115,15 @@ serializer test proves layout, not that the client accepts the message.
 - [x] Recover the top-level `Cmd_ChannelOrderTypeSingleModeRoomInfoTetrisToC`
       layout (`u32 | string | u32 | u8`) and add a serializer test. Its role and
       values remain unverified; do not send it until the live sequence confirms it.
-- [ ] Recover the nested `_SingleModeInfo` (`0x0071FA1A`) fields.
+- [x] Live-probe the layer-3 AddMemberToC wire prefix and first member field.
+      The accepted body omits the previously guessed 0x005216CA command tag and
+      0x0FFA613A member type ID; WineDbg reaches FUN_004EC400 and a second
+      FUN_00461C50 refill for the local test member. The remaining 87-byte profile
+      suffix is opaque and has only been tested with member ID "test".
+- [ ] Resolve the null event at Tet4.exe:0x004FBBB4 when corrected AddMemberToC
+      is followed by StartNewGameSvcKorToC; the exact event source is not known.
+- [ ] Recover the nested `_SingleModeInfo` (`0x0071FA1A`) fields and decode the
+      opaque AddMemberToC profile suffix.
 - [ ] Verify the real client transitions from the lobby to the Single Mode room screen
       without a crash or indefinite wait.
 

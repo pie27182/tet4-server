@@ -308,31 +308,35 @@ def handle(conn: socket.socket, capture_dir: Path | None = None) -> None:
                     connection_id,
                 )
                 if member_id and room_option:
-                    # The Tet4.exe-specific AddMemberToC converter is registered
-                    # at XLBP layer 3. Its field layout is reconstructed, but
-                    # the default nested school/item record still needs live
-                    # validation, so never send this candidate unless opted in.
+                    # This layer-3 wire layout was accepted by the live client:
+                    # message ID | member-id string | opaque 87-byte profile suffix.
+                    # Keep it opt-in until the profile suffix and the follow-up
+                    # SvcKor interaction are fully understood.
                     if os.environ.get("TET4_EXPERIMENTAL_ADD_MEMBER_BOOTSTRAP") == "1":
-                        bootstrap = single_mode.layered_add_member_to_c_candidate(
-                            member_id,
-                            single_mode_index=0,
-                        )
+                        bootstrap = single_mode.layered_add_member_to_c_candidate(member_id)
                         session.send(conn, bootstrap)
                         log.warning(
-                            "sent experimental Tetris AddMemberToC candidate "
+                            "sent experimental live-probed AddMemberToC "
                             "connection=%s member_id_len=%d layer=%d",
                             connection_id,
                             len(member_id),
                             single_mode.ADD_MEMBER_LAYER,
                         )
-                    session.send(conn, start_new_game_svckor_to_c(member_id))
-                    log.info(
-                        "sent Cmd_Room_StartNewGameSvcKorToC connection=%s "
-                        "member_id_len=%d option_len=%d entries=1",
-                        connection_id,
-                        len(member_id),
-                        len(room_option),
-                    )
+                    if os.environ.get("TET4_SKIP_SVCKOR") == "1":
+                        log.warning(
+                            "skipped Cmd_Room_StartNewGameSvcKorToC connection=%s "
+                            "(TET4_SKIP_SVCKOR=1)",
+                            connection_id,
+                        )
+                    else:
+                        session.send(conn, start_new_game_svckor_to_c(member_id))
+                        log.info(
+                            "sent Cmd_Room_StartNewGameSvcKorToC connection=%s "
+                            "member_id_len=%d option_len=%d entries=1",
+                            connection_id,
+                            len(member_id),
+                            len(room_option),
+                        )
             elif msg_id == GAME_ALTER_ROOM_TOS:
                 request = parse_alter_room_request(payload)
                 log.info(

@@ -37,10 +37,18 @@ class Message:
     body: bytes  # from the message ID to the end of the batch
 
 
-def encode_batch(body: bytes, layer: int = 0) -> bytes:
-    if not 0 <= layer < LAYERS:
-        raise ValueError(f"layer must be 0..{LAYERS - 1}")
-    return u32(Msg.LayerAlignment) * layer + body
+def encode_batch(layers: dict[int, bytes]) -> bytes:
+    """One message type in its layer slots: {layer: body}, bodies sharing one ID."""
+    if not layers or not set(layers) <= set(range(LAYERS)):
+        raise ValueError(f"layers must be within 0..{LAYERS - 1}")
+    out, empty = [], 0
+    for layer in range(max(layers) + 1):
+        if layer in layers:
+            out.append(u32(Msg.LayerAlignment) * empty + layers[layer])
+            empty = 0
+        else:
+            empty += 1
+    return b"".join(out)
 
 
 def decode_batch(batch: bytes) -> Message | None:
@@ -100,15 +108,16 @@ class _Clear:
 class Session:
     """One client connection.
 
-    The client's share normally comes first and every frame after it is
-    encrypted. On the game socket the client sometimes sends a plain frame before
-    its share and sends it again, encrypted, after the handshake. Such frames get
-    no reply: until the handshake the client takes the first 48 bytes it receives
-    as the server's share.
+    The client's share comes first and every frame after it is encrypted. A plain
+    frame before the share is a stale "connected" notification firing on a new game
+    connection (see server.GAME_HANDSHAKE_DELAY); it gets no reply, because until
+    the handshake the client takes the first 48 bytes it receives as the server's
+    share.
     """
 
     def __init__(self, service: str, reader: asyncio.StreamReader,
-                 writer: asyncio.StreamWriter, tracer: Tracer | None = None):
+                 writer: asyncio.StreamWriter, tracer: Tracer | None = None,
+                 handshake_delay: float = 0.0):
         self.service = service
         host, port = writer.get_extra_info("peername")[:2]
         self.peer = f"{host}:{port}"
@@ -118,6 +127,8 @@ class Session:
         self._rx = self._tx = _Clear()
         self._keyed = False
         self._tracer = tracer
+        self._handshake_delay = handshake_delay
+        log.debug("%s %s: connected", service, self.peer)
 
     async def _read(self, n: int) -> bytes:
         chunk, self._pending = self._pending[:n], self._pending[n:]
@@ -127,6 +138,7 @@ class Session:
 
     async def _handshake(self, client_share: bytes) -> None:
         """Answer the client's share with a fresh one of ours and key both directions."""
+        await asyncio.sleep(self._handshake_delay)
         server_share = crypto.seal_share(crypto.new_share())
         self._writer.write(server_share)
         await self._writer.drain()
@@ -134,6 +146,7 @@ class Session:
         self._rx = crypto.upstream_cipher(master)
         self._tx = crypto.downstream_cipher(master)
         self._keyed = True
+        log.debug("%s %s: share answered", self.service, self.peer)
 
     async def receive(self) -> Message | None:
         """The next message from the client; None once it has closed the connection."""
@@ -180,14 +193,18 @@ class Session:
             log.debug("%s %s: batch of layer markers only", self.service, self.peer)
 
     async def send(self, body: bytes, layer: int = 0) -> None:
-        batch = encode_batch(body, layer)
+        await self.send_layers({layer: body})
+
+    async def send_layers(self, layers: dict[int, bytes]) -> None:
+        batch = encode_batch(layers)
         if self._tracer:
             self._tracer.record(self, "out", batch)
         payload = MAGIC + batch
         self._writer.write(self._tx.encrypt(u32(len(payload)) + payload))
         await self._writer.drain()
+        first = layers[min(layers)]
         log.info("%s %s -> %s%s", self.service, self.peer,
-                 describe(int.from_bytes(body[:4], "big")), _layer_note(layer))
+                 describe(int.from_bytes(first[:4], "big")), _layer_note(*sorted(layers)))
 
 
 Handler = Callable[[Reader], Awaitable[None]]
@@ -214,5 +231,5 @@ async def serve_messages(session: Session, handlers: dict[tuple[int, int], Handl
                         describe(message.id), exc)
 
 
-def _layer_note(layer: int) -> str:
-    return f" (layer {layer})" if layer else ""
+def _layer_note(*layers: int) -> str:
+    return "" if layers == (0,) else f" (layer {'+'.join(map(str, layers))})"

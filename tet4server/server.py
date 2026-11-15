@@ -18,6 +18,14 @@ from .xlbp import Session, Tracer
 
 HOST = "127.0.0.1"
 
+# Single Mode opens the game socket twice: AutoEnter connects, then CreateRoomToC
+# closes that connection and connects again. If the first connection is keyed
+# before the client handles CreateRoomToC, its queued "connected" notification fires
+# on the second one, which then sends EnterRoomToS unencrypted and later fails with
+# MFC's generic error. Answering game shares a little later lets the client drop the
+# first connection unkeyed.
+GAME_HANDSHAKE_DELAY = 0.2
+
 log = logging.getLogger("tet4.server")
 
 
@@ -35,10 +43,11 @@ class Services:
     """The four listeners. A port of 0 binds any free port; the replies announce
     the ports actually bound."""
 
-    def __init__(self, host: str = HOST, ports: Ports = Ports(), trace: Path | None = None):
+    def __init__(self, host: str = HOST, ports: Ports = Ports(), trace: Path | None = None,
+                 records: Path | None = None):
         self.host = host
         self.ports = ports
-        self.lobby = Lobby()
+        self.lobby = Lobby(records)
         self._tracer = Tracer(trace) if trace else None
         self._servers: list[asyncio.Server] = []
         self._connections: set[asyncio.Task] = set()
@@ -46,7 +55,8 @@ class Services:
     async def start(self) -> "Services":
         try:
             game = Endpoint(self.host, await self._listen(self.ports.game, self._secure(
-                "game", lambda session: GameConnection(session, self.lobby))))
+                "game", lambda session: GameConnection(session, self.lobby),
+                GAME_HANDSHAKE_DELAY)))
             channel = Endpoint(self.host, await self._listen(self.ports.channel, self._secure(
                 "channel", lambda session: ChannelConnection(session, self.lobby, game))))
             cds_port = await self._listen(self.ports.cds, _plain(
@@ -91,11 +101,13 @@ class Services:
         self._servers.append(server)
         return server.sockets[0].getsockname()[1]
 
-    def _secure(self, service: str, connection: Callable[[Session], object]):
+    def _secure(self, service: str, connection: Callable[[Session], object],
+                handshake_delay: float = 0.0):
         async def handler(reader, writer):
             try:
-                session = Session(service, reader, writer, self._tracer)
+                session = Session(service, reader, writer, self._tracer, handshake_delay)
                 await connection(session).run()
+                log.debug("%s %s: closed by the client", service, session.peer)
             except (ProtocolError, ConnectionError, asyncio.IncompleteReadError) as exc:
                 log.info("%s connection closed: %s", service, str(exc) or type(exc).__name__)
         return handler
@@ -118,8 +130,8 @@ def _plain(name: str, answer: Callable[[bytes], bytes | None]):
     return handler
 
 
-async def _run(trace: Path | None) -> None:
-    async with Services(trace=trace) as services:
+async def _run(trace: Path | None, records: Path | None) -> None:
+    async with Services(trace=trace, records=records) as services:
         p = services.ports
         log.info("listening on %s: TPack %d, CDS %d, channel %d, game %d",
                  services.host, p.tpack, p.cds, p.channel, p.game)
@@ -132,12 +144,14 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python3 -m tet4server", description=__doc__)
     parser.add_argument("--trace", type=Path, metavar="FILE",
                         help="append every decrypted channel/game message to FILE (JSON lines)")
+    parser.add_argument("--records", type=Path, metavar="FILE",
+                        help="keep Single Mode records and play counts in FILE (JSON)")
     parser.add_argument("--log-level", default="INFO", choices=("DEBUG", "INFO", "WARNING"))
     args = parser.parse_args(argv)
     logging.basicConfig(level=args.log_level,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     try:
-        asyncio.run(_run(args.trace))
+        asyncio.run(_run(args.trace, args.records))
     except KeyboardInterrupt:
         log.info("stopped")
     except OSError as exc:

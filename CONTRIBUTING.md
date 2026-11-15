@@ -17,8 +17,9 @@ This server answers an existing client, so a protocol change needs evidence.
 tests, from captured bytes where they exist.
 
 GitHub Issues are for defects and unexplained client behavior: expected and
-actual behavior, steps, evidence, and what would show it fixed. The open protocol
-work is listed in `docs/PROTOCOL.md`, section 8.
+actual behavior, steps, evidence, and what would show it fixed. Open protocol
+questions are the messages `docs/PROTOCOL.md` lists as received without a reply
+and the fields it describes as sent empty or unknown.
 
 Commits: a short imperative subject, then what changed and the evidence for it
 (function address, capture, test).

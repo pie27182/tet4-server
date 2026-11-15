@@ -9,7 +9,7 @@ import enum
 from dataclasses import dataclass
 from typing import NamedTuple
 
-from .xdr import Reader, i32, i64, string, u8, u32, u64
+from .xdr import Reader, i32, i64, string, u8, u16, u32, u64
 
 
 class Msg(enum.IntEnum):
@@ -40,14 +40,22 @@ class Msg(enum.IntEnum):
     Channel_RoomInfoToC = 0x0A680DDA
     Room_OrderTypeAutoEnterSingleModeRoomTetrisToC = 0x0DF37B3A
 
-    # Game socket
+    # Game socket, client to server
     Room_EnterRoomToS = 0x09A5347A
     Room_AlterRoomToS = 0x0D31FDDA
     Room_StartNewGameToS = 0x072585BA
-    Room_OrderTypeSingleModePolyMinoPutTetrisToS = 0x0CC4004A
+    Room_OrderTypeSingleModePolyMinoPutTetrisToS = 0x0CC4004A  # every piece; no reply
     Room_OrderTypeSingleModeGameReportTetrisToS = 0x05BCDF3A
+    Room_GameReportToS = 0x0B81FF1A                             # after the Tetris report; no reply
+    Room_ExitRoomToS = 0x0510821A
+    Room_OrderTypeSetSpeedLevelTetris = 0x0F5DE7AA              # on leaving; no reply
+
+    # Game socket, server to client
     Room_EnterRoomToC = 0x0974DCEA
+    Room_AddMemberToC = 0x0619233A
     Room_StartNewGameToC = 0x0F809B5A
+    Room_OrderTypeSingleModeGameReportTetrisToC = 0x0EE1D56A
+    Room_DeleteMemberToC = 0x0E50895A
 
 
 def describe(msg_id: int) -> str:
@@ -107,6 +115,22 @@ def read_room_request(r: Reader) -> RoomRequest:
         k46e=r.string(), k127e=r.u32(), k66e=r.u32(), k200e=r.string(), k69e=r.u32(),
         k22e=r.string(), k23e=r.string(), k24e=r.string(),
     )
+
+
+@dataclass(frozen=True)
+class GameReport:
+    member_id: bytes
+    mode: int        # 0 Marathon, 1 40 lines, 2 Ultra
+    value: int       # score; in 40 lines the time in 1/100 s
+    completed: bool  # 40 lines: all lines cleared; always set in the other modes
+
+
+def read_game_report(r: Reader) -> GameReport:
+    """Room_OrderTypeSingleModeGameReportTetrisToS (built by 0x00461770): str member |
+    str k23e | str k24e | str k42e | u32 mode | u32 value | u8 completed | u32 x3."""
+    member_id = r.string()
+    r.string(), r.string(), r.string()
+    return GameReport(member_id, mode=r.u32(), value=r.u32(), completed=bool(r.u8()))
 
 
 def read_enter_room(r: Reader) -> bytes:
@@ -195,6 +219,49 @@ def get_member_info_to_c(member_id: bytes) -> bytes:
     ])
 
 
+SINGLE_MODES = 3      # Marathon, 40 lines, Ultra: _SingleModeInfo mode 0, 1, 2
+FORTY_LINES = 1       # the mode whose value is a time (1/100 s), lower is better
+TOP = 5               # records the client shows and keeps per mode
+
+
+class SingleMode(NamedTuple):
+    """A player's standing in one Single Mode mode."""
+    top: list[tuple[int, bytes]]  # best first: (score or time, date)
+    plays: int = 0                # games played in the mode
+    rank: int = 0                 # place of the player's best among all players; 0 without one
+    ranked: int = 0               # players with a record in the mode
+
+
+def single_mode_info(mode: int, standing: SingleMode, result: int = 0) -> bytes:
+    """A nested _SingleModeInfo (Deserialize 0x004596D0): u32 mode | u32 | u32 rank |
+    u32 ranked | vector<u32> values | vector<str> dates | u32 result | u32 plays.
+    The result screen (0x0045CB30) shows `result`, the rank and rank/ranked as a
+    percentage; FUN_00460230 adds `plays` of every mode to the multiplayer games and
+    opens Ultra at 500. The client shows TOP records and compares a finished game with
+    the first, so there are always TOP; a value of 0 is an empty slot."""
+    top = (list(standing.top) + [(0, b"")] * TOP)[:TOP]
+    return b"".join([u32(mode), u32(0), u32(standing.rank), u32(standing.ranked),
+                     u32(TOP), *(u32(v) for v, _ in top), u32(TOP), *(string(d) for _, d in top),
+                     u32(result), u32(standing.plays)])
+
+
+def get_member_info_tetris(member_id: bytes, standings: list[SingleMode]) -> bytes:
+    """Layer 3 of Channel_GetMemberInfoToC, Tet4.exe's
+    Cmd_Channel_OrderTypeGetMemberInfoTetrisToC (Deserialize 0x004598C0, converter
+    0x00459E20): u32 id | _TetrisMemberInfo | _EmblemInventoryInfo |
+    _AliasInventoryInfo | vector | vector. It stores the player's Tetris profile, whose
+    _SingleModeInfo records (one per mode) the Single Mode scene reads every frame."""
+    member = b"".join([
+        string(member_id),
+        u8(0) + string(b"") + u32(0) + u16(0),             # _TetrisSchoolInfo
+        u32(0), u32(0), string(b""), bytes(12), string(b""), string(b""), u64(0),
+        u32(len(standings)), *(single_mode_info(m, st) for m, st in enumerate(standings)),
+    ])
+    inventory = u32(0) + string(b"") + u32(0)              # vector | str | u32
+    return b"".join([u32(Msg.Channel_GetMemberInfoToC), member, inventory, inventory,
+                     u32(0), u32(0)])
+
+
 def get_member_list_to_c() -> bytes:
     """Channel_GetMemberListToC (Serialize 0x601301D0): u32 id | str x3 |
     vector<member> | str. Sent empty."""
@@ -268,6 +335,49 @@ def enter_room_to_c() -> bytes:
     """Room_EnterRoomToC (converter 0x6013C940): u32 id | str k1e | u32 failcode |
     str k2e. failcode 0 is success."""
     return b"".join([u32(Msg.Room_EnterRoomToC), string(b""), u32(0), string(b"")])
+
+
+def room_add_member_to_c(member_id: bytes) -> bytes:
+    """Room_AddMemberToC (Deserialize 0x6012FC50, converter 0x6013A060, header s4e/c5e):
+    u32 id | str k50e (host) | str k57e | u32 k58e (seat) | str k3e | str k7e | str k8e |
+    str k11e | u32 k10e | str k12e | u64 k34e | u64 k13e | u32 k26e-k31e | str k32e |
+    u32 k33e | str k102e | str k37e | str k38e | str k52e | u32 k53e | u32 k35e |
+    vector k153e. CGameLobbyModel::Msg_AddRoomMember seats the member in the game
+    (CTetMainBody::AddGamer) and, for the player, keeps its counts k26e-k31e, which
+    the client reads again when it leaves the room."""
+    return b"".join([
+        u32(Msg.Room_AddMemberToC), string(member_id),
+        string(b""), u32(0), string(member_id),
+        string(b""), string(b""), string(b""), u32(0), string(b""),
+        u64(0), u64(0), bytes(24),
+        string(b""), u32(0), string(b""), string(b""), string(b""),
+        string(b""), u32(0), u32(0), u32(0),
+    ])
+
+
+def room_delete_member_to_c(member_id: bytes) -> bytes:
+    """Room_DeleteMemberToC (Deserialize 0x60132A20, converter 0x6013CB60, header
+    s4e/c6e): u32 id | str k50e | str k57e | u32 k58e | str k3e | str k8e. When k3e is
+    the player, CGameLobbyModel::Msg_DeleteRoomMember disconnects the game socket and
+    moves the client back to the lobby; this is how the client leaves a room."""
+    return b"".join([u32(Msg.Room_DeleteMemberToC), string(b""), string(b""), u32(0),
+                     string(member_id), string(b"")])
+
+
+def single_mode_game_report_to_c(report: GameReport, standing: SingleMode) -> bytes:
+    """Room_OrderTypeSingleModeGameReportTetrisToC, layer 3 (Deserialize 0x00443BB0,
+    converter 0x00450940): u32 id | str | str | u32 result | _TetrisMemberGameReport |
+    _SingleModeInfo. With result 0 the client takes the _SingleModeInfo as the mode's
+    standing and shows it on the result screen; the _TetrisMemberGameReport is unused."""
+    member_report = b"".join([                             # _TetrisMemberGameReport
+        string(report.member_id), bytes(20), bytes(5), bytes(48), bytes(1),  # u32 x5 | u8 x5 | 12 x4 | u8
+        u8(0) + string(b"") + u32(0) + u16(0),             # _TetrisSchoolInfo
+        bytes(16),
+    ])
+    result = report.value if report.completed else 0
+    return b"".join([u32(Msg.Room_OrderTypeSingleModeGameReportTetrisToC),
+                     string(report.member_id), string(b""), u32(0), member_report,
+                     single_mode_info(report.mode, standing, result)])
 
 
 def start_new_game_to_c(member_ids) -> bytes:

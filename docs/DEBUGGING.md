@@ -23,12 +23,7 @@ Let your user capture without root (log out and in afterwards):
 sudo usermod -aG wireshark "$USER"
 ```
 
-Prepare the client as in the README (`tools/client.py check`, then `patch`), and a
-second copy with the Single Mode debug patch:
-
-```bash
-python3 tools/client.py patch client client-debug --debug-single-scene
-```
+Prepare the client as in the README (`tools/client.py check`, then `patch`).
 
 For each run, make a folder and note the start time:
 
@@ -73,26 +68,21 @@ Stop in reverse order: close the client, then Ctrl+C the server, then Ctrl+C
 
 Each run is a separate folder.
 
-1. **baseline** — `client-patched`, no debugger. Log in, wait in the lobby ~10 s,
-   click 싱글모드, wait until the client crashes or 30 s pass.
-2. **debug-scene** — the same in `client-debug` (the patched-out scene update).
-   When the Single Mode screen appears, wait 5 s, then press Enter (게임시작).
-   Note whether the game socket is still open and what happens. This tests the
-   new `StartNewGameToS` → `StartNewGameToC` reply.
-3. **debugger** — `client-patched` under winedbg with the breakpoint file; replace
-   the Terminal 3 command with:
+1. **baseline** — `client-patched`, no debugger. Log in, click 싱글모드, play a
+   game to the end, press Enter (다시도전) and play again, press ESC (확인), pick
+   another mode with the arrow keys and play it, click 나가기, then click 싱글모드
+   once more. Note every step that does not happen as described.
+2. **debugger** — the same under winedbg with the breakpoint file; replace the
+   Terminal 3 command with:
 
    ```bash
    cd client-patched && LANG=ko_KR.UTF-8 LC_ALL=ko_KR.UTF-8 winedbg ./Tet4.exe "$(cat ../tools/bootstrap-sample.txt)" < ../tools/single-mode.wdbg 2>&1 | tee "../$RUN/winedbg.log"
    ```
 
    (The commands go on standard input: Wine 9's `winedbg --file` fails to open
-   the file.)
-
-   The file prints the loaded modules (`info share`; check that every DLL sits at
-   its preferred base), then a backtrace and registers at each stop on the Single
-   Mode path and at the known faults. Run 3 also with `client-debug` if run 2 got
-   past the scene.
+   the file.) The file prints the loaded modules (`info share`; check that every
+   DLL sits at its preferred base), then a backtrace at each stop on the Single
+   Mode path; an unhandled exception stops it as well.
 
 The client runs slower under the debugger, so timeouts may differ; that is
 expected, say so in the notes.
@@ -101,12 +91,12 @@ expected, say so in the notes.
 
 One PNG each, named with the time (`0941-lobby.png`):
 
-- the lobby with the channel list;
-- right after clicking 싱글모드;
-- every dialog the client shows (timeout `제한 시간에 걸렸습니다`, errors,
-  connecting), before closing it;
-- the Wine crash dialog, with its details expanded, or the debugger's last screen;
-- in run 2: the Single Mode screen, and the screen after pressing Enter.
+- the lobby;
+- the Single Mode screen before the first game;
+- every result screen (NEW RECORD or 기록갱신 실패, with the score, rank and %);
+- every dialog the client shows, before closing it;
+- the screen after 나가기;
+- the Wine crash dialog, with its details expanded, or the debugger's last screen.
 
 A screen recording is welcome instead of many screenshots, if it is short.
 
@@ -146,7 +136,7 @@ who sent the FIN or RST on the game socket.
   tshark-conversations.txt
   tshark-packets.tsv
   wine.log                  WINEDEBUG output
-  winedbg.log               run 3 only
+  winedbg.log               run 2 only
   *.png                     screenshots
 ```
 

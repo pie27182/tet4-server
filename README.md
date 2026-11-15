@@ -8,22 +8,18 @@ the evidence for every reply.
 
 ## Status
 
-Confirmed with the real client:
+Single Mode plays end to end with the real client (Wine, headless under Xvfb):
 
-- TPack login, the CDS channel directory, and the secure socket in both directions;
-- channel entry: authorization, user id, channel info, the player's own member
-  record, and the member, room and item lists. The client reaches the lobby;
-- Single Mode: AutoEnter, room creation, the game socket and EnterRoom; with the
-  debug patch the Single Mode screen opens (headless Wine 9 under Xvfb).
+- TPack login, the CDS channel directory and the secure socket;
+- the lobby: authorization, channel entry, the player's member record and Tetris
+  profile, and the member, room and item lists;
+- Single Mode: AutoEnter, room creation and entry, the game itself in Marathon,
+  40 lines and Ultra, game over with NEW RECORD, rank and the player's five best
+  results per mode, retry (Enter or 다시도전), back to the mode selection (ESC or
+  확인), and 나가기 back to the lobby.
 
-Not working: the game does not start. The client crashes in its Single Mode
-scene (`Tet4.exe` 0x00461E9D), and with that crash patched out it crashes again
-when Start is pressed, because nothing registers the player in its game model. The
-message that should, a two-layer `Cmd_Channel_AddMemberToC`, is not recovered yet;
-see [section 8](docs/PROTOCOL.md#8-where-single-mode-stops).
-
-Not yet seen in a live run: `StartNewGameToC` as the answer to `StartNewGameToS`
-(the client crashes before sending it).
+The client runs the game; the server keeps the records. Ultra opens after 500
+games, counted over all modes, as the client requires.
 
 ## Running
 
@@ -38,7 +34,9 @@ python3 -m tet4server
 ```
 
 This listens on 127.0.0.1: TPack 10454, CDS 15000, channel 15001, game 15002.
-`--trace FILE` appends every decrypted message to FILE.
+`--records FILE` keeps the Single Mode records and play counts in FILE across
+restarts; without it they last until the server stops. `--trace FILE` appends
+every decrypted message to FILE.
 
 To run the client against it, copy your client folder into `client/` (it is
 git-ignored), then check it, make the patched copy and start it under Wine in a
@@ -69,7 +67,7 @@ tet4server/  the server
   xlbp.py      secure session, batches  messages.py message IDs and layouts
   tpack.py     account service          cds.py      channel directory
   channel.py   channel service          game.py     game service
-  lobby.py     rooms                    server.py   listeners and command line
+  lobby.py     rooms, records           server.py   listeners and command line
 tests/       captured vectors, layouts, and a scripted client session
 tools/       client.py, the sample bootstrap, a winedbg command file
 docs/        PROTOCOL.md, DEBUGGING.md

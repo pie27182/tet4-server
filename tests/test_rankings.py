@@ -1,4 +1,5 @@
 """The public Single and Multiplayer ranking pages and their read-only JSON APIs."""
+import asyncio
 import json
 import tempfile
 import unittest
@@ -19,7 +20,7 @@ class PublicRankingsTest(unittest.IsolatedAsyncioTestCase):
         self.addAsyncCleanup(self.services.close)
 
     async def get(self, target: str) -> tuple[int, bytes]:
-        reader, writer = await __import__("asyncio").open_connection(
+        reader, writer = await asyncio.open_connection(
             "127.0.0.1", self.services.ports.rankings)
         writer.write(f"GET {target} HTTP/1.1\r\nHost: localhost\r\n\r\n".encode("ascii"))
         await writer.drain()
@@ -51,7 +52,7 @@ class PublicRankingsTest(unittest.IsolatedAsyncioTestCase):
 
         status, page = await self.get("/rankings/multiplayer")
         self.assertEqual(status, 200)
-        self.assertIn(b"1616", page)
+        self.assertIn(b"1,616", page)
         self.assertIn(b"provisional", page.lower())
 
     async def test_single_rankings_order_scores_and_times_correctly(self):

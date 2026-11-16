@@ -2,11 +2,14 @@
 
 One server process serves every player: TPack, CDS, the channel and game
 sockets, and the account service. It needs Python 3.10 or newer and nothing
-else; accounts and records live in one SQLite file.
+else; accounts, records and wallets (TP, items, the emblem and title shown) live
+in one SQLite file.
 
-What players get: registration and login with a name and password, Single Mode
-in all three modes, and records ranked across all players on the server.
-Multiplayer rooms are not implemented (see the README).
+What players get: registration and login with a name and password, the lobby with
+chat and the room list, multiplayer rooms (item battle, no-item battle, race) with
+invitations and quick join, Single Mode in all three modes with records ranked
+across all players on the server, and the shop, paid with TP won in games. The
+README lists what is not implemented yet.
 
 ## 1. What you need
 
@@ -160,6 +163,11 @@ A restart ends the players' sessions; they log in again with `play`.
 - The game socket carries no ticket. The server accepts a player there only while
   the same account is logged in on a channel connection from the same address.
 - One process, one thread for the network (asyncio) and a worker thread for
-  database writes. A player holds two TCP connections and the server only does work
-  at login, room entry and game over, so thousands of concurrent players fit in one
-  small VPS; `LimitNOFILE` above allows 65536 open sockets.
+  database writes, which land in the order they were made. A player holds two TCP
+  connections; `LimitNOFILE` above allows 65536 open sockets. Idle players in the
+  lobby cost almost nothing, but in a multiplayer game the server passes every
+  player's moves to the others in the room, and the client's stream cipher runs in
+  pure Python: that relay is the main cost, so measure with the load you expect
+  before counting on thousands of players in games at once.
+- Messages to other players are queued without waiting; a connection that stops
+  reading is dropped once a megabyte is waiting for it.

@@ -187,6 +187,14 @@ class Shop:
                 points, {i["code"]: Item(**i) for i in json.loads(items)}, title, emblem)
 
     def wallet(self, member_id: bytes) -> Wallet:
+        """A player's wallet to read; a player who never had one gets a new player's,
+        which is only kept once it changes (looking up any name stores nothing)."""
+        wallet = self._wallets.get(member_id) or Wallet()
+        wallet.expire(time.time())
+        return wallet
+
+    def _own(self, member_id: bytes) -> Wallet:
+        """A player's wallet to change, kept from now on."""
         wallet = self._wallets.setdefault(member_id, Wallet())
         wallet.expire(time.time())
         return wallet
@@ -200,7 +208,7 @@ class Shop:
         product = PRODUCTS.get(code)
         if product is None or not 1 <= quantity <= 99:
             return "판매하지 않는 상품입니다."
-        wallet = self.wallet(member_id)
+        wallet = self._own(member_id)
         if wallet.points < product.price * quantity:
             return "TP가 부족합니다."
         wallet.points -= product.price * quantity
@@ -211,7 +219,7 @@ class Shop:
 
     def show(self, member_id: bytes, title: str, emblem: str) -> bool:
         """Show an owned title and emblem; an empty code shows none."""
-        wallet = self.wallet(member_id)
+        wallet = self._own(member_id)
         if any(code and (code not in wallet.items or code[1] != kind)
                for code, kind in ((title, "3"), (emblem, "2"))):
             return False
@@ -221,7 +229,7 @@ class Shop:
 
     def earn(self, member_id: bytes, points: int) -> tuple[int, int]:
         """Add TP; the balance before and after."""
-        wallet = self.wallet(member_id)
+        wallet = self._own(member_id)
         before = wallet.points
         wallet.points += points
         self._save(member_id)

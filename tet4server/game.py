@@ -12,6 +12,8 @@ from .xlbp import Session, serve_messages
 
 log = logging.getLogger("tet4.game")
 
+MAP_PLACES = 1000         # places in a map list the server learns names for (about 60 used)
+
 # In-game messages a client sends for the other players in its room: Tet4.exe
 # registers each of them for receiving at layer 3 (0x0045B410) under the same ID.
 RELAYED = {schema.message_id(name) for name in (
@@ -141,8 +143,8 @@ class GameConnection:
             return
         start = schema.unpack("Room_OrderTypeLetsGameStartTetris", r)
         start.pop("kind")
-        if start["map"]:
-            self.lobby.map_names[(room.fields.k46e[:1], start["place"])] = start["map"]
+        if start["map"] and start["place"] < MAP_PLACES:
+            self.lobby.map_names[(room.fields.k46e[:1], start["place"])] = start["map"][:64]
         room.start_game([member for member in start["members"] if member])
         room.post(schema.pack("Room_OrderTypeLetsGameStartOkTetris", start), layer=3)
         self.lobby.room_changed(room)

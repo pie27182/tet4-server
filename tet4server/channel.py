@@ -1,4 +1,5 @@
-"""Channel service: login, the lobby (players, chat, room list) and room creation."""
+"""Channel service: login, the lobby (players, chat, room list), room creation and
+joining, invitations, profiles and the shop."""
 import asyncio
 import dataclasses
 import logging
@@ -248,10 +249,10 @@ class ChannelConnection:
         if self.player is None:
             return
         member = self.player.member_id
-        wallet = self.lobby.shop.wallet(member)
-        before = wallet.points
+        before = self.lobby.shop.wallet(member).points
         error = self.lobby.shop.buy(member, request["code"].decode("latin-1"),
                                     request["quantity"])
+        wallet = self.lobby.shop.wallet(member)
         await self.session.send(schema.pack(
             "Shop_ResBuyProductToC", code=request["code"], quantity=request["quantity"],
             gift=request["gift"], receiver=request["receiver"], result=int(error is not None),

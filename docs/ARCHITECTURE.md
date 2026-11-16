@@ -154,6 +154,7 @@ capture, the client's code, or a live run.
 | `test_server` | A scripted client through login and Single Mode over TCP; records and ranks; channel processes |
 | `test_multiplayer` | Two scripted clients: presence, chat, rooms, a game to its end, multiplayer rating, invitations, banishing |
 | `test_rating` | Multiplayer rating transfers, opponent strength, global order and SQLite persistence |
+| `test_rating_table_dump` | Mapping a PE virtual address to the original grade table's raw bytes |
 | `test_rankings` | Public HTML/JSON leaderboards for Single Mode and multiplayer records |
 | `test_shop` | The catalog, wallets, buying, the inventory, items in a game, profiles |
 | `test_accounts` | The database, the account service, tickets, logins across channels |

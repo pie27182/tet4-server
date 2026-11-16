@@ -30,17 +30,19 @@ def member_row(lobby: Lobby, player: Player) -> dict:
                 k31e=lobby.ratings.standing(player.member_id).points,
                 room=room.number if room and not room.single else 0)
 
+
 def profile(lobby: Lobby, member_id: bytes) -> dict:
     """A member's profile: decorations, Single Mode records and multiplayer rating."""
     wallet = lobby.shop.wallet(member_id)
     rating = lobby.ratings.standing(member_id)
     # _TetrisSchoolInfo's field order is u8, str, u32, u16. The u32 is the
-    # rating-point value; the grade label/threshold table is still being recovered.
+    # rating-point value; grade code/name are zero until the client's 24 thresholds
+    # and grade lookup have been recovered. The trailing best-grade field is also 0.
     school = dict(f0=0, f1=b"", f2=rating.points, f3=0)
     return dict(member=member_id, school=school,
                 f2=rating.wins, f3=rating.losses,
                 f4=f"{rating.win_rate * 100:.2f}", f5=0,
-                f6=max(0, rating.streak), f7=rating.best_streak,
+                f6=max(0, rating.streak), f7=0,
                 emblem=wallet.emblem.encode(), title=wallet.title.encode(),
                 single_modes=[single_mode(mode, lobby.records.standing(member_id, mode))
                               for mode in range(SINGLE_MODES)])

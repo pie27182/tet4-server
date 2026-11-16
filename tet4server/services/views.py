@@ -37,8 +37,11 @@ def profile(lobby: Lobby, member_id: bytes) -> dict:
     # _TetrisSchoolInfo's field order is u8, str, u32, u16. The u32 is the
     # rating-point value; the grade label/threshold table is still being recovered.
     school = dict(f0=0, f1=b"", f2=rating.points, f3=0)
-    return dict(member=member_id, school=school, emblem=wallet.emblem.encode(),
-                title=wallet.title.encode(),
+    return dict(member=member_id, school=school,
+                f2=rating.wins, f3=rating.losses,
+                f4=f"{rating.win_rate * 100:.2f}", f5=0,
+                f6=max(0, rating.streak), f7=rating.best_streak,
+                emblem=wallet.emblem.encode(), title=wallet.title.encode(),
                 single_modes=[single_mode(mode, lobby.records.standing(member_id, mode))
                               for mode in range(SINGLE_MODES)])
 

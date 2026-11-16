@@ -781,8 +781,10 @@ MESSAGES.md has every layout.
   1.3.4 client. The exact 24 thresholds/name mapping, original score transfer,
   best-combo accumulation, best-grade field and rank-locked arenas remain open.
   NHN separately announced public Single Ranking and Multi Ranking lists in
-  November 2008; the old in-game/web UI or its ranking-query path is not yet
-  reproduced. **partially implemented**
+  November 2008. Equivalent read-only HTML pages are now available at
+  `http://server:10456/rankings`, with JSON at `/api/rankings/multiplayer` and
+  `/api/rankings/single?mode=0|1|2`. The original Hangame page layout and exact
+  query implementation have not been recovered. **partially implemented**
 - **Missions and levels.** `_TetrisMissionMastInfo`/`_TetrisMissionUserInfo` in the
   profiles (sent empty), `Channel_OrderTypeMissionCompleteTetrisToC`,
   `Room_OrderTypeMissionCompleteTetrisToC`, `Room_OrderTypeSetEmblemTetrisToC` (an

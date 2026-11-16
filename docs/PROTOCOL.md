@@ -715,23 +715,52 @@ MESSAGES.md has every layout.
   socket). A watcher would enter the game socket and receive the room's in-game
   messages without a seat; `Room_ViewerToPlayerToS`/`ToC` move a watcher into a free
   seat. Rooms already list `watchers`, and LetsGameStart leaves members in watch
-  mode out of a game. **code**
+  mode out of a game. **code** The room's own 관전 모드 button lights up and sends
+  only `Room_OrderTypeSetSpeedLevelTetris` (seat, 1, 1, 8), which the server passes
+  on; the host's next LetsGameStart still seats that player. **live**
 - **Nicknames.** `Channel_CheckUserIdToS`, `CheckCharacterIdExistToS`,
   `MakeUserIdToS` (choosing one) and `Channel_OrderTypeChangeUserIdTetrisToS` (the
   nickname change item T10020) with their replies. Here an account's name is its
   nickname. **code**
-- **Friends.** `Channel_OrderTypeFriendMemberInfoTetrisToS` (`str · str`) →
-  `...ToC`, a friend's profile; the lobby's 친구 tab. **code**
+- **Friends, whispers and blocking.** The 친구 tab, 친구추가 (add a friend), 귓말
+  (`/w name`) and 귓말거부 (blocking) go through Hangame's messenger, CasualComm.dll
+  (CasualNet: it asks a GMS server for a CMS address, then logs in to the CMS), a
+  protocol of its own that neither this server nor its documents cover. Without it
+  the 친구 tab shows "채팅 서버 점검" (chat server maintenance), a friend is never
+  added, and a whisper is shown only to its sender. In the game protocol,
+  `Channel_OrderTypeFriendMemberInfoTetrisToS` (`str · str`) → `...ToC` is a
+  friend's profile. **live**
+- **Visiting a player** (게임 신청하기 in a player's menu or profile). Msg_VisitFriend
+  (HgModel3 0x6090F270) looks the target's `k140e` up in the arena list and, without
+  a `k137e` (the member list's path sends none), takes a path that sends nothing
+  and leaves the lobby waiting: until the client restarts, the room list's 입장
+  buttons do nothing (quick join still works). **live**
 - **Gifts and coupons.** `Shop_ReqBuyProductToS` already carries `gift`, `receiver`
   and `message`; `Shop_RequestUseGiftToS` (`u64 · str · str`) →
   `ResponseUseGiftToC` takes one from the gift box (the inventory's `gifts`);
   `Shop_GetCouponListToC` lists coupons. **code**
-- **The Happy Cube** (해피큐브). `Shop_RequestUseHappyCubeHammerToS` (no fields) →
-  `ResponseUseHappyCubeHammerToC` (`str · str · str · u32`); the hammer is item
-  T10015. **code**
-- **Club payments.** `Shop_RequestChangeLiqidMethodToS` and
-  `RequestReserveSurrenderToS` (cancelling) with their replies, for clubs paid
-  monthly; here TP pays a club once. **code**
+- **The Happy Cube** (해피큐브). In some games (painting, survival) a cube falls
+  among the pieces; the client counts the cubes a player lands and reports them as
+  `Room_GaeaGameValueSvcKorToS` (`[{_GaeaGameValue}]`: `HappyCubeEvent`, the count,
+  ""), which the server ignores. **live** The counts the lobby shows come from
+  Hangame's promotion messages (`GaeaPromotionDataSvcKorToC`); opening a cube is
+  `Shop_RequestUseHappyCubeHammerToS` (no fields) → `ResponseUseHappyCubeHammerToC`
+  (`str · str · str · u32`), with a hammer (item T10015, which can be bought). **code**
+- **Real money and club payments.** The shop's 한코인 충전 (Han coin top-up) opens
+  `https://bill.hangame.com/pay/charge.nhn?CHNL=HG` in the client, and the club tab,
+  banners and coupons point at tetris.hangame.com pages: Hangame's billing site,
+  gone. Here TP pays for everything, clubs included. **live**
+  `Shop_RequestChangeLiqidMethodToS` and `RequestReserveSurrenderToS` (cancelling)
+  with their replies were for clubs paid monthly. **code**
+- **Arenas** (경기장). 경기장 변경 lists the arenas, and choosing one makes the client
+  close and relaunch through the Hangame web site (Msg_Destroy → reloadHanGame →
+  ReloadLogonHangameWeb): here it simply closes. Arenas by grade (초보, 고수, ...)
+  need the ratings below. **live**
+- **Ratings and records** (내공, 등급, 전적). The profile, the member list and the exit
+  dialog show 내공 (rating points), a grade from it (24 grades from 초보 to 절대신,
+  table at Tet4.exe 0x005DC870), wins, losses, win rate, best combo and streak, the
+  best grade and today's TP; the server sends them all as 0: games are ranked and
+  paid in TP, but no record is kept of them. **live**
 - **Missions and levels.** `_TetrisMissionMastInfo`/`_TetrisMissionUserInfo` in the
   profiles (sent empty), `Channel_OrderTypeMissionCompleteTetrisToC`,
   `Room_OrderTypeMissionCompleteTetrisToC`, `Room_OrderTypeSetEmblemTetrisToC` (an

@@ -64,21 +64,29 @@ traffic is only lightly encrypted.
 
 ## What works
 
-Tested with two real clients at once:
+Tested with two real clients at once, button by button:
 
 - **Lobby**: the player list with the room each player is in, chat, the room list,
-  quick join (바로입장), player profiles, emblems and titles.
-- **Rooms**: item battle, no-item battle and race; passwords, joining, quick join,
-  invitations (초대), the host's settings and map, games to the end with the ranking
-  and TP, leaving, and sending a player away (강퇴, tested with scripted clients).
+  quick join (바로입장), player profiles, emblems and titles, and reports (신고),
+  which the server keeps for its operators.
+- **Rooms**: item battle (with teams), no-item battle, race, survival and painting;
+  passwords, joining, quick join, invitations (초대), the host's settings and map,
+  games to the end with the ranking and TP, leaving (also after the game, 나가기
+  예약), and sending a player away (강퇴, tested with scripted clients).
 - **Single Mode**: Marathon, 40 lines and Ultra, with the five best results per mode
   and ranks among all players.
 - **Shop (상점) and My Items (내 아이템)**: buying with TP. Players start with 10,000
   TP and earn 30, 20 or 10 TP per multiplayer game by rank.
 
-Not yet: watching a room, nicknames, friends, gifts and coupons, the Happy Cube,
-missions and levels, and the effects of items that are used up (they can be bought
-but do nothing). Survival and painting rooms open but are untested.
+Not yet:
+
+- ratings and records: 내공, grades, arenas by grade, wins and losses (shown as 0);
+- friends, whispers and blocking, which went through Hangame's separate messenger;
+- visiting a player (게임 신청하기 in a player's menu): it does nothing, and the
+  room list's 입장 buttons then stop working until the game is restarted;
+- watching a room, nicknames, gifts and coupons, the Happy Cube, missions;
+- the effects of items that are used up (they can be bought but do nothing);
+- paying with real money: the game's top-up and club pages were Hangame's web site.
 
 ## Run a server
 

@@ -1,20 +1,18 @@
-"""Cryptography of the client's secure socket (HgSock3.dll, CHgSecureSocket).
+"""The secure socket's cryptography: the key exchange and the stream cipher.
 
-Handshake (GenerateKey 0x606041D0, MakeKey 0x606042C0): each side sends a 48-byte
-share, twelve little-endian dwords TEA-encrypted under FIXED_KEY. The plaintext is
-24 random 16-bit values. Both sides derive the same twelve-dword master key:
-client plaintext XOR server plaintext. The key is fixed, so this is obfuscation,
-not secrecy: anyone who sees both shares can decrypt the session.
+Key exchange: each side sends a 48-byte share, twelve little-endian dwords
+TEA-encrypted under FIXED_KEY, whose plaintext is 24 random 16-bit values. Both
+sides derive the same twelve-dword master key: the client's plaintext XOR the
+server's. The key is fixed, so this hides nothing from anyone who sees both shares.
 
-Stream (filters 0x606057A0 / 0x60605900): one cipher state per direction. A state
-holds an 8-byte chain, an 8-byte block and an MT19937 generator seeded with
-init_by_array (0x60605A70). For byte j of each 8-byte block:
+Stream: one cipher state per direction, each an 8-byte chain, an 8-byte block and
+an MT19937 generator seeded with init_by_array. For byte j of each 8-byte block:
 
     cipher = plain ^ chain[j] ^ keystream[j]        chain[j] = plain
 
 After the eighth byte the block is TEA-encrypted under the key
 (chain0, chain1, chain0, chain1) and becomes the new chain, and two generator
-outputs (0x60605B20) form the next keystream.
+outputs form the next keystream. docs/PROTOCOL.md section 5 has the details.
 """
 import random
 import secrets
@@ -155,10 +153,10 @@ class StreamCipher:
 
 
 def upstream_cipher(master) -> StreamCipher:
-    """Client-to-server bytes: the client's send context (this+0x13C)."""
+    """The cipher of the bytes the client sends."""
     return StreamCipher(master[6:8], master[8:12])
 
 
 def downstream_cipher(master) -> StreamCipher:
-    """Server-to-client bytes: the client's receive context (this+0x140)."""
+    """The cipher of the bytes the server sends."""
     return StreamCipher(master[0:2], master[2:6])

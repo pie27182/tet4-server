@@ -22,13 +22,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from tet4server import crypto, schema  # noqa: E402
-from tet4server.messages import Msg  # noqa: E402
-from tet4server.xdr import Reader, string, u32, u64  # noqa: E402
-from tet4server.xlbp import MAGIC, decode_batch, encode_batch  # noqa: E402
+from tet4server.config import CHANNEL_PORT  # noqa: E402
+from tet4server.protocol import cipher, codec  # noqa: E402
+from tet4server.protocol.codec import pack  # noqa: E402
+from tet4server.protocol.session import MAGIC, decode_batch, encode_batch  # noqa: E402
+from tet4server.protocol.wire import U32  # noqa: E402
 
-PIECE = schema.message_id("Room_OrderTypePolyMinoPutTetris")
-START_OK = schema.message_id("Room_OrderTypeLetsGameStartOkTetris")
+PIECE = codec.message_id("Room_OrderTypePolyMinoPutTetris")
 
 
 class Client:
@@ -37,72 +37,67 @@ class Client:
     @classmethod
     async def connect(cls, host: str, port: int) -> "Client":
         reader, writer = await asyncio.open_connection(host, port)
-        share = crypto.seal_share(crypto.new_share())
+        share = cipher.seal_share(cipher.new_share())
         writer.write(share)
-        master = crypto.master_key(share, await reader.readexactly(crypto.SHARE_SIZE))
+        master = cipher.master_key(share, await reader.readexactly(cipher.SHARE_SIZE))
         return cls(reader, writer, master)
 
     def __init__(self, reader, writer, master):
         self.reader, self.writer = reader, writer
-        self.tx, self.rx = crypto.upstream_cipher(master), crypto.downstream_cipher(master)
+        self.tx, self.rx = cipher.upstream_cipher(master), cipher.downstream_cipher(master)
 
-    def send(self, body: bytes, layer: int = 0) -> None:
-        payload = MAGIC + encode_batch({layer: body})
-        self.writer.write(self.tx.encrypt(u32(len(payload)) + payload))
+    def send(self, *messages) -> None:
+        payload = MAGIC + encode_batch(messages)
+        self.writer.write(self.tx.encrypt(U32.pack(len(payload)) + payload))
 
     async def receive(self):
-        length = int.from_bytes(self.rx.decrypt(await self.reader.readexactly(4)), "big")
+        length = U32.unpack(self.rx.decrypt(await self.reader.readexactly(4)))[0]
         return decode_batch(self.rx.decrypt(await self.reader.readexactly(length))[4:])
 
-    async def until(self, msg_id: int, layer: int = 0):
+    async def until(self, name: str) -> dict:
+        """The fields of the next message `name`, skipping others."""
+        layout = codec.MESSAGES[name]
         while True:
             message = await self.receive()
-            if (message.id, message.layer) == (msg_id, layer):
-                return message
-
-
-def fields(message, name: str) -> dict:
-    r = Reader(message.body)
-    r.u32()
-    return schema.unpack(name, r)
+            if (message.layer, message.id) == (layout.layer, layout.id):
+                return codec.unpack(name, message.body)
 
 
 async def bot(args, index: int, rooms: dict, stats: dict) -> None:
     name, size = b"bot%d" % index, args.room
     group, host = divmod(index, size)[0], index % size == 0
     channel = await Client.connect(args.host, args.port)
-    channel.send(u32(Msg.AuthToS))
-    await channel.until(Msg.AuthToC)
-    channel.send(u32(Msg.Channel_GetUserIdByMemberIdToS) + string(name))
-    await channel.until(Msg.Channel_GetUserIdToC)
-    channel.send(b"".join([u32(Msg.Channel_EnterChannelByUserIdToS), u64(0), string(name),
-                           string(b"TET4"), string(b""), string(b"1"), string(b""), u32(0),
-                           string(b""), string(b""), u64(0)]))
-    await channel.until(Msg.Channel_EnterChannelToC)
+    channel.send(pack("AuthToS"))
+    await channel.until("AuthToC")
+    channel.send(pack("Channel_GetUserIdByMemberIdToS", member=name))
+    await channel.until("Channel_GetUserIdToC")
+    channel.send(pack("Channel_EnterChannelByUserIdToS", member=name, game_id=b"TET4",
+                      channel_id=b"1"))
+    await channel.until("Channel_EnterChannelToC")
     if host:
-        channel.send(schema.pack("Channel_AutoEnterRoomToS", k3e=name, k42e=0xFFFFFFFF,
-                                 k45e=b"load", k46e=b"Y000MNN", k66e=size))
-        created = fields(await channel.until(Msg.Channel_CreateRoomToC), "Channel_CreateRoomToC")
-        rooms[group].set_result((created["k42e"], created["k53e"]))
+        channel.send(pack("Channel_AutoEnterRoomToS", member=name, room=0xFFFFFFFF,
+                          title=b"load", options=b"Y000MNN", limit=size))
+        created = await channel.until("Channel_CreateRoomToC")
+        rooms[group].set_result((created["room"], created["game_port"]))
     number, game_port = await rooms[group]
     stats["readers"].append(asyncio.create_task(drain(channel)))   # lobby news, not counted
     game = await Client.connect(args.host, game_port)
-    game.send(schema.pack("Room_EnterRoomToS", k42e=number, k3e=name))
-    await game.until(Msg.Room_EnterRoomToC)
+    game.send(pack("Room_EnterRoomToS", room=number, member=name))
+    await game.until("Room_EnterRoomToC")
     if host:
         for _ in range(size):                             # everyone seated
-            await game.until(Msg.Room_AddMemberToC)
+            await game.until("Room_AddMemberToC")
         seats = [b"bot%d" % (group * size + seat) for seat in range(size)]
-        game.send(schema.pack("Room_OrderTypeLetsGameStartTetris", flags=[0] * 6,
-                              members=seats + [b""] * (6 - size)), layer=3)
-    await game.until(START_OK, 3)
+        game.send(pack("Room_OrderTypeLetsGameStartTetris", flags=[0] * 6,
+                       players=seats + [b""] * (6 - size)))
+    await game.until("Room_OrderTypeLetsGameStartOkTetris")
     stats["playing"] += 1
     stats["readers"].append(asyncio.create_task(listen(game, stats)))
     await stats["start"]
     end = time.monotonic() + args.seconds
     while time.monotonic() < end:
-        game.send(schema.pack("Room_OrderTypePolyMinoPutTetris", f2=bytes(16),
-                              f3=int(time.time() * 1000) & 0xFFFFFFFF), layer=3)
+        game.send(pack("Room_OrderTypePolyMinoPutTetris", f2=bytes(16),
+                       f3=int(time.time() * 1000) & 0xFFFFFFFF))
         stats["sent"] += 1
         await asyncio.sleep(random.expovariate(args.rate))
 
@@ -120,7 +115,7 @@ async def listen(game: Client, stats: dict) -> None:
         while True:
             message = await game.receive()
             if message.id == PIECE:
-                sent = fields(message, "Room_OrderTypePolyMinoPutTetris")["f3"]
+                sent = codec.unpack("Room_OrderTypePolyMinoPutTetris", message.body)["f3"]
                 stats["latency"].append(((int(time.time() * 1000) - sent) & 0xFFFFFFFF))
     except (asyncio.IncompleteReadError, ConnectionError):
         pass
@@ -158,7 +153,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=15001, help="the channel's port")
+    parser.add_argument("--port", type=int, default=CHANNEL_PORT, help="the channel's port")
     parser.add_argument("--players", type=int, default=60)
     parser.add_argument("--room", type=int, default=6, help="players per room (2-6)")
     parser.add_argument("--rate", type=float, default=2.0, help="pieces per second per player")

@@ -1,7 +1,7 @@
 # Running the server on a VPS
 
-One server process serves every player: TPack, CDS, the channel and game
-sockets, and the account service. It needs Python 3.10 or newer and nothing
+One server serves every player: TPack, CDS, the channel and game sockets, and the
+account service, in one process or, with `--channels`, one process per channel. It needs Python 3.10 or newer and nothing
 else; accounts, records and wallets (TP, items, the emblem and title shown) live
 in one SQLite file.
 
@@ -25,6 +25,10 @@ README lists what is not implemented yet.
 | 15000 | CDS (channel directory) |
 | 15001, 15002 | channel 1: channel and game sockets |
 | 15003, 15004 | channel 2, and so on: channel n uses 15001 + 2(n - 1) and the next |
+
+These ports, and every other setting (the players per channel, the TP economy,
+ticket lifetime, login limits), are in `tet4server/config.py`, each with a comment;
+the client's own TPack and CDS ports are named by the launcher's bootstrap.
 
 ## 2. Install
 
@@ -178,9 +182,9 @@ A restart ends the players' sessions; they log in again with `play`.
   sockets. In a multiplayer game the server passes every player's moves to the
   others in the room through the client's stream cipher, in pure Python: that is a
   channel's main cost. Measured with `tools/loadtest.py` on one channel, 300
-  players in 50 full rooms, each placing two pieces a second (fast play): 2,500
-  pieces delivered a second, half a core, a median delivery of 1 ms and 99% within
-  0.2 s. Check yours with:
+  players in 50 full rooms, each placing two pieces a second (fast play): 2,570
+  pieces delivered a second for 40% of one core, a median delivery of 1 ms and 99%
+  within 0.17 s. Check yours with:
 
   ```bash
   python3 tools/loadtest.py --players 300 --server-pid "$(pgrep -f 'tet4server' | head -1)"

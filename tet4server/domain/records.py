@@ -1,17 +1,33 @@
-"""Single Mode records: plays and the best results per player and mode."""
+"""Single Mode records: each player's games and best results per mode, and their ranks
+among everyone's."""
 import asyncio
 import logging
 import time
 from bisect import bisect_left, bisect_right, insort
 from collections import defaultdict
 from dataclasses import dataclass, field
+from typing import NamedTuple
 
-from .accounts import Database
-from .messages import FORTY_LINES, TOP, GameReport, SingleMode
+from ..config import FORTY_LINES, RECORDS_SHOWN
+from ..storage import Database
 
 log = logging.getLogger("tet4.records")
 
-REFRESH = 60              # seconds between readings of everyone's records (for the ranks)
+
+class GameReport(NamedTuple):
+    """A finished Single Mode game, as the client reports it."""
+    member_id: bytes
+    mode: int         # 0 Marathon, 1 40 lines, 2 Ultra
+    value: int        # the score; in 40 lines the time in 1/100 s
+    completed: bool   # 40 lines: all lines cleared; always set in the other modes
+
+
+class Standing(NamedTuple):
+    """A player's standing in one mode."""
+    top: list[tuple[int, bytes]]  # the best results, best first: (score or time, date)
+    plays: int = 0                # games played in the mode
+    rank: int = 0                 # the place of the player's best among everyone's; 0: none
+    ranked: int = 0               # players with a result in the mode
 
 
 @dataclass
@@ -23,8 +39,8 @@ class _Played:
 class Records:
     """Single Mode records. With a database, the database holds them: a game is added
     in one transaction, a player's records are read again on entering the channel, and
-    everyone's (for the ranks) every REFRESH seconds, as channels in other processes
-    add to them (Channel._refresh_records)."""
+    everyone's (for the ranks) every config.RECORDS_REFRESH seconds, as channels in
+    other processes add to them."""
 
     def __init__(self, db: Database | None = None):
         self._played: dict[tuple[bytes, int], _Played] = {}
@@ -62,7 +78,7 @@ class Records:
         self._bests.clear()
         self._keep(rows)
 
-    def single_mode(self, member_id: bytes, mode: int) -> SingleMode:
+    def standing(self, member_id: bytes, mode: int) -> Standing:
         """A player's games and best results in a mode, ranked against everyone's best:
         the number of better bests, plus one."""
         own = self._played.get((member_id, mode), _Played())
@@ -73,11 +89,12 @@ class Records:
             better = (bisect_left(bests, best) if mode == FORTY_LINES
                       else len(bests) - bisect_right(bests, best))
             rank = better + 1
-        return SingleMode(own.top, own.plays, rank, len(bests))
+        return Standing(own.top, own.plays, rank, len(bests))
 
-    async def add_game(self, report: GameReport) -> SingleMode:
-        """Count a finished game and keep its result among the best TOP. Higher scores
-        are better; in 40 lines the value is a time and only cleared runs count."""
+    async def add_game(self, report: GameReport) -> Standing:
+        """Count a finished game and keep its result among the best RECORDS_SHOWN.
+        Higher scores are better; in 40 lines the value is a time and only cleared runs
+        count."""
         name = report.member_id.decode("latin-1")
 
         def count(played: _Played) -> tuple[_Played, bool]:
@@ -86,7 +103,7 @@ class Records:
                 return played, False
             entry = (report.value, time.strftime("%Y.%m.%d").encode())
             played.top = sorted(played.top + [entry], key=lambda r: r[0],
-                                reverse=report.mode != FORTY_LINES)[:TOP]
+                                reverse=report.mode != FORTY_LINES)[:RECORDS_SHOWN]
             return played, entry in played.top
 
         def read_count_write() -> tuple[_Played, bool]:
@@ -105,4 +122,4 @@ class Records:
         self._set(report.member_id, report.mode, played)
         log.info("%r mode %d: %d%s", report.member_id, report.mode, report.value,
                  ", kept among the best" if kept else "")
-        return self.single_mode(report.member_id, report.mode)
+        return self.standing(report.member_id, report.mode)

@@ -50,7 +50,7 @@ Tested with two real clients at once (Wine, headless under Xvfb):
 - **Single Mode**: Marathon, 40 lines and Ultra; game over, NEW RECORD, rank and the five best results per mode, retry, and returning to the lobby. Ultra opens after 500 games, as the client requires.
 - **Shop (상점) and My Items (내 아이템)**: three tabs, buying with TP, and inventory with item period or uses. Players start with 10,000 TP and earn 30, 20 or 10 TP per multiplayer game by rank.
 
-Not implemented or not verified: whispers, friends, guilds, gifts and gift box, Happy Cube, missions, spectating a room from the lobby, and effects for consumable items (rating, record and nickname-change items); these items can be bought but do nothing. Survival and painting rooms are created but untested.
+Not implemented yet: watching a room, nicknames, friends, gifts and coupons, the Happy Cube, club payments, missions and levels, room and operator notices, and effects for consumable items (rating, record and nickname-change items); these items can be bought but do nothing. Whispers never reach the server. Survival and painting rooms are created but untested. [`docs/PROTOCOL.md`](docs/PROTOCOL.md) section 13 records what is known of each missing feature.
 
 The server keeps players, rooms, records and wallets, and relays game traffic between players in a room. To run your own server, see [`docs/DEPLOY.md`](docs/DEPLOY.md). Account names and passwords are handled by the server operator; use a unique password. The game protocol uses a fixed encryption key, so do not treat in-game traffic as fully private.
 
@@ -63,14 +63,15 @@ python3 -m unittest discover -s tests -t .
 python3 -m tet4server
 ```
 
-By default it listens on 127.0.0.1: TPack 10454, CDS 15000, and one channel on 15001 (game 15002). `--db FILE` stores accounts, records and wallets in SQLite and requires login; `--channels N` runs N channels of up to 300 players each. `--host` and `--public-host` configure listening and advertised addresses. `--trace FILE` appends decrypted messages to a file; traces may contain sensitive session data and must be kept private.
+By default it listens on 127.0.0.1: TPack 10454, CDS 15000, and one channel on 15001 (game 15002); every setting is in [`tet4server/config.py`](tet4server/config.py). `--db FILE` stores accounts, records and wallets in SQLite and requires login; `--channels N` runs N channels of up to 300 players each. `--host` and `--public-host` configure listening and advertised addresses. `--trace FILE` appends decrypted messages to a file; traces may contain sensitive session data and must be kept private.
 
 ## Documentation
 
 - [`docs/WINDOWS.md`](docs/WINDOWS.md) — plain-language Windows player guide.
 - [`docs/DEPLOY.md`](docs/DEPLOY.md) — run the server on a VPS.
-- [`docs/PROTOCOL.md`](docs/PROTOCOL.md) — protocol and evidence.
-- [`docs/MESSAGES.md`](docs/MESSAGES.md) — the 233 client messages and server behavior.
+- [`docs/PROTOCOL.md`](docs/PROTOCOL.md) — the protocol as a specification a server can be built from, with the evidence for each fact and what is known of the features not implemented yet.
+- [`docs/MESSAGES.md`](docs/MESSAGES.md) — all 233 client messages field by field, and what the server does with each (generated from the code).
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how the server is built: its layout, processes, a message's path through the code, and how to extend it.
 - [`docs/DEBUGGING.md`](docs/DEBUGGING.md) — developer diagnostics.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — protocol contribution rules.
 

@@ -14,18 +14,15 @@ import logging
 import time
 from dataclasses import asdict, dataclass, field
 
-from . import schema
-from .accounts import Database
+from ..config import EMBLEM, MAX_QUANTITY, START_POINTS, TITLE
+from ..storage import Database
 
 log = logging.getLogger("tet4.shop")
 
-START_POINTS = 10_000          # a new player's TP, enough to try the shop
-GAME_POINTS = (30, 20, 10)     # TP for a multiplayer game by rank; later ranks get the last
-MIN_GAME_SECONDS = 30          # shorter games earn nothing
 PERMANENT = time.mktime((2099, 12, 31, 23, 59, 59, 0, 0, -1))
 
-# The shop's tabs (CShopData::SetShopInfo, Tet4.exe 0x0051C750, files each board's
-# groups under a tab): room-host tickets, items for the game, emblems and titles.
+# The shop's tabs, each a board of product groups: room-host tickets and clubs, items
+# for the game, emblems and titles.
 TICKETS, SKILLS, DECORATIONS = "BDT001", "BDT002", "BDT003"
 
 # Product groups: code -> (tab, {period: TP}).
@@ -232,7 +229,7 @@ class Shop:
         """Buy `quantity` of a product with TP. None when bought, else why not, in the
         words the client shows."""
         product = PRODUCTS.get(code)
-        if product is None or not 1 <= quantity <= 99:
+        if product is None or not 1 <= quantity <= MAX_QUANTITY:
             return "판매하지 않는 상품입니다."
 
         def pay(wallet: Wallet) -> str | None:
@@ -247,19 +244,19 @@ class Shop:
             log.info("%r bought %d x %s", member_id, quantity, code)
         return error
 
-    async def show(self, member_id: bytes, title: str, emblem: str) -> bool:
-        """Show an owned title and emblem; an empty code shows none."""
+    async def show(self, member_id: bytes, emblem: str, title: str) -> bool:
+        """Show an owned emblem and title; an empty code shows none."""
         def choose(wallet: Wallet) -> bool:
             if any(code and (code not in wallet.items or code[1] != kind)
-                   for code, kind in ((title, "3"), (emblem, "2"))):
+                   for code, kind in ((emblem, EMBLEM), (title, TITLE))):
                 return False
             wallet.title, wallet.emblem = title, emblem
             return True
         return await self._change(member_id, choose)
 
     async def discard(self, member_id: bytes, code: str, kind: str) -> tuple[bool, bool]:
-        """Throw away an owned emblem (kind "2") or title ("3"): whether it was thrown
-        away, and whether it was the one shown (then none is)."""
+        """Throw away an owned emblem (kind EMBLEM) or title (TITLE): whether it was
+        thrown away, and whether it was the one shown (then none is)."""
         def remove(wallet: Wallet) -> tuple[bool, bool]:
             if code[1:2] != kind or code not in wallet.items:
                 return False, False
@@ -283,50 +280,3 @@ def _wallet(row: tuple | None) -> Wallet:
         return Wallet()
     points, items, title, emblem = row
     return Wallet(points, {i["code"]: Item(**i) for i in json.loads(items)}, title, emblem)
-
-
-# Messages, all at layer 3 of the channel socket (Tet4.exe registers the shop's
-# converters at 0x005424A0).
-
-def _date(t: float) -> bytes:
-    return time.strftime("%Y%m%d%H%M%S", time.localtime(t)).encode()
-
-
-def _shop_info() -> bytes:
-    tabs: dict[str, list[str]] = {}
-    for group, (tab, _) in GROUPS.items():
-        tabs.setdefault(tab, []).append(group)
-    return schema.pack(
-        "Shop_GetShopInfoToC",
-        boards=[dict(code=tab, groups=groups) for tab, groups in tabs.items()],
-        groups=[dict(code=group, products=[group + p for p in prices])
-                for group, (_, prices) in GROUPS.items()],
-        products=[dict(code=p.code, currency=b"TP", price=p.price, per_piece=p.period[0] == "C")
-                  for p in PRODUCTS.values()])
-
-
-SHOP_INFO = _shop_info()
-
-
-def point_info_to_c(wallet: Wallet) -> bytes:
-    return schema.pack("Shop_GetPointInfoToC", kind=b"TP", amount=wallet.points)
-
-
-def change_point_info_to_c(before: int, after: int) -> bytes:
-    return schema.pack("Shop_ChangePointInfoToC", kind=b"TP", before=before, amount=after)
-
-
-def inventory_info_to_c(wallet: Wallet) -> bytes:
-    """The inventory (CShopInventory::SetInventory, 0x005113B0): items, emblems and
-    titles, each a period item (kind T, start and end dates) or one with uses (kind C)."""
-    shelves: dict[str, list[dict]] = {"1": [], "2": [], "3": []}
-    for item in wallet.items.values():
-        timed = not item.count
-        shelves.get(item.code[1], shelves["1"]).append(dict(
-            code=item.code, kind=b"T" if timed else b"C", count=item.count,
-            start=_date(item.start) if timed else b"", end=_date(item.end) if timed else b""))
-    return schema.pack(
-        "Shop_GetInventoryInfoToC",
-        items=dict(items=shelves["1"]), emblems=dict(items=shelves["2"], slots=4),
-        titles=dict(items=shelves["3"], slots=4),
-        points=[dict(kind=b"TP", amount=wallet.points)], now=_date(time.time()))

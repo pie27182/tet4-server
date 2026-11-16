@@ -73,10 +73,11 @@ class RequestTest(unittest.TestCase):
 
 class ReplyLayoutTest(unittest.TestCase):
     def test_enter_channel_reply_carries_k23e_in_string_3_and_k24e_in_string_8(self):
-        fields = parse(m.enter_channel_to_c(b"K23", b"K24"),
+        fields = parse(schema.pack("Channel_EnterChannelToC", k23e=b"K23", k24e=b"K24", k62e=6),
                        "s s s s s u32 u32 u32 u8 s u32 u32 s s u32 u32 u32 s")
         strings = [v for v in fields if isinstance(v, bytes)]
         self.assertEqual((strings[2], strings[7], strings[8]), (b"K23", b"K24", b""))
+        self.assertEqual(fields[6], 6)          # k62e, the second number: a room's size
 
     def test_member_info_starts_with_the_member_id(self):
         fields = parse(m.get_member_info_to_c(b"test"),

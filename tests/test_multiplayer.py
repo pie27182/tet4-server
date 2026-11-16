@@ -186,3 +186,46 @@ class MultiplayerTest(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class InvitationTest(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.services = await Services(ports=Ports(0, 0, 0, 0, 0)).start()
+        self.addAsyncCleanup(self.services.close)
+        self.ports = self.services.ports
+
+    async def test_invite_from_a_room(self):
+        alice, bob = Player(self, b"alice"), Player(self, b"bob")
+        await alice.enter_channel()
+        await bob.enter_channel()
+        await alice.channel.send(pack("Channel_AutoEnterRoomToS", k3e=b"alice", k42e=0xFFFFFFFF,
+                                      k45e=b"come", k46e=b"Y000MNN", k66e=2))
+        await alice.until(alice.channel, Msg.Channel_CreateRoomToC)
+        await alice.enter_game(1)
+
+        # The member list tells where everyone is (k151e): alice in room 1, bob in the lobby.
+        await bob.channel.send(u32(Msg.Channel_GetMemberListToS) + string(b"TET4") * 3)
+        listed = fields(await bob.until(bob.channel, Msg.Channel_GetMemberListToC),
+                        "Channel_GetMemberListToC")
+        self.assertEqual({m["k3e"]: m["k151e"] for m in listed["members"]},
+                         {b"alice": 1, b"bob": 0})
+
+        await alice.channel.send(pack("Channel_InviteGameToMemberToS", k3e=b"alice",
+                                      k64e=b"play?", target=b"bob"))
+        invite = fields(await bob.until(bob.channel, ID("Channel_InviteGameToMemberToC")),
+                        "Channel_InviteGameToMemberToC")
+        self.assertEqual((invite["k3e"], invite["k42e"], invite["k64e"]), (b"alice", 1, b"play?"))
+
+        # bob's answer goes to alice: 0 accepted, then he joins the room himself.
+        await bob.channel.send(pack("Channel_ResponseInviteGameToS", k3e=b"bob", k64e=b"alice",
+                                    declined=0))
+        answer = fields(await alice.until(alice.channel, ID("Channel_ResponseInviteGameToC")),
+                        "Channel_ResponseInviteGameToC")
+        self.assertEqual((answer["k3e"], answer["declined"]), (b"bob", 0))
+
+        # Someone who is not in the lobby cannot be asked: declined at once.
+        await alice.channel.send(pack("Channel_InviteGameToMemberToS", k3e=b"alice",
+                                      target=b"nobody"))
+        answer = fields(await alice.until(alice.channel, ID("Channel_ResponseInviteGameToC")),
+                        "Channel_ResponseInviteGameToC")
+        self.assertEqual((answer["k3e"], answer["declined"]), (b"nobody", 1))

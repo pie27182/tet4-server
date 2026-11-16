@@ -9,7 +9,7 @@ from .accounts import Database
 from .lobby import Lobby, Player
 from .messages import Endpoint, Msg
 from .profiles import member_info, tetris_info
-from .room import Room, room_info_to_c
+from .room import SEATS, Room, room_info_to_c
 from .xdr import Reader
 from .xlbp import Session, serve_messages
 
@@ -72,6 +72,8 @@ class ChannelConnection:
             (3, schema.message_id("Shop_RequestCanPurchaseToS")): self.on_can_purchase,
             (3, Msg.Channel_OrderTypeGetDisplayMemberInfoTetrisToS): self.on_get_profile,
             (3, schema.message_id("Channel_OrderTypeChangeDisplayMemberInfoToS")): self.on_show,
+            (0, schema.message_id("Channel_InviteGameToMemberToS")): self.on_invite,
+            (0, schema.message_id("Channel_ResponseInviteGameToS")): self.on_invite_answer,
         }
 
     async def run(self) -> None:
@@ -114,8 +116,12 @@ class ChannelConnection:
     async def on_enter_channel(self, r: Reader) -> None:
         request = m.read_enter_channel(r)
         member = self.member_id = self._claim(request.member_id)
-        # MetpInfo(4).k23e/k24e come back from this reply; Msg_SendEnterRoom needs them.
-        await self.session.send(m.enter_channel_to_c(request.k23e, request.k24e))
+        # The channel's settings (HgCom3 converter 0x60139620, keys in field order):
+        # MetpInfo(4).k23e/k24e come back from this reply and Msg_SendEnterRoom needs them;
+        # k62e is a room's size, which HgModel3 _UpdateRoomMembers reads to seat the
+        # members a room info lists (and so to know which room each member is in).
+        await self.session.send(schema.pack("Channel_EnterChannelToC", k23e=request.k23e,
+                                            k24e=request.k24e, k62e=SEATS))
         # The player's own record (layer 0, found by SGlobalInfo::MyData()) and its
         # Tetris profile (layer 3, read by the Single Mode scene).
         await self.session.send_layers({
@@ -136,7 +142,7 @@ class ChannelConnection:
         players = list(self.lobby.players.values())
         await self.session.send_layers({
             0: schema.pack("Channel_GetMemberListToC", CHANNEL_KEYS,
-                           members=[member_info(p.member_id) for p in players]),
+                           members=[member_info(p) for p in players]),
             3: schema.pack_as("Channel_GetMemberListToC", "Channel_OrderTypeGetMemberListTetrisToC",
                               members=[tetris_info(self.lobby, p.member_id) for p in players]),
         })
@@ -278,3 +284,29 @@ class ChannelConnection:
                                 request["emblem"].decode("latin-1")):
             self.lobby.post({3: profiles.change_display_member_info(
                 member, self.lobby.shop.wallet(member))})
+
+    # --- invitations ------------------------------------------------------------
+
+    async def on_invite(self, r: Reader) -> None:
+        """초대하기: a player in a room invites one in the lobby, who is asked with the
+        room's number and password; a player who cannot be asked declines at once."""
+        f = schema.unpack("Channel_InviteGameToMemberToS", r)
+        room = self.player.room if self.player else None
+        target = self.lobby.players.get(f["target"])
+        if room is None or target is None or target.room is not None:
+            await self.session.send(schema.pack(
+                "Channel_ResponseInviteGameToC", k3e=f["target"], k64e=f["k3e"], declined=1))
+            return
+        target.channel.session.post(schema.pack(
+            "Channel_InviteGameToMemberToC", k3e=self.player.member_id, k42e=room.number,
+            k65e=room.fields.k45e, k67e=room.fields.k67e, k64e=f["k64e"]))
+
+    async def on_invite_answer(self, r: Reader) -> None:
+        """The invited player's answer (k3e the invited, k64e who asked, 0 accepted), for
+        the player who asked; accepting, the invited player joins the room by itself."""
+        f = schema.unpack("Channel_ResponseInviteGameToS", r)
+        inviter = self.lobby.players.get(f["k64e"])
+        if inviter and self.player:
+            inviter.channel.session.post(schema.pack(
+                "Channel_ResponseInviteGameToC", k3e=self.player.member_id, k64e=f["k64e"],
+                declined=f["declined"]))

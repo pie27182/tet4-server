@@ -12,7 +12,7 @@ from . import schema
 from .shop import DECORATION_NAMES, Wallet
 
 if TYPE_CHECKING:
-    from .lobby import Lobby
+    from .lobby import Lobby, Player
 
 SLOTS = 4                  # emblem and title slots; the slot items add four more
 EXTRA_SLOTS = {"2": "T90002", "3": "T90003"}
@@ -20,9 +20,13 @@ NO_MISSION = 0xFFFFFFFF    # an emblem or title bought, not earned by a mission:
                            # emblem list (0x004853C0) looks any other number up
 
 
-def member_info(member_id: bytes) -> dict:
-    """A lobby member list row (_MemberInfo)."""
-    return dict(k3e=member_id, k7e=member_id, k11e=b"M")
+def member_info(player: "Player") -> dict:
+    """A lobby member list row (_MemberInfo). k151e is the room the player is in, 0 in
+    the lobby (HgModel3 Msg_FillMemberList keeps it at CMemberData+0x338): the member
+    list shows it, and accepting an invitation finds the inviter's room by it."""
+    room = player.room
+    return dict(k3e=player.member_id, k7e=player.member_id, k11e=b"M",
+                k151e=room.number if room and not room.single else 0)
 
 
 def tetris_info(lobby: "Lobby", member_id: bytes) -> dict:

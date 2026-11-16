@@ -173,21 +173,6 @@ def get_user_id_to_c(member_id: bytes) -> bytes:
     ])
 
 
-def enter_channel_to_c(k23e: bytes, k24e: bytes) -> bytes:
-    """Channel_EnterChannelToC (Serialize 0x6012E4A0): u32 id | str x5 | u32 x3 | u8 |
-    str | u32 x2 | str x2 | u32 x3 | str k1e. Converter 0x60139620 maps string 3 to
-    k23e and string 8 to k24e; k1e must be present and not "v2e"."""
-    return b"".join([
-        u32(Msg.Channel_EnterChannelToC),
-        string(b""), string(b""), string(k23e), string(b""), string(b""),
-        u32(0), u32(0), u32(0), u8(0),
-        string(b""), u32(0), u32(0),
-        string(b""), string(k24e),
-        u32(0), u32(0), u32(0),
-        string(b""),
-    ])
-
-
 def get_member_info_to_c(member_id: bytes) -> bytes:
     """Channel_GetMemberInfoToC (Serialize 0x6012DCE0, converter 0x601391A0):
     str k3e | str x3 | u32 | str | u64 | u32 x7 | str | u32 x2 | str | u64 | u32 x2 |

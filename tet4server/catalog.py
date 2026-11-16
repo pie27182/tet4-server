@@ -309,6 +309,8 @@ NAMES = {
     "_AliasInfo": "code name mission",
     "_SingleModeInfo": "mode _ rank ranked values dates result plays",
     # Channel
+    "Channel_EnterChannelToC": "k3e k22e k23e k60e k73e k61e k62e k69e k70e k63e k129e k130e "
+                               "k128e k24e k99e k35e k154e k1e",
     "Channel_GetMemberListToC": "k22e k23e k24e members k1e",
     "Channel_OrderTypeGetMemberListTetrisToC": "members",
     "Channel_AddMemberToC": "k22e k23e k24e k3e k7e k8e k11e k10e k12e k26e k27e k28e k29e k30e "
@@ -320,6 +322,10 @@ NAMES = {
                                                       "missions mission_states",
     "Channel_OrderTypeChangeDisplayMemberInfoToS": "emblem title",
     "Channel_OrderTypeChangeDisplayMemberInfoToC": "k3e emblem title",
+    "Channel_InviteGameToMemberToS": "k3e k42e k64e target _",
+    "Channel_InviteGameToMemberToC": "k1e failcode k2e k3e k42e k65e k67e k64e _",
+    "Channel_ResponseInviteGameToS": "k3e k64e declined",
+    "Channel_ResponseInviteGameToC": "k3e k64e declined",
     "Channel_DeleteMemberToC": "k22e k23e k24e k3e",
     "Channel_GetRoomListToC": "k22e k23e k24e k51e k1e rooms",
     "Channel_RoomInfoToC": "room",

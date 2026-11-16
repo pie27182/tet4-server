@@ -21,7 +21,7 @@ from . import cds, tpack
 from .accounts import AccountService, Database
 from .channel import ChannelConnection
 from .game import GameConnection
-from .lobby import Lobby
+from .lobby import PRESENCE, Lobby
 from .messages import Endpoint
 from .records import REFRESH
 from .xdr import ProtocolError, frame, read_frame
@@ -116,9 +116,9 @@ class Channel:
         self.public_host = public_host
         self.ports = ports
         self.db = Database(db) if db else None
-        self.lobby = Lobby(self.db)
+        self.lobby = Lobby(self.db, number)
         self._listeners = Listeners(host, Tracer(trace) if trace else None)
-        self._refresh: asyncio.Task | None = None
+        self._chores: list[asyncio.Task] = []
         self.endpoint = self.game = Endpoint(public_host, 0)
 
     async def start(self) -> "Channel":
@@ -134,22 +134,21 @@ class Channel:
             await self.close()
             raise
         if self.db:
-            self._refresh = asyncio.create_task(self._refresh_records())
+            # Other channels share the database: their games change the ranks, and their
+            # logins can replace a session here.
+            await asyncio.to_thread(self.db.clear_channel, self.number)
+            self._chores = [asyncio.create_task(_every(REFRESH, self.lobby.records.refresh)),
+                            asyncio.create_task(_every(PRESENCE,
+                                                       self.lobby.end_replaced_sessions))]
         return self
-
-    async def _refresh_records(self) -> None:
-        """Other channels' games change the ranks: read everyone's records again."""
-        while True:
-            await asyncio.sleep(REFRESH)
-            await self.lobby.records.refresh()
 
     @property
     def members(self) -> int:
         return len(self.lobby.players)
 
     async def close(self) -> None:
-        if self._refresh:
-            self._refresh.cancel()
+        for chore in self._chores:
+            chore.cancel()
         await self._listeners.close()
         await self.lobby.close()
         if self.db:
@@ -254,6 +253,16 @@ class Services:
 
     async def __aexit__(self, *exc_info) -> None:
         await self.close()
+
+
+async def _every(seconds: float, chore) -> None:
+    """Run `chore` every `seconds` until cancelled; a failure is logged, not fatal."""
+    while True:
+        await asyncio.sleep(seconds)
+        try:
+            await chore()
+        except Exception:
+            log.exception("%s failed", chore.__qualname__)
 
 
 def _channel_process(number: int, host: str, public_host: str, ports: Ports, db: Path,

@@ -47,6 +47,8 @@ CREATE TABLE IF NOT EXISTS tickets (
 CREATE TABLE IF NOT EXISTS single_mode (
     name TEXT NOT NULL, mode INTEGER NOT NULL, plays INTEGER NOT NULL,
     top TEXT NOT NULL, PRIMARY KEY (name, mode));
+CREATE TABLE IF NOT EXISTS presence (
+    name TEXT PRIMARY KEY, channel INTEGER NOT NULL, session TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS wallets (
     name TEXT PRIMARY KEY, points INTEGER NOT NULL, items TEXT NOT NULL,
     title TEXT NOT NULL, emblem TEXT NOT NULL);
@@ -156,6 +158,24 @@ class Database:
                          top: list[tuple[int, str]]) -> None:
         self._run("INSERT OR REPLACE INTO single_mode VALUES (?, ?, ?, ?)",
                   (name, mode, plays, json.dumps(top)))
+
+    # Presence: the channel and session each logged-in player is in, so that a player
+    # logging in again in another channel's process ends the older session there.
+
+    def arrive(self, name: str, channel: int, session: str) -> None:
+        self._run("INSERT OR REPLACE INTO presence VALUES (?, ?, ?)", (name, channel, session))
+
+    def depart(self, name: str, session: str) -> None:
+        self._run("DELETE FROM presence WHERE name = ? AND session = ?", (name, session))
+
+    def sessions(self, names: list[str]) -> dict[str, str]:
+        marks = ",".join("?" * len(names))
+        return dict(self._run(f"SELECT name, session FROM presence WHERE name IN ({marks})",
+                              names))
+
+    def clear_channel(self, channel: int) -> None:
+        """Forget a channel's players (it starts, so none of them is still there)."""
+        self._run("DELETE FROM presence WHERE channel = ?", (channel,))
 
     def load_wallet(self, name: str) -> tuple[int, str, str, str] | None:
         rows = self._run("SELECT points, items, title, emblem FROM wallets WHERE name = ?",

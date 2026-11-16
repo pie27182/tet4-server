@@ -69,7 +69,7 @@ class GameConnection(Connection):
         try:
             await self.serve()
         finally:
-            self.leave_room(tell_self=False)
+            await self.leave_room(tell_self=False)
 
     def _show(self, room: Room) -> None:
         """Tell the channel about a room's new state; Single Mode rooms are unlisted."""
@@ -108,9 +108,9 @@ class GameConnection(Connection):
     @on("Room_ExitRoomToS")
     async def exit_room(self, request: dict) -> None:
         # The exit button: the client leaves once told that its player left the room.
-        self.leave_room(tell_self=True)
+        await self.leave_room(tell_self=True)
 
-    def leave_room(self, tell_self: bool) -> None:
+    async def leave_room(self, tell_self: bool) -> None:
         room, self.room = self.room, None
         if room is None:
             return
@@ -118,8 +118,8 @@ class GameConnection(Connection):
         if member is None:
             return
         log.info("%r left room %d", member.member_id, room.number)
-        if room.player_out(member.member_id) and room.members:
-            self.lobby.spawn(self.end_game(room))
+        if room.player_out(member.member_id) and (room.members or not room.single):
+            await self.end_game(room)
         if tell_self:
             self.session.post(gone(room, member))
         room.post(gone(room, member))
@@ -153,7 +153,7 @@ class GameConnection(Connection):
         log.info("room %d: %r sent %r away", room.number, self.member_id, target)
         room.banished.add(target)
         member.connection.session.post(pack("Room_ReqBanishMemberToC", member=target))
-        member.connection.leave_room(tell_self=True)
+        await member.connection.leave_room(tell_self=True)
 
     # --- the room ------------------------------------------------------------------------
 
@@ -272,7 +272,8 @@ class GameConnection(Connection):
         players = [dict(member=member_id) for member_id in ranking]
         room.post(pack("Room_GameReportToC", members=players),
                   pack("Room_OrderTypeGameReportTetrisToC", room=room.number, reports=players))
-        self._show(room)
+        if room.members:
+            self._show(room)
         if room.played_for() >= MIN_GAME_SECONDS:
             self.lobby.spawn(self.reward(ranking))
 

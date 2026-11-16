@@ -2,7 +2,7 @@
 
 How the server is built: its layers and modules, its processes, the path of a
 message through the code, and how to extend it. [`PROTOCOL.md`](PROTOCOL.md)
-describes what the client speaks, [`MESSAGES.md`](MESSAGES.md) every message.
+describes what the client speaks, [`MESSAGES.md`](MESSAGES.md) every message, and [`RATINGS.md`](RATINGS.md) the rating model and public ranking endpoints.
 
 ## Layers
 

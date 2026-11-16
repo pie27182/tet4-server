@@ -91,8 +91,9 @@ Partially implemented:
   wins, losses, win rate and streaks saved globally; the score-transfer curve is a
   documented reconstruction, not yet verified against the original client;
 - the original 24 grade thresholds, best-combo tracking and grade-locked arenas are
-  not yet recovered, and the original in-game/web Multi Ranking presentation is not
-  yet reproduced.
+  not yet recovered. Public Single and Multi Ranking pages are available separately
+  at `http://server:10456/rankings`; their layout and the original score formula are
+  not claimed to be identical to Hangame's.
 
 Not yet:
 

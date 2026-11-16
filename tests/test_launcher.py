@@ -159,6 +159,22 @@ class ControlsTest(unittest.TestCase):
             ["A", "RShift", "PageUp", "NumPad7", "NumPad7", "Grave", None, None])
 
 
+class PasswordStorageTest(unittest.TestCase):
+    def test_passwords_use_the_system_keyring_per_server_and_account(self):
+        backend = mock.Mock()
+        with mock.patch.dict("sys.modules", {"keyring": backend}):
+            self.assertTrue(client.save_password("Tet4Server.example", "Alice", "secret"))
+            backend.set_password.assert_called_once_with(
+                client.KEYRING_SERVICE, "tet4server.example:alice", "secret")
+            backend.get_password.return_value = "secret"
+            self.assertEqual(client.load_password("Tet4Server.example", "Alice"), "secret")
+
+    def test_unavailable_keyring_falls_back_without_crashing(self):
+        with mock.patch.dict("sys.modules", {"keyring": None}):
+            self.assertIsNone(client.load_password("server", "alice"))
+            self.assertFalse(client.save_password("server", "alice", "secret"))
+
+
 class LoginTest(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         tmp = tempfile.TemporaryDirectory()

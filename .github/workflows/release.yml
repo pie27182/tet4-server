@@ -38,8 +38,8 @@ jobs:
         run: python -m unittest tests.test_launcher -v
       - name: Build Tet4Launcher.exe
         run: |
-          python -m pip install pyinstaller==6.22.3
-          python -m PyInstaller --onefile --windowed --name Tet4Launcher tools/client.py
+          python -m pip install pyinstaller==6.22.3 keyring==25.7.0
+          python -m PyInstaller --onefile --windowed --copy-metadata keyring --collect-submodules keyring.backends --name Tet4Launcher tools/client.py
       - name: Check that the window opens
         shell: pwsh
         run: |

@@ -1,5 +1,5 @@
-"""Accounts, login tickets and Single Mode records in one SQLite database, and the
-account service that registers players and hands out tickets.
+"""Accounts, login tickets, Single Mode records and wallets in one SQLite database,
+and the account service that registers players and hands out tickets.
 
 The client never sends a password. A launcher (`tools/client.py play`) logs in
 here first, receives a ticket and starts the client with it in the bootstrap
@@ -24,6 +24,7 @@ import string
 import threading
 import time
 from collections import defaultdict, deque
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 log = logging.getLogger("tet4.accounts")
@@ -46,6 +47,8 @@ CREATE TABLE IF NOT EXISTS tickets (
 CREATE TABLE IF NOT EXISTS single_mode (
     name TEXT NOT NULL, mode INTEGER NOT NULL, plays INTEGER NOT NULL,
     top TEXT NOT NULL, PRIMARY KEY (name, mode));
+CREATE TABLE IF NOT EXISTS wallets (
+    name TEXT PRIMARY KEY, points INTEGER NOT NULL, items TEXT NOT NULL);
 """
 
 
@@ -58,8 +61,9 @@ def _hash(password: str, salt: bytes) -> bytes:
 
 
 class Database:
-    """Blocking SQLite access; the services call it through asyncio.to_thread, so one
-    connection is shared under a lock."""
+    """Blocking SQLite access, one connection shared under a lock. The services read
+    through asyncio.to_thread and write through `write`, on one thread, so that the
+    writes land in the order they were made."""
 
     def __init__(self, path: Path):
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -67,9 +71,14 @@ class Database:
         self._db.execute("PRAGMA journal_mode=WAL")
         self._db.executescript(SCHEMA)
         self._lock = threading.Lock()
+        self._writer = ThreadPoolExecutor(1, thread_name_prefix="db-write")
 
     def close(self) -> None:
+        self._writer.shutdown()
         self._db.close()
+
+    async def write(self, fn, *args):
+        return await asyncio.get_running_loop().run_in_executor(self._writer, fn, *args)
 
     def _run(self, sql: str, args=()) -> list[tuple]:
         with self._lock:
@@ -116,6 +125,12 @@ class Database:
                          top: list[tuple[int, str]]) -> None:
         self._run("INSERT OR REPLACE INTO single_mode VALUES (?, ?, ?, ?)",
                   (name, mode, plays, json.dumps(top)))
+
+    def load_wallets(self) -> list[tuple[str, int, str]]:
+        return self._run("SELECT * FROM wallets")
+
+    def save_wallet(self, name: str, points: int, items: str) -> None:
+        self._run("INSERT OR REPLACE INTO wallets VALUES (?, ?, ?)", (name, points, items))
 
 
 class AccountService:

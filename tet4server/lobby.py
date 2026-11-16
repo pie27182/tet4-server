@@ -1,4 +1,4 @@
-"""The shared state of one channel: logged-in players, rooms and records.
+"""The shared state of one channel: logged-in players, rooms, records and the shop.
 
 The channel and game services only touch it from the event loop, so it needs no
 locks. Messages to other players go out with Session.post, which never waits.
@@ -12,6 +12,7 @@ from .accounts import Database
 from .messages import RoomRequest
 from .records import Records
 from .room import Room, empty_room_info_to_c, room_info_to_c
+from .shop import Shop
 
 if TYPE_CHECKING:
     from .channel import ChannelConnection
@@ -33,6 +34,7 @@ class Player:
 class Lobby:
     def __init__(self, db: Database | None = None):
         self.records = Records(db)
+        self.shop = Shop(db)
         self.db = db
         self.players: dict[bytes, Player] = {}
         self.rooms: dict[int, Room] = {}

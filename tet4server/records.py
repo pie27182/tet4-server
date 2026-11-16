@@ -1,5 +1,4 @@
 """Single Mode records: plays and the best results per player and mode."""
-import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
@@ -50,7 +49,7 @@ class Records:
         log.info("%r mode %d: %d%s", report.member_id, report.mode, report.value,
                  ", kept among the best" if kept else "")
         if self._db:
-            await asyncio.to_thread(
+            await self._db.write(
                 self._db.save_single_mode, report.member_id.decode("latin-1"), report.mode,
                 played.plays, [(value, date.decode()) for value, date in played.top])
         return self.single_mode(report.member_id, report.mode)

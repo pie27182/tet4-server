@@ -4,7 +4,7 @@ import dataclasses
 import logging
 
 from . import messages as m
-from . import schema
+from . import schema, shop
 from .accounts import Database
 from .lobby import Lobby, Player
 from .messages import Endpoint, Msg
@@ -79,6 +79,11 @@ class ChannelConnection:
             (0, schema.message_id("Channel_AutoEnterRoomToS")): self.on_auto_enter_room,
             (0, schema.message_id("Chatting_ChatStringToS")): self.on_chat,
             (0, schema.message_id("Chatting_HanChatStringToS")): self.on_han_chat,
+            (3, schema.message_id("Shop_GetShopInfoToS")): self.on_get_shop_info,
+            (3, Msg.Shop_GetInventoryInfoToS): self.on_get_inventory,
+            (3, schema.message_id("Shop_GetPointInfoToS")): self.on_get_points,
+            (3, schema.message_id("Shop_ReqBuyProductToS")): self.on_buy,
+            (3, schema.message_id("Shop_RequestCanPurchaseToS")): self.on_can_purchase,
         }
 
     async def run(self) -> None:
@@ -225,3 +230,44 @@ class ChannelConnection:
             k1e=b"v2e" if failcode else b"", k42e=request["k42e"], k45e=f.k45e, k67e=f.k67e,
             k127e=f.k127e, k66e=room.limit if room else 0, k46e=f.k46e, k200e=f.k200e,
             k52e=self.game.host.encode("ascii"), k53e=self.game.port))
+
+    # --- the shop ---------------------------------------------------------------
+
+    async def on_get_shop_info(self, r: Reader) -> None:
+        await self.session.send(shop.SHOP_INFO, layer=3)
+
+    async def on_get_inventory(self, r: Reader) -> None:
+        # Sent on entering the lobby and by the shop; the lobby shows the TP from it.
+        if self.player:
+            wallet = self.lobby.shop.wallet(self.player.member_id)
+            await self.session.send(shop.inventory_info_to_c(wallet), layer=3)
+
+    async def on_get_points(self, r: Reader) -> None:
+        kind = schema.unpack("Shop_GetPointInfoToS", r)["kind"]
+        if self.player:
+            amount = self.lobby.shop.wallet(self.player.member_id).points if kind == b"TP" else 0
+            await self.session.send(
+                schema.pack("Shop_GetPointInfoToC", kind=kind, amount=amount), layer=3)
+
+    async def on_buy(self, r: Reader) -> None:
+        """Buy a product with TP. The reply's status C completes the purchase in the
+        buy window (Tet4.exe 0x0054DEB0); a nonzero result shows its error text."""
+        request = schema.unpack("Shop_ReqBuyProductToS", r)
+        if self.player is None:
+            return
+        member = self.player.member_id
+        wallet = self.lobby.shop.wallet(member)
+        before = wallet.points
+        error = await self.lobby.shop.buy(member, request["code"].decode("latin-1"),
+                                          request["quantity"])
+        await self.session.send(schema.pack(
+            "Shop_ResBuyProductToC", code=request["code"], quantity=request["quantity"],
+            gift=request["gift"], receiver=request["receiver"], result=int(error is not None),
+            error=error or "", status=b"" if error else b"C"), layer=3)
+        if error is None:
+            await self.session.send(shop.change_point_info_to_c(before, wallet.points), layer=3)
+            await self.session.send(shop.inventory_info_to_c(wallet), layer=3)
+
+    async def on_can_purchase(self, r: Reader) -> None:
+        code = schema.unpack("Shop_RequestCanPurchaseToS", r)["code"]
+        await self.session.send(schema.pack("Shop_ResponseCanPurchaseToC", code=code), layer=3)

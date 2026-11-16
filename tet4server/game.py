@@ -70,6 +70,7 @@ class GameConnection:
             (3, schema.message_id("Room_OrderTypeLetsGameStartTetris")): self.on_lets_game_start,
             (3, schema.message_id("Room_OrderTypeIWillDieTetris")): self.on_out,
             (0, Msg.Room_AlterRoomToS): self.on_alter_room,
+            (0, schema.message_id("Room_ReqBanishMemberToS")): self.on_banish,
             (3, schema.message_id("Room_OrderTypeMapSetTetrisToS")): self.on_map_set,
         }
         for msg_id in RELAYED:
@@ -89,7 +90,8 @@ class GameConnection:
         if self.lobby.requires_login and not self.lobby.online_from(member_id, self.session.host):
             raise ConnectionRefusedError(f"{member_id!r} is not logged in from {self.session.host}")
         room = self.lobby.rooms.get(request["k42e"])
-        if room is None or room.member(member_id) or (seat := room.add(self)) is None:
+        if (room is None or room.member(member_id) or member_id in room.banished
+                or (seat := room.add(self)) is None):
             log.info("%r cannot enter room %d", member_id, request["k42e"])
             await self.session.send(schema.pack("Room_EnterRoomToC", failcode=1, k1e=b"v2e"))
             raise ConnectionRefusedError(f"room {request['k42e']} refused {member_id!r}")
@@ -141,7 +143,7 @@ class GameConnection:
         start.pop("kind")
         if start["map"]:
             self.lobby.map_names[(room.fields.k46e[:1], start["place"])] = start["map"]
-        room.start_game()
+        room.start_game([member for member in start["members"] if member])
         room.post(schema.pack("Room_OrderTypeLetsGameStartOkTetris", start), layer=3)
         self.lobby.room_changed(room)
 
@@ -196,6 +198,22 @@ class GameConnection:
                                           k46e=f["k46e"] or room.fields.k46e)
         room.post(schema.pack("Room_GetRoomInfoToC", room=room.info()))
         self.lobby.room_changed(room)
+
+    async def on_banish(self, r: Reader) -> None:
+        """The host sends a member away (강퇴): the member is told (ReqBanishMemberToC,
+        HgCom3 converter 0x6013E0B0), leaves like with the exit button, and cannot come
+        back to this room."""
+        target = r.string()
+        room = self.room
+        if room is None or room.host != self.member_id or target == self.member_id:
+            return
+        member = room.member(target)
+        if member is None:
+            return
+        log.info("room %d: %r sent %r away", room.number, self.member_id, target)
+        room.banished.add(target)
+        member.conn.session.post(schema.pack("Room_ReqBanishMemberToC", k3e=target))
+        member.conn.leave_room(tell_self=True)
 
     async def on_map_set(self, r: Reader) -> None:
         """The host's map choice for the other members' games: MapSetTetrisToC (converter

@@ -43,6 +43,7 @@ class Room:
         self.alive: list[bytes] = []      # players of the running game still in it
         self.out: list[bytes] = []        # players out of it, first out first
         self.started = 0.0                # when the last game started (monotonic)
+        self.banished: set[bytes] = set()  # members the host sent away, kept out
 
     @property
     def limit(self) -> int:
@@ -81,9 +82,12 @@ class Room:
                 return member
         return None
 
-    def start_game(self) -> None:
+    def start_game(self, players: list[bytes] | None = None) -> None:
+        """Start a game for `players` (members; all of them by default): a member in
+        watch mode (관전 모드) stays out of the host's list and of the game."""
+        members = [m.member_id for m in self.members]
         self.playing = True
-        self.alive = [m.member_id for m in self.members]
+        self.alive = [p for p in players or members if p in members] or members
         self.out = []
         self.started = time.monotonic()
 

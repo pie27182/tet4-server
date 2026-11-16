@@ -210,7 +210,7 @@ class ChannelConnection:
         request = schema.unpack("Channel_GameJoinRoomToS", r)
         room = self.lobby.rooms.get(request["k42e"])
         failcode = 0
-        if room is None or room.single:
+        if room is None or room.single or self.member_id in room.banished:
             failcode = 1
         elif room.private and request["k67e"] != room.fields.k67e:
             failcode = 2

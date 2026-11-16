@@ -361,6 +361,7 @@ NAMES = {
     "Room_GetMemberListToC": "k25e k116e k50e k103e k104e k3e members",
     "Room_GetRoomInfoToC": "room",
     "Room_AlterRoomToS": "k42e k45e k67e k46e _",
+    "Room_ReqBanishMemberToC": "k3e",
     "Room_OrderTypeMapSetTetrisToS": "seat place random f50 f51",
     "Room_OrderTypeMapSetTetrisToC": "seat name random f50 f51",
     "_UseAbleItem": "k3e hold next _ _",

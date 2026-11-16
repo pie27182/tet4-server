@@ -229,3 +229,37 @@ class InvitationTest(unittest.IsolatedAsyncioTestCase):
         answer = fields(await alice.until(alice.channel, ID("Channel_ResponseInviteGameToC")),
                         "Channel_ResponseInviteGameToC")
         self.assertEqual((answer["k3e"], answer["declined"]), (b"nobody", 1))
+
+
+class BanishTest(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.services = await Services(ports=Ports(0, 0, 0, 0, 0)).start()
+        self.addAsyncCleanup(self.services.close)
+        self.ports = self.services.ports
+
+    async def test_host_sends_a_member_away(self):
+        alice, bob = Player(self, b"alice"), Player(self, b"bob")
+        await alice.enter_channel()
+        await bob.enter_channel()
+        await alice.channel.send(pack("Channel_AutoEnterRoomToS", k3e=b"alice", k42e=0xFFFFFFFF,
+                                      k46e=b"Y000MNN", k66e=2))
+        await alice.until(alice.channel, Msg.Channel_CreateRoomToC)
+        await alice.enter_game(1)
+        await bob.enter_game(1)
+
+        await bob.game.send(u32(ID("Room_ReqBanishMemberToS")) + string(b"alice"))  # not the host
+        await alice.game.send(u32(ID("Room_ReqBanishMemberToS")) + string(b"bob"))
+        told = fields(await bob.until(bob.game, ID("Room_ReqBanishMemberToC")),
+                      "Room_ReqBanishMemberToC")
+        self.assertEqual(told["k3e"], b"bob")
+        for player in (bob, alice):
+            gone = fields(await player.until(player.game, Msg.Room_DeleteMemberToC),
+                          "Room_DeleteMemberToC")
+            self.assertEqual(gone["k3e"], b"bob")
+        self.assertEqual([m.member_id for m in self.services.lobby.rooms[1].members], [b"alice"])
+
+        # He cannot come back.
+        await bob.channel.send(pack("Channel_GameJoinRoomToS", k3e=b"bob", k42e=1))
+        joined = fields(await bob.until(bob.channel, ID("Channel_GameJoinRoomToC")),
+                        "Channel_GameJoinRoomToC")
+        self.assertEqual(joined["failcode"], 1)

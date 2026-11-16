@@ -11,6 +11,8 @@ The wire formats themselves (message IDs, field layouts and names) are in
 protocol/catalog.py.
 """
 
+import os
+
 # ====================================================================================
 # This server's settings
 # ====================================================================================
@@ -46,6 +48,12 @@ CHANNEL_START_TIMEOUT = 30.0  # how long the front waits for a channel process t
 # --- Rooms ---------------------------------------------------------------------------
 
 DAILY_ROOMS = 99            # rooms a player may create a day without a room-host item
+
+# Optional live-client probe: override only the options string in a Single Mode room's
+# Channel_RoomInfoToC. The room's actual settings and create replies remain unchanged.
+SINGLE_MODE_ROOM_INFO_OPTIONS = os.getenv("TET4_SINGLE_MODE_ROOM_INFO_OPTIONS", "").encode("ascii")
+if SINGLE_MODE_ROOM_INFO_OPTIONS and len(SINGLE_MODE_ROOM_INFO_OPTIONS) != 5:
+    raise ValueError("TET4_SINGLE_MODE_ROOM_INFO_OPTIONS must be exactly 5 ASCII bytes")
 
 # --- TP, the points players earn and spend -------------------------------------------
 

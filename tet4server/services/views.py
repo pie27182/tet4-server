@@ -9,7 +9,8 @@ import time
 from functools import cache
 
 from ..config import (CHANNEL_ID, DECORATION_SLOTS, EMBLEM, EXTRA_SLOTS, GAME_ID, NO_MISSION,
-                      RECORDS_SHOWN, ROOM_EMPTY, ROOM_SLOTS, SINGLE_MODES, SUB_ID, TITLE)
+                      RECORDS_SHOWN, ROOM_EMPTY, ROOM_SLOTS, SINGLE_MODE_ROOM_INFO_OPTIONS,
+                      SINGLE_MODES, SUB_ID, TITLE)
 from ..domain.lobby import Lobby, Player
 from ..domain.records import Standing
 from ..domain.room import Room, Settings
@@ -105,8 +106,10 @@ def echo(settings: Settings, layout: str) -> dict:
 def room_info(room: Room) -> dict:
     """A room as the room list shows it (_RoomInfo)."""
     s = room.settings
+    # Keep the experiment in the lobby update only; game/create replies use real options.
+    options = (SINGLE_MODE_ROOM_INFO_OPTIONS or s.options) if room.single else s.options
     return dict(echo(s, "_RoomInfo"), room=room.number, title=s.title, limit=room.limit,
-                private=int(room.private), options=s.options, state=room.state,
+                private=int(room.private), options=options, state=room.state,
                 creator=room.creator, host=room.host, playing=int(room.playing),
                 players=[dict(member=m.member_id, seat=m.seat) for m in room.members])
 

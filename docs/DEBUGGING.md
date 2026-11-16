@@ -50,6 +50,12 @@ dumpcap -i lo -f 'tcp port 10454 or tcp port 15000 or tcp port 15001 or tcp port
 python3 -m tet4server --log-level DEBUG --trace "$RUN/trace.jsonl" 2>&1 | tee "$RUN/server.log"
 ```
 
+For an isolated Single Mode room-transition test, prefix the server command with
+`TET4_SINGLE_MODE_ROOM_INFO_OPTIONS=H000S`. This changes only the `options` string in
+the Single Mode room's `Channel_RoomInfoToC`; the actual room and create replies keep
+the requested `N000S`. `H000S` is an unverified test candidate, not a fix. Compare
+against a baseline run and preserve both traces and debugger logs.
+
 **Terminal 3, client** — choose one of the variants in section 3. Wine's own log
 goes to `wine.log`; the channels below show exceptions, DLL loads, socket calls and
 thread ids with timestamps:

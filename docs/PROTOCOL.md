@@ -444,6 +444,14 @@ a Single Mode room is never listed to others. When it closes, the creator's slot
 freed with an empty RoomInfoToC, or the old title stays in that player's list.
 **live**
 
+**Diagnostic probe (not a default behavior).** For a controlled live-client test, set
+`TET4_SINGLE_MODE_ROOM_INFO_OPTIONS=H000S`. It overrides only the `options` string
+(`k46e`) in the Single Mode room's `Channel_RoomInfoToC`; the room's actual options
+and its AutoEnter/CreateRoom replies remain unchanged. `H000S` is a candidate from
+reverse-engineering, not a verified fix. The current catalog defines `_RoomInfo.limit`
+as `u32` (`k66e`) and `_RoomInfo.options` as `str` (`k46e`), so do not send the string
+candidate as `k66e`; first reconcile that key discrepancy with a live converter trace.
+
 ### 9.4 Joining
 
 From the room list (or quick join) the client sends **Channel_GameJoinRoomToS**

@@ -105,3 +105,44 @@ class ShopServiceTest(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ProfileTest(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.services = await Services(ports=Ports(0, 0, 0, 0, 0)).start()
+        self.addAsyncCleanup(self.services.close)
+        self.ports = self.services.ports
+
+    async def test_show_emblem_and_title(self):
+        alice, bob = Player(self, b"alice"), Player(self, b"bob")
+        await alice.enter_channel()
+        await bob.enter_channel()
+        store = self.services.lobby.shop
+        for code in ("PD0TT20062D000", "PD0TT30077D000", "PI0TT90003U000"):
+            self.assertIsNone(store.buy(b"alice", code, 1))
+
+        # bob looks at alice's profile: her emblems and titles, with their names
+        await bob.channel.send(schema.pack("Channel_OrderTypeGetDisplayMemberInfoTetrisToS",
+                                           k3e=b"alice"), layer=3)
+        profile = fields(await bob.until(
+            bob.channel, ID("Channel_OrderTypeGetDisplayMemberInfoTetrisToC"), 3),
+            "Channel_OrderTypeGetDisplayMemberInfoTetrisToC")
+        self.assertEqual([(e["code"], e["name"].decode("cp949"), e["mission"])
+                          for e in profile["emblems"]["items"]],
+                         [(b"T20062", "골목대장", 0xFFFFFFFF)])
+        self.assertEqual((profile["emblems"]["slots"], profile["titles"]["slots"]), (4, 8))
+
+        # alice shows them: everyone hears it, and her profile carries them
+        await alice.channel.send(schema.pack("Channel_OrderTypeChangeDisplayMemberInfoToS",
+                                             emblem=b"T20062", title=b"T30077"), layer=3)
+        for player in (alice, bob):
+            change = fields(await player.until(
+                player.channel, ID("Channel_OrderTypeChangeDisplayMemberInfoToC"), 3),
+                "Channel_OrderTypeChangeDisplayMemberInfoToC")
+            self.assertEqual((change["k3e"], change["emblem"], change["title"]),
+                             (b"alice", b"T20062", b"T30077"))
+        wallet = store.wallet(b"alice")
+        self.assertEqual((wallet.emblem, wallet.title), ("T20062", "T30077"))
+        # one she does not own is refused
+        self.assertFalse(store.show(b"alice", "T30001", ""))
+        self.assertEqual(wallet.title, "T30077")

@@ -48,7 +48,8 @@ CREATE TABLE IF NOT EXISTS single_mode (
     name TEXT NOT NULL, mode INTEGER NOT NULL, plays INTEGER NOT NULL,
     top TEXT NOT NULL, PRIMARY KEY (name, mode));
 CREATE TABLE IF NOT EXISTS wallets (
-    name TEXT PRIMARY KEY, points INTEGER NOT NULL, items TEXT NOT NULL);
+    name TEXT PRIMARY KEY, points INTEGER NOT NULL, items TEXT NOT NULL,
+    title TEXT NOT NULL, emblem TEXT NOT NULL);
 """
 
 
@@ -137,11 +138,12 @@ class Database:
         self._run("INSERT OR REPLACE INTO single_mode VALUES (?, ?, ?, ?)",
                   (name, mode, plays, json.dumps(top)))
 
-    def load_wallets(self) -> list[tuple[str, int, str]]:
-        return self._run("SELECT * FROM wallets")
+    def load_wallets(self) -> list[tuple[str, int, str, str, str]]:
+        return self._run("SELECT name, points, items, title, emblem FROM wallets")
 
-    def save_wallet(self, name: str, points: int, items: str) -> None:
-        self._run("INSERT OR REPLACE INTO wallets VALUES (?, ?, ?)", (name, points, items))
+    def save_wallet(self, name: str, points: int, items: str, title: str, emblem: str) -> None:
+        self._run("INSERT OR REPLACE INTO wallets VALUES (?, ?, ?, ?, ?)",
+                  (name, points, items, title, emblem))
 
 
 class AccountService:

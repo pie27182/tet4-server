@@ -232,23 +232,6 @@ def single_mode_info(mode: int, standing: SingleMode, result: int = 0) -> bytes:
                      u32(result), u32(standing.plays)])
 
 
-def get_member_info_tetris(member_id: bytes, standings: list[SingleMode]) -> bytes:
-    """Layer 3 of Channel_GetMemberInfoToC, Tet4.exe's
-    Cmd_Channel_OrderTypeGetMemberInfoTetrisToC (Deserialize 0x004598C0, converter
-    0x00459E20): u32 id | _TetrisMemberInfo | _EmblemInventoryInfo |
-    _AliasInventoryInfo | vector | vector. It stores the player's Tetris profile, whose
-    _SingleModeInfo records (one per mode) the Single Mode scene reads every frame."""
-    member = b"".join([
-        string(member_id),
-        u8(0) + string(b"") + u32(0) + u16(0),             # _TetrisSchoolInfo
-        u32(0), u32(0), string(b""), bytes(12), string(b""), string(b""), u64(0),
-        u32(len(standings)), *(single_mode_info(m, st) for m, st in enumerate(standings)),
-    ])
-    inventory = u32(0) + string(b"") + u32(0)              # vector | str | u32
-    return b"".join([u32(Msg.Channel_GetMemberInfoToC), member, inventory, inventory,
-                     u32(0), u32(0)])
-
-
 def get_member_list_to_c() -> bytes:
     """Channel_GetMemberListToC (Serialize 0x601301D0): u32 id | str x3 |
     vector<member> | str. Sent empty."""

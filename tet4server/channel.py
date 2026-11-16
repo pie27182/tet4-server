@@ -4,10 +4,11 @@ import dataclasses
 import logging
 
 from . import messages as m
-from . import schema, shop
+from . import profiles, schema, shop
 from .accounts import Database
 from .lobby import Lobby, Player
 from .messages import Endpoint, Msg
+from .profiles import member_info, tetris_info
 from .room import Room, room_info_to_c
 from .xdr import Reader
 from .xlbp import Session, serve_messages
@@ -16,21 +17,6 @@ log = logging.getLogger("tet4.channel")
 
 CHANNEL_KEYS = dict(k22e=b"TET4", k23e=b"", k24e=b"1")   # GameID, sub id, channel
 DAILY_ROOMS = 99          # rooms a player may create per day without a room-host item
-
-
-def member_info(member_id: bytes) -> dict:
-    """A lobby member list row (_MemberInfo)."""
-    return dict(k3e=member_id, k7e=member_id, k11e=b"M")
-
-
-def tetris_info(lobby: Lobby, member_id: bytes) -> dict:
-    """A member's Tetris profile (_TetrisMemberInfo) with its Single Mode records."""
-    return dict(k3e=member_id, single_modes=[
-        dict(mode=mode, values=[v for v, _ in (s.top + [(0, b"")] * m.TOP)[:m.TOP]],
-             dates=[d for _, d in (s.top + [(0, b"")] * m.TOP)[:m.TOP]],
-             rank=s.rank, ranked=s.ranked, plays=s.plays)
-        for mode, s in ((mode, lobby.records.single_mode(member_id, mode))
-                        for mode in range(m.SINGLE_MODES))])
 
 
 def add_member_batch(lobby: Lobby, member_id: bytes) -> dict[int, bytes]:
@@ -84,6 +70,8 @@ class ChannelConnection:
             (3, schema.message_id("Shop_GetPointInfoToS")): self.on_get_points,
             (3, schema.message_id("Shop_ReqBuyProductToS")): self.on_buy,
             (3, schema.message_id("Shop_RequestCanPurchaseToS")): self.on_can_purchase,
+            (3, Msg.Channel_OrderTypeGetDisplayMemberInfoTetrisToS): self.on_get_profile,
+            (3, schema.message_id("Channel_OrderTypeChangeDisplayMemberInfoToS")): self.on_show,
         }
 
     async def run(self) -> None:
@@ -132,9 +120,7 @@ class ChannelConnection:
         # Tetris profile (layer 3, read by the Single Mode scene).
         await self.session.send_layers({
             0: m.get_member_info_to_c(member),
-            3: m.get_member_info_tetris(
-                member, [self.lobby.records.single_mode(member, mode)
-                         for mode in range(m.SINGLE_MODES)]),
+            3: profiles.member_info_tetris(self.lobby, member),
         })
         # Rooms a player may still create today (FUN_00491830 compares allowed - used).
         await self.session.send(schema.pack(
@@ -271,3 +257,24 @@ class ChannelConnection:
     async def on_can_purchase(self, r: Reader) -> None:
         code = schema.unpack("Shop_RequestCanPurchaseToS", r)["code"]
         await self.session.send(schema.pack("Shop_ResponseCanPurchaseToC", code=code), layer=3)
+
+    # --- profiles ---------------------------------------------------------------
+
+    async def on_get_profile(self, r: Reader) -> None:
+        """A player's profile: the member info dialog, and the player's own emblem and
+        title lists (the lobby's 엠블럼 and 호칭 buttons ask for them)."""
+        request = schema.unpack("Channel_OrderTypeGetDisplayMemberInfoTetrisToS", r)
+        await self.session.send(
+            profiles.display_member_info(self.lobby, request["k3e"], request["kind"]), layer=3)
+
+    async def on_show(self, r: Reader) -> None:
+        """Show an owned emblem and title (empty: none); everyone's lobby updates. The
+        client sends both, the one it changes and the one shown (0x004E8660)."""
+        request = schema.unpack("Channel_OrderTypeChangeDisplayMemberInfoToS", r)
+        if self.player is None:
+            return
+        member = self.player.member_id
+        if self.lobby.shop.show(member, request["title"].decode("latin-1"),
+                                request["emblem"].decode("latin-1")):
+            self.lobby.post({3: profiles.change_display_member_info(
+                member, self.lobby.shop.wallet(member))})

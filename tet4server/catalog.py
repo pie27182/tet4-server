@@ -302,7 +302,11 @@ NAMES = {
                    "k102e k34e k37e k38e k35e k151e k201e k153e",
     "_MemberInfoRoom": "k57e k58e k3e k7e k8e k11e k10e k12e k34e k13e k26e k27e k28e k29e k30e "
                        "k31e k32e k33e k102e k37e k38e k52e k53e k35e k153e",
-    "_TetrisMemberInfo": "k3e school _ _ _ _ _ _ _ _ _ single_modes",
+    "_TetrisMemberInfo": "k3e school _ _ _ _ _ _ emblem title _ single_modes",
+    "_EmblemInventoryInfo": "items shown slots",
+    "_EmblemInfo": "code name mission",
+    "_AliasInventoryInfo": "items shown slots",
+    "_AliasInfo": "code name mission",
     "_SingleModeInfo": "mode _ rank ranked values dates result plays",
     # Channel
     "Channel_GetMemberListToC": "k22e k23e k24e members k1e",
@@ -310,6 +314,12 @@ NAMES = {
     "Channel_AddMemberToC": "k22e k23e k24e k3e k7e k8e k11e k10e k12e k26e k27e k28e k29e k30e "
                             "k31e k13e k34e k32e k33e k102e k37e k38e k35e k151e k201e k153e k1e",
     "Channel_OrderTypeAddMemberTetrisToC": "member",
+    "Channel_OrderTypeGetMemberInfoTetrisToC": "tetris emblems titles missions mission_states",
+    "Channel_OrderTypeGetDisplayMemberInfoTetrisToS": "k3e kind",
+    "Channel_OrderTypeGetDisplayMemberInfoTetrisToC": "k3e kind basic tetris emblems titles "
+                                                      "missions mission_states",
+    "Channel_OrderTypeChangeDisplayMemberInfoToS": "emblem title",
+    "Channel_OrderTypeChangeDisplayMemberInfoToC": "k3e emblem title",
     "Channel_DeleteMemberToC": "k22e k23e k24e k3e",
     "Channel_GetRoomListToC": "k22e k23e k24e k51e k1e rooms",
     "Channel_RoomInfoToC": "room",

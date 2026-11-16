@@ -49,23 +49,61 @@ GROUPS = {
     "PI0TT90002": (DECORATIONS, {"U000": 1000}),                         # four emblem slots
     "PI0TT90003": (DECORATIONS, {"U000": 1000}),                         # four title slots
 }
-# Emblems (2xxxx) and titles (3xxxx): (period, TP, numbers), sold as PD0TT<number>.
-for period, price, numbers in (
-    ("D000", 200, (20049, 20052, 20053, 20062, 20063, 20064, 20065,
-                   30067, 30068, 30069, 30074, 30075, 30076, 30077)),
-    ("U000", 200, (*range(20014, 20023), 20036)),
-    ("D007", 200, (20039, 20040, 20041)),
-    ("D030", 200, (20023, 20024, 20025, 20026, 20028, 20029, 20030, 20031, 20032, 20037,
-                   20038, 20046, 20047, 20048, 20050, 20051, 20054, 20055, 20056, 20058,
-                   20059, 20060, 30073)),
-    ("U000", 100, tuple(range(30001, 30011))),
-    ("D030", 100, (30011, 30012, *range(30014, 30026), *range(30049, 30053), 30054, 30055,
-                   30056, *range(30061, 30067), 30070, 30071, 30072)),
-    ("D100", 100, (30053,)),
-    ("D030", 99, (30057, 30058, 30059, 30060)),
-):
-    for number in numbers:
-        GROUPS[f"PD0TT{number}"] = (DECORATIONS, {period: price})
+# Emblems (2xxxx) and titles (3xxxx), sold as PD0TT<number>: number -> (name, period,
+# TP). The emblem and title lists show the names (an emblem's picture is the client's).
+DECORATION_NAMES: dict[str, str] = {}
+for number, (name, period, price) in {
+    20014: ("2009신인상수상자", "U000", 200), 20015: ("모드탐험가", "U000", 200),
+    20016: ("콤보귀신", "U000", 200), 20017: ("콤보로먹고사는", "U000", 200),
+    20018: ("T스핀의 달인", "U000", 200), 20019: ("1만승기록보유고객님", "U000", 200),
+    20020: ("테트쫌했다.1000승", "U000", 200), 20021: ("테트범생이군", "U000", 200),
+    20022: ("테트범생인걸", "U000", 200), 20023: ("섹시녀", "D030", 200),
+    20024: ("섹시남", "D030", 200), 20025: ("깜찍녀", "D030", 200),
+    20026: ("깜찍남", "D030", 200), 20028: ("스마트걸", "D030", 200),
+    20029: ("카우보이", "D030", 200), 20030: ("프리티걸", "D030", 200),
+    20031: ("프리티보이", "D030", 200), 20032: ("티맨", "D030", 200),
+    20036: ("포포리", "U000", 200), 20037: ("이몽룡", "D030", 200),
+    20038: ("성춘향", "D030", 200), 20039: ("황금동전", "D007", 200),
+    20040: ("슬롯플러스", "D007", 200), 20041: ("주사위", "D007", 200),
+    20046: ("우울모드", "D030", 200), 20047: ("쉼표G", "D030", 200),
+    20048: ("내일은축구왕", "D030", 200), 20049: ("태극기", "D000", 200),
+    20050: ("so HOT!", "D030", 200), 20051: ("T-Spin 달인", "D030", 200),
+    20052: ("하트", "D000", 200), 20053: ("테트챔피온", "D000", 200),
+    20054: ("칠전팔기", "D030", 200), 20055: ("일반 개근상", "D030", 200),
+    20056: ("특수 개근상", "D030", 200), 20058: ("BOOK", "D030", 200),
+    20059: ("커피 한잔의 여유", "D030", 200), 20060: ("가나다", "D030", 200),
+    20062: ("골목대장", "D000", 200), 20063: ("인기쟁이", "D000", 200),
+    20064: ("마당발", "D000", 200), 20065: ("슈퍼스타", "D000", 200),
+    30001: ("2009신인상수상자", "U000", 100), 30002: ("모드탐험가", "U000", 100),
+    30003: ("콤보귀신", "U000", 100), 30004: ("콤보로먹고사는", "U000", 100),
+    30005: ("콤보쫌하는", "U000", 100), 30006: ("T스핀의 달인", "U000", 100),
+    30007: ("1만승기록보유고객님", "U000", 100), 30008: ("테트쫌했다.1000승", "U000", 100),
+    30009: ("테트범생이군", "U000", 100), 30010: ("테트범생인걸", "U000", 100),
+    30011: ("솔로인지10년", "D030", 100), 30012: ("솔로천국커플지옥", "D030", 100),
+    30014: ("꽃미남", "D030", 100), 30015: ("꽃미녀", "D030", 100),
+    30016: ("완소볼매", "D030", 100), 30017: ("남성인권보장위원회", "D030", 100),
+    30018: ("신년엔로또맞을", "D030", 100), 30019: ("오프라인", "D030", 100),
+    30020: ("자리비움", "D030", 100), 30021: ("공부의 신", "D030", 100),
+    30022: ("엣지 있는", "D030", 100), 30023: ("간지 좀 흐르는", "D030", 100),
+    30024: ("새해복많이받으세요", "D030", 100), 30025: ("새뱃돈으로 차를 산", "D030", 100),
+    30049: ("쿨하지못해미안해", "D030", 100), 30050: ("so cool", "D030", 100),
+    30051: ("대한민국4강기원", "D030", 100), 30052: ("난! NY스타일", "D030", 100),
+    30053: ("Republic of Korea", "D100", 100), 30054: ("노맵이 좋아", "D030", 100),
+    30055: ("무조건 아템전!", "D030", 100), 30056: ("절대신", "D030", 100),
+    30057: ("모태평민", "D030", 99), 30058: ("다음판에잘할게", "D030", 99),
+    30059: ("테트잉여인증", "D030", 99), 30060: ("마음만은절대신", "D030", 99),
+    30061: ("가을남자", "D030", 100), 30062: ("따라올테면따라와봐", "D030", 100),
+    30063: ("너를원해", "D030", 100), 30064: ("실패를 모르는 자", "D030", 100),
+    30065: ("출석의 달인", "D030", 100), 30066: ("난 테트만했어", "D030", 100),
+    30067: ("SDF쇼퍼홀릭", "D000", 200), 30068: ("SDF모범생", "D000", 200),
+    30069: ("SDF환경운동가", "D000", 200), 30070: ("슈퍼스타 TETRIS", "D030", 100),
+    30071: ("매너 방장", "D030", 100), 30072: ("매너 플레이", "D030", 100),
+    30073: ("테트가좋아", "D030", 200), 30074: ("골목대장", "D000", 200),
+    30075: ("인기쟁이", "D000", 200), 30076: ("마당발", "D000", 200),
+    30077: ("슈퍼스타", "D000", 200),
+}.items():
+    GROUPS[f"PD0TT{number}"] = (DECORATIONS, {period: price})
+    DECORATION_NAMES[f"T{number}"] = name
 
 # Clubs and packs: their items for the period, and TP back.
 PACKAGES = {
@@ -116,6 +154,8 @@ class Item:
 class Wallet:
     points: int = START_POINTS
     items: dict[str, Item] = field(default_factory=dict)
+    title: str = ""            # the title (T3xxxx) and emblem (T2xxxx) the player shows
+    emblem: str = ""
 
     def add(self, product: Product, quantity: int, now: float) -> None:
         for code in product.items:
@@ -131,6 +171,10 @@ class Wallet:
     def expire(self, now: float) -> None:
         self.items = {code: item for code, item in self.items.items()
                       if item.count > 0 or item.end > now}
+        if self.title not in self.items:
+            self.title = ""
+        if self.emblem not in self.items:
+            self.emblem = ""
 
 
 class Shop:
@@ -138,9 +182,9 @@ class Shop:
         """With `db`, wallets are loaded from and written to the database."""
         self._db = db
         self._wallets: dict[bytes, Wallet] = {}
-        for name, points, items in db.load_wallets() if db else []:
+        for name, points, items, title, emblem in db.load_wallets() if db else []:
             self._wallets[name.encode("latin-1")] = Wallet(
-                points, {i["code"]: Item(**i) for i in json.loads(items)})
+                points, {i["code"]: Item(**i) for i in json.loads(items)}, title, emblem)
 
     def wallet(self, member_id: bytes) -> Wallet:
         wallet = self._wallets.setdefault(member_id, Wallet())
@@ -165,6 +209,16 @@ class Shop:
         self._save(member_id)
         return None
 
+    def show(self, member_id: bytes, title: str, emblem: str) -> bool:
+        """Show an owned title and emblem; an empty code shows none."""
+        wallet = self.wallet(member_id)
+        if any(code and (code not in wallet.items or code[1] != kind)
+               for code, kind in ((title, "3"), (emblem, "2"))):
+            return False
+        wallet.title, wallet.emblem = title, emblem
+        self._save(member_id)
+        return True
+
     def earn(self, member_id: bytes, points: int) -> tuple[int, int]:
         """Add TP; the balance before and after."""
         wallet = self.wallet(member_id)
@@ -178,7 +232,8 @@ class Shop:
         if self._db:
             wallet = self._wallets[member_id]
             self._db.submit(self._db.save_wallet, member_id.decode("latin-1"), wallet.points,
-                            json.dumps([asdict(i) for i in wallet.items.values()]))
+                            json.dumps([asdict(i) for i in wallet.items.values()]),
+                            wallet.title, wallet.emblem)
 
 
 # Messages, all at layer 3 of the channel socket (Tet4.exe registers the shop's

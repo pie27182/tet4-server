@@ -1,46 +1,73 @@
-name: Windows release
+name: Release
 
+# Builds Tet4Launcher.exe on Windows. Pushing a tag such as v1.2.0 also publishes it
+# as a GitHub release; a change to the launcher, or a manual run, only builds and
+# tests it (the .exe is kept as the run's artifact).
 on:
   push:
-    tags:
-      - "v*"
+    tags: ["v*"]
+    branches: ["**"]
+    paths: ["tools/client.py", "tests/test_launcher.py", ".github/workflows/release.yml",
+            ".github/release-notes.md"]
+  pull_request:
+    paths: ["tools/client.py", "tests/test_launcher.py", ".github/workflows/release.yml",
+            ".github/release-notes.md"]
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  tests:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out the tagged source
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.12"
+      - run: python -m unittest discover -s tests -t .
 
-      - name: Run test suite
-        run: python -m unittest discover -s tests -t .
-
-      - name: Build Windows launcher ZIP
+  launcher:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test the launcher on Windows
+        run: python -m unittest tests.test_launcher -v
+      - name: Build Tet4Launcher.exe
         run: |
-          mkdir -p dist/tet4-windows/tools
-          cp start-client.bat dist/tet4-windows/
-          cp tools/client.py tools/bootstrap-sample.txt dist/tet4-windows/tools/
-          cp docs/WINDOWS.md dist/tet4-windows/README-WINDOWS.md
-          python - <<'PY'
-          from pathlib import Path
-          from zipfile import ZIP_DEFLATED, ZipFile
+          python -m pip install pyinstaller==6.22.3
+          python -m PyInstaller --onefile --windowed --name Tet4Launcher tools/client.py
+      - name: Check that the window opens
+        shell: pwsh
+        run: |
+          $launcher = Start-Process dist\Tet4Launcher.exe -PassThru
+          Start-Sleep -Seconds 10
+          if ($launcher.HasExited) { throw "Tet4Launcher.exe exited with code $($launcher.ExitCode)" }
+          Stop-Process -Id $launcher.Id
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tet4Launcher
+          path: dist/Tet4Launcher.exe
+          if-no-files-found: error
 
-          source = Path("dist/tet4-windows")
-          with ZipFile("dist/tet4-windows.zip", "w", ZIP_DEFLATED) as archive:
-              for path in sorted(source.rglob("*")):
-                  if path.is_file():
-                      archive.write(path, path.relative_to(source))
-          PY
-
-      - name: Publish GitHub release
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [tests, launcher]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: Tet4Launcher
+      - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/tet4-windows.zip --title "Tet4 $GITHUB_REF_NAME" --generate-notes
+        run: >
+          gh release create "$GITHUB_REF_NAME" Tet4Launcher.exe
+          --title "Tet4 $GITHUB_REF_NAME"
+          --notes-file .github/release-notes.md --generate-notes

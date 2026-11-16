@@ -1,78 +1,121 @@
 # tet4-server
 
-An online server for the 2012 Hangame Tetris client, `Tet4.exe` 1.3.4. The server supports accounts, the lobby, multiplayer rooms, Single Mode records, and the shop. See the status and limitations below before playing.
+Play the 2012 Hangame Tetris (`Tet4.exe` 1.3.4) online again: this project is a
+server for the original game, and a launcher that connects your copy of the game to
+it. Accounts, the lobby and chat, multiplayer rooms, Single Mode with records ranked
+across all players, and the shop all work.
 
-## Launch the client
+The game itself is **not included**: you need your own copy of the original game
+folder, the one that contains `Tet4.exe`.
 
-### Windows
+## Play on Windows
 
-1. Download `tet4-windows.zip` from the [latest release](https://github.com/pie27182/tet4-server/releases/latest) and extract the entire archive to a folder you can write to, such as `Documents\Tet4`. Do not run files directly from inside the ZIP archive.
-2. You need your own legally obtained copy of the original Hangame Tet4 1.3.4 game. **The game is not included in this project.** You need the folder that contains `Tet4.exe`.
-3. If the launcher says Python is missing, install Python 3 for Windows from the [official Python website](https://www.python.org/downloads/windows/). Keep the Python Launcher option enabled if the installer offers it. No additional Python packages are needed.
-4. Double-click `start-client.bat` and follow the prompts. Enter a server address or press Enter to use the suggested address, then enter the path to the folder containing `Tet4.exe`. Password characters are not displayed while you type; this is normal.
+1. Download **Tet4Launcher.exe** from the
+   [latest release](https://github.com/pie27182/tet4-server/releases/latest) and run
+   it. Nothing else needs to be installed. Windows may warn about an unknown
+   publisher: click **More info**, then **Run anyway**.
+2. Click **Browse...** and choose your game folder (the one with `Tet4.exe`).
+3. Type an account name and a password. The first time, click **Create account**;
+   after that, **Log in and play** (or press Enter).
 
-To start the launcher from Command Prompt while in its folder:
+The launcher remembers the server, the game folder and your account name. The
+first time you play on a server it makes a copy of the game that connects there, in
+`%LOCALAPPDATA%\Tet4`; your own game folder is never changed. The launcher closes
+once the game starts.
 
-```bat
-start-client.bat
-```
+## Play on Linux
 
-The launcher creates a separate `client-patched` folder and changes the server address only in that copy. Your original game folder is not modified. If `client-patched` already exists, the launcher uses it as-is. To create a fresh copy or switch servers, close the game and delete only `client-patched` before launching again.
-
-If the game closes immediately, check `client-patched\tet4-launcher.log`. The server must be running and reachable; this project cannot guarantee that the suggested public server is always online.
-
-### Linux
-
-You need Python 3.10 or newer, Wine, and your own original copy of the game, version 1.3.4. On Debian or Ubuntu, install the required programs, download the project, and start the launcher:
+You need Python 3.10 or newer (with Tk for the window: `python3-tk` on Debian and
+Ubuntu) and Wine:
 
 ```bash
-sudo apt update && sudo apt install -y python3 wine git
-git clone https://github.com/pie27182/tet4-server.git
-cd tet4-server
-python3 tools/client.py
+sudo apt install python3 python3-tk wine git
 ```
 
-The launcher asks for the server address and the path to the folder containing `Tet4.exe`, then lets you log in or create an account. Run `python3 tools/client.py` from the `tet4-server` folder. On other distributions, install Python and Wine with your distribution's package manager.
+```bash
+git clone https://github.com/pie27182/tet4-server.git
+```
 
-### Before you start
+```bash
+python3 tet4-server/tools/client.py
+```
 
-- This project provides a launcher, not the game files. Do not download unknown “prebuilt” game bundles.
-- The launcher verifies `Tet4.exe` and stops if it does not match the expected original 1.3.4 file.
-- Use a unique password that you do not use on other websites. The game protocol uses a fixed encryption key, so in-game traffic should not be considered fully private.
-- For detailed instructions and troubleshooting, see [`docs/WINDOWS.md`](docs/WINDOWS.md).
+The same window opens; the copies of the game go to `~/.local/share/tet4`. Without
+a display, `--console` asks the same questions in the terminal.
 
-## Project status
+## If something goes wrong
 
-Tested with two real clients at once (Wine, headless under Xvfb):
+| What you see | What to do |
+|---|---|
+| "Could not reach the server" | The server may be offline, or a firewall blocks it. Check the address and try again later. |
+| "Wrong name or password" | Check both; names are lower case. "Name taken" when creating an account means someone has it: choose another. |
+| "...is not the original Hangame Tetris 1.3.4 file" | Choose the original game folder, not a copy or another version. |
+| The game window shows broken text | Set Windows' *Language for non-Unicode programs* to Korean (Settings, Time & language, Language & region, Administrative language settings) and restart. |
+| The game closes at once | Its log is `%LOCALAPPDATA%\Tet4\game.log` (Linux: `~/.local/share/tet4/game.log`). |
 
-- **Login and lobby**: TPack login, the CDS channel directory and secure socket; accounts and tickets with `--db`; the member list with each player's room, joins and leaves, lobby chat, the 100-slot room list, quick join (바로입장), the member info dialog, and emblems and titles.
-- **Rooms**: item battle, no-item battle and race; passwords, joining from the room list, quick join and invitations (초대), host title, options and map choice, starting a game, passing in-game traffic, results and TP, and leaving. Host kick (강퇴) is tested with scripted clients only.
-- **Single Mode**: Marathon, 40 lines and Ultra; game over, NEW RECORD, rank and the five best results per mode, retry, and returning to the lobby. Ultra opens after 500 games, as the client requires.
-- **Shop (상점) and My Items (내 아이템)**: three tabs, buying with TP, and inventory with item period or uses. Players start with 10,000 TP and earn 30, 20 or 10 TP per multiplayer game by rank.
+Use a password you use nowhere else: the server keeps it safely, but the game's own
+traffic is only lightly encrypted.
 
-Not implemented yet: watching a room, nicknames, friends, gifts and coupons, the Happy Cube, club payments, missions and levels, room and operator notices, and effects for consumable items (rating, record and nickname-change items); these items can be bought but do nothing. Whispers never reach the server. Survival and painting rooms are created but untested. [`docs/PROTOCOL.md`](docs/PROTOCOL.md) section 13 records what is known of each missing feature.
+## What works
 
-The server keeps players, rooms, records and wallets, and relays game traffic between players in a room. To run your own server, see [`docs/DEPLOY.md`](docs/DEPLOY.md). Account names and passwords are handled by the server operator; use a unique password. The game protocol uses a fixed encryption key, so do not treat in-game traffic as fully private.
+Tested with two real clients at once:
 
-## Running the server
+- **Lobby**: the player list with the room each player is in, chat, the room list,
+  quick join (바로입장), player profiles, emblems and titles.
+- **Rooms**: item battle, no-item battle and race; passwords, joining, quick join,
+  invitations (초대), the host's settings and map, games to the end with the ranking
+  and TP, leaving, and sending a player away (강퇴, tested with scripted clients).
+- **Single Mode**: Marathon, 40 lines and Ultra, with the five best results per mode
+  and ranks among all players.
+- **Shop (상점) and My Items (내 아이템)**: buying with TP. Players start with 10,000
+  TP and earn 30, 20 or 10 TP per multiplayer game by rank.
 
-Python 3.10 or newer, standard library only.
+Not yet: watching a room, nicknames, friends, gifts and coupons, the Happy Cube,
+missions and levels, and the effects of items that are used up (they can be bought
+but do nothing). Survival and painting rooms open but are untested.
+
+## Run a server
+
+Python 3.10 or newer, nothing else. To try it on one machine:
+
+```bash
+python3 -m tet4server --db tet4.db
+```
+
+```bash
+python3 tools/client.py --insecure play --server 127.0.0.1 --game ~/Tet4 --register
+```
+
+(`~/Tet4` being your game folder; `--insecure` because this test server has no TLS
+certificate.)
+
+For a public server with accounts and TLS, follow [`docs/DEPLOY.md`](docs/DEPLOY.md).
+Every setting (ports, players per channel, the TP economy, account rules) is in
+[`tet4server/config.py`](tet4server/config.py). The tests:
 
 ```bash
 python3 -m unittest discover -s tests -t .
-python3 -m tet4server
 ```
-
-By default it listens on 127.0.0.1: TPack 10454, CDS 15000, and one channel on 15001 (game 15002); every setting is in [`tet4server/config.py`](tet4server/config.py). `--db FILE` stores accounts, records and wallets in SQLite and requires login; `--channels N` runs N channels of up to 300 players each. `--host` and `--public-host` configure listening and advertised addresses. `--trace FILE` appends decrypted messages to a file; traces may contain sensitive session data and must be kept private.
 
 ## Documentation
 
-- [`docs/WINDOWS.md`](docs/WINDOWS.md) — plain-language Windows player guide.
-- [`docs/DEPLOY.md`](docs/DEPLOY.md) — run the server on a VPS.
-- [`docs/PROTOCOL.md`](docs/PROTOCOL.md) — the protocol as a specification a server can be built from, with the evidence for each fact and what is known of the features not implemented yet.
-- [`docs/MESSAGES.md`](docs/MESSAGES.md) — all 233 client messages field by field, and what the server does with each (generated from the code).
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how the server is built: its layout, processes, a message's path through the code, and how to extend it.
-- [`docs/DEBUGGING.md`](docs/DEBUGGING.md) — developer diagnostics.
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) — protocol contribution rules.
+- [`docs/DEPLOY.md`](docs/DEPLOY.md): run a server on a VPS.
+- [`docs/PROTOCOL.md`](docs/PROTOCOL.md): the game's protocol as a specification a
+  server can be built from, with the evidence for every fact and what is known of
+  the features not implemented yet.
+- [`docs/MESSAGES.md`](docs/MESSAGES.md): all 233 messages of the game, field by
+  field, and what the server does with each.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): how the server is built and how to
+  extend it.
+- [`docs/DEBUGGING.md`](docs/DEBUGGING.md): recording and debugging the real client.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md): the rules for changes.
 
-The decompiled client and protocol-analysis scripts are not in this repository. Do not commit game files, captures, traces, or real credentials.
+## Releasing
+
+Push a tag such as `v1.2.0`: the
+[Release workflow](.github/workflows/release.yml) tests everything, builds
+`Tet4Launcher.exe` on Windows, checks that it starts, and publishes it with the
+notes in [`.github/release-notes.md`](.github/release-notes.md).
+
+The game's files, captures, traces and real credentials never go into this
+repository.

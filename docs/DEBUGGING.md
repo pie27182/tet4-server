@@ -5,7 +5,7 @@ to send back for analysis. A run is useful when everything in it shares one
 timeline: the server log, the decrypted trace, the packet capture, the Wine log,
 the debugger log and the screenshots.
 
-Use the test account in `tools/bootstrap-sample.txt` only. Traces and captures
+Use the test account of `tools/client.py bootstrap` only. Traces and captures
 contain the account's ticket; with the sample account that ticket is a dummy.
 
 ## 1. Setup, once
@@ -23,7 +23,8 @@ Let your user capture without root (log out and in afterwards):
 sudo usermod -aG wireshark "$USER"
 ```
 
-Prepare the client as in the README (`tools/client.py check`, then `patch`).
+Prepare the client: `python3 tools/client.py check client`, then
+`python3 tools/client.py patch client client-patched` (it connects to 127.0.0.1).
 
 For each run, make a folder and note the start time:
 
@@ -54,7 +55,7 @@ goes to `wine.log`; the channels below show exceptions, DLL loads, socket calls 
 thread ids with timestamps:
 
 ```bash
-cd client-patched && LANG=ko_KR.UTF-8 LC_ALL=ko_KR.UTF-8 WINEDEBUG=+timestamp,+tid,+seh,+loaddll,+winsock wine Tet4.exe "$(cat ../tools/bootstrap-sample.txt)" 2> "../$RUN/wine.log"
+cd client-patched && LANG=ko_KR.UTF-8 LC_ALL=ko_KR.UTF-8 WINEDEBUG=+timestamp,+tid,+seh,+loaddll,+winsock wine Tet4.exe "$(python3 ../tools/client.py bootstrap)" 2> "../$RUN/wine.log"
 ```
 
 **Terminal 4, notes.** Write down, with the clock time, every action you take:
@@ -76,7 +77,7 @@ Each run is a separate folder.
    Terminal 3 command with:
 
    ```bash
-   cd client-patched && LANG=ko_KR.UTF-8 LC_ALL=ko_KR.UTF-8 winedbg ./Tet4.exe "$(cat ../tools/bootstrap-sample.txt)" < ../tools/single-mode.wdbg 2>&1 | tee "../$RUN/winedbg.log"
+   cd client-patched && LANG=ko_KR.UTF-8 LC_ALL=ko_KR.UTF-8 winedbg ./Tet4.exe "$(python3 ../tools/client.py bootstrap)" < ../tools/single-mode.wdbg 2>&1 | tee "../$RUN/winedbg.log"
    ```
 
    (The commands go on standard input: Wine 9's `winedbg --file` fails to open

@@ -32,6 +32,10 @@ CREATE TABLE IF NOT EXISTS tickets (
 CREATE TABLE IF NOT EXISTS single_mode (
     name TEXT NOT NULL, mode INTEGER NOT NULL, plays INTEGER NOT NULL,
     top TEXT NOT NULL, PRIMARY KEY (name, mode));
+CREATE TABLE IF NOT EXISTS multiplayer_ratings (
+    name TEXT PRIMARY KEY, points INTEGER NOT NULL, plays INTEGER NOT NULL,
+    wins INTEGER NOT NULL, losses INTEGER NOT NULL, streak INTEGER NOT NULL,
+    best_streak INTEGER NOT NULL, best_points INTEGER NOT NULL);
 -- Who is logged in where: a player's channel and login id ("session").
 CREATE TABLE IF NOT EXISTS presence (
     name TEXT PRIMARY KEY, channel INTEGER NOT NULL, session TEXT NOT NULL);
@@ -149,6 +153,23 @@ class Database:
                          top: list[tuple[int, str]]) -> None:
         self._run("INSERT OR REPLACE INTO single_mode VALUES (?, ?, ?, ?)",
                   (name, mode, plays, json.dumps(top)))
+
+    def load_ratings(self, name: str | None = None
+                     ) -> list[tuple[str, int, int, int, int, int, int, int]]:
+        """All multiplayer ratings, or one player's lifetime stats."""
+        sql = ("SELECT name, points, plays, wins, losses, streak, best_streak, best_points "
+               "FROM multiplayer_ratings")
+        rows = self._run(sql + (" WHERE name = ?" if name else ""), (name,) if name else ())
+        return rows
+
+    def save_rating(self, name: str, points: int, plays: int, wins: int, losses: int,
+                    streak: int, best_streak: int, best_points: int) -> None:
+        self._run(
+            "INSERT INTO multiplayer_ratings VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(name) DO UPDATE SET points=excluded.points, plays=excluded.plays, "
+            "wins=excluded.wins, losses=excluded.losses, streak=excluded.streak, "
+            "best_streak=excluded.best_streak, best_points=excluded.best_points",
+            (name, points, plays, wins, losses, streak, best_streak, best_points))
 
     # Presence: the channel and login each logged-in player is in, so that a player
     # logging in again in another channel's process ends the older login there.

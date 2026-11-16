@@ -20,6 +20,7 @@ log = logging.getLogger("tet4.shop")
 
 START_POINTS = 10_000          # a new player's TP, enough to try the shop
 GAME_POINTS = (30, 20, 10)     # TP for a multiplayer game by rank; later ranks get the last
+MIN_GAME_SECONDS = 30          # shorter games earn nothing
 PERMANENT = time.mktime((2099, 12, 31, 23, 59, 59, 0, 0, -1))
 
 # The shop's tabs (CShopData::SetShopInfo, Tet4.exe 0x0051C750, files each board's
@@ -149,7 +150,7 @@ class Shop:
     def owns(self, member_id: bytes, item: str) -> bool:
         return item in self.wallet(member_id).items
 
-    async def buy(self, member_id: bytes, code: str, quantity: int) -> str | None:
+    def buy(self, member_id: bytes, code: str, quantity: int) -> str | None:
         """Buy `quantity` of a product with TP. None when bought, else why not, in the
         words the client shows."""
         product = PRODUCTS.get(code)
@@ -161,22 +162,23 @@ class Shop:
         wallet.points -= product.price * quantity
         wallet.add(product, quantity, time.time())
         log.info("%r bought %d x %s, %d TP left", member_id, quantity, code, wallet.points)
-        await self._save(member_id)
+        self._save(member_id)
         return None
 
-    async def earn(self, member_id: bytes, points: int) -> tuple[int, int]:
+    def earn(self, member_id: bytes, points: int) -> tuple[int, int]:
         """Add TP; the balance before and after."""
         wallet = self.wallet(member_id)
         before = wallet.points
         wallet.points += points
-        await self._save(member_id)
+        self._save(member_id)
         return before, wallet.points
 
-    async def _save(self, member_id: bytes) -> None:
+    def _save(self, member_id: bytes) -> None:
+        """Queue the wallet's write; writes reach the database in the order queued."""
         if self._db:
             wallet = self._wallets[member_id]
-            await self._db.write(self._db.save_wallet, member_id.decode("latin-1"),
-                                 wallet.points, json.dumps([asdict(i) for i in wallet.items.values()]))
+            self._db.submit(self._db.save_wallet, member_id.decode("latin-1"), wallet.points,
+                            json.dumps([asdict(i) for i in wallet.items.values()]))
 
 
 # Messages, all at layer 3 of the channel socket (Tet4.exe registers the shop's

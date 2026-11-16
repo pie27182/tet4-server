@@ -1,5 +1,6 @@
 """A room: its members' game connections in seat order, its host and its state."""
 import logging
+import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -40,6 +41,7 @@ class Room:
         self.playing = False
         self.alive: list[bytes] = []      # players of the running game still in it
         self.out: list[bytes] = []        # players out of it, first out first
+        self.started = 0.0                # when the last game started (monotonic)
 
     @property
     def limit(self) -> int:
@@ -82,6 +84,11 @@ class Room:
         self.playing = True
         self.alive = [m.member_id for m in self.members]
         self.out = []
+        self.started = time.monotonic()
+
+    def played_for(self) -> float:
+        """Seconds since the last game started."""
+        return time.monotonic() - self.started
 
     def player_out(self, member_id: bytes) -> bool:
         """Count a player out of the running game (IWillDie, or leaving). True when that

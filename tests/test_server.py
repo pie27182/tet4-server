@@ -240,7 +240,11 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
         await game.send(u32(Msg.Room_AlterRoomToS) + u32(0) + string(b"") * 4)
         await game.send(u32(Msg.Room_StartNewGameToS) + string(b"v6e"))
         reply = await self.expect(game, Msg.Room_StartNewGameToC)
-        self.assertEqual(parse(reply.body, "u32 s u8 u8 u8")[:2], [1, MEMBER])
+        # HgCom3's members at layer 0, then (past two empty layers) Tet4.exe's items.
+        layer0 = 4 + 4 + 4 + len(MEMBER) + 3
+        self.assertEqual(parse(reply.body[:layer0], "u32 s u8 u8 u8")[:2], [1, MEMBER])
+        self.assertEqual(parse(reply.body[layer0:], "u32 u32 u32 s u8 u8 u8 u8")[2:],
+                         [1, MEMBER, 0, 0, 0, 0])
 
         # Game over: the reply carries the mode's records, now with this score.
         await game.send(game_report(0, 246, True), layer=3)

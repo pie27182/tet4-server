@@ -1,9 +1,10 @@
 """Two scripted clients through the multiplayer flow the real clients follow: lobby
 presence and chat, room creation from the create dialog, joining, the game start,
-the in-game relay, the end with its ranking and report, and leaving."""
+the in-game relay, the end with its ranking, report and TP, and leaving."""
 import unittest
+from unittest import mock
 
-from tet4server import schema
+from tet4server import schema, shop
 from tet4server.messages import Msg, describe
 from tet4server.server import Ports, Services
 from tet4server.xdr import Reader, string, u32, u64
@@ -65,6 +66,7 @@ class MultiplayerTest(unittest.IsolatedAsyncioTestCase):
         self.addAsyncCleanup(self.services.close)
         self.ports = self.services.ports
 
+    @mock.patch.object(shop, "MIN_GAME_SECONDS", 0)
     async def test_two_players_play_a_game(self):
         alice, bob = Player(self, b"alice"), Player(self, b"bob")
         await alice.enter_channel()
@@ -144,6 +146,12 @@ class MultiplayerTest(unittest.IsolatedAsyncioTestCase):
             r = Reader(tetris[8:])   # two layer markers, then the message ID
             r.u32()
             self.assertEqual(schema.unpack("Room_OrderTypeGameReportTetrisToC", r)["room"], 1)
+
+        # TP by rank, shown in each player's lobby.
+        for player, earned in ((bob, 30), (alice, 20)):
+            change = fields(await player.until(player.channel, ID("Shop_ChangePointInfoToC"), 3),
+                            "Shop_ChangePointInfoToC")
+            self.assertEqual(change["amount"] - change["before"], earned)
 
         # bob leaves: both hear it; alice stays as the host.
         await bob.game.send(u32(Msg.Room_ExitRoomToS))

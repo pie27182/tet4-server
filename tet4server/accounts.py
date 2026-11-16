@@ -24,7 +24,7 @@ import string
 import threading
 import time
 from collections import defaultdict, deque
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 
 log = logging.getLogger("tet4.accounts")
@@ -60,6 +60,11 @@ def _hash(password: str, salt: bytes) -> bytes:
     return hashlib.scrypt(password.encode(), salt=salt, **SCRYPT)
 
 
+def _log_failure(future: Future) -> None:
+    if not future.cancelled() and future.exception():
+        log.error("database write failed", exc_info=future.exception())
+
+
 class Database:
     """Blocking SQLite access, one connection shared under a lock. The services read
     through asyncio.to_thread and write through `write`, on one thread, so that the
@@ -77,8 +82,14 @@ class Database:
         self._writer.shutdown()
         self._db.close()
 
+    def submit(self, fn, *args) -> Future:
+        """Queue a write; it runs after every write queued before it."""
+        future = self._writer.submit(fn, *args)
+        future.add_done_callback(_log_failure)
+        return future
+
     async def write(self, fn, *args):
-        return await asyncio.get_running_loop().run_in_executor(self._writer, fn, *args)
+        return await asyncio.wrap_future(self.submit(fn, *args))
 
     def _run(self, sql: str, args=()) -> list[tuple]:
         with self._lock:

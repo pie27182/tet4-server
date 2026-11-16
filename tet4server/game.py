@@ -2,7 +2,7 @@
 import logging
 
 from . import messages as m
-from . import schema
+from . import schema, shop
 from .lobby import Lobby
 from .messages import Msg
 from .room import Member, Room
@@ -113,8 +113,19 @@ class GameConnection:
             log.info("%r is not the host of room %d", self.member_id, room.number)
             return
         room.playing = True
-        room.post(m.start_new_game_to_c([member.member_id for member in room.members]))
+        members = [member.member_id for member in room.members]
+        room.post_layers({0: m.start_new_game_to_c(members), 3: self.usable_items(members)})
         self.lobby.room_changed(room)
+
+    def usable_items(self, members: list[bytes]) -> bytes:
+        """The layer-3 StartNewGameToC (Tet4.exe 0x00459BD0): each player's items for
+        the game. Unlimited hold (T10004) lifts the hold limit; next (T10005) shows
+        more of the coming pieces."""
+        owns = self.lobby.shop.owns
+        return schema.pack_as(
+            "Room_StartNewGameToC", "Room_OrderTypeStartNewGameTetrisToC",
+            items=[dict(k3e=member, hold=owns(member, "T10004"), next=owns(member, "T10005"))
+                   for member in members])
 
     async def on_lets_game_start(self, r: Reader) -> None:
         """The host starts a multiplayer game: every member, the host included, gets
@@ -157,6 +168,17 @@ class GameConnection:
                               room=room.number, reports=players),
         })
         self.lobby.room_changed(room)
+        if room.played_for() >= shop.MIN_GAME_SECONDS:
+            self.reward(room.ranking())
+
+    def reward(self, ranking: list[bytes]) -> None:
+        """TP for a finished game by rank; each player's lobby shows the new balance."""
+        for rank, member_id in enumerate(ranking, 1):
+            points = shop.GAME_POINTS[min(rank, len(shop.GAME_POINTS)) - 1]
+            before, after = self.lobby.shop.earn(member_id, points)
+            player = self.lobby.players.get(member_id)
+            if player:
+                player.channel.session.post(shop.change_point_info_to_c(before, after), layer=3)
 
     async def relay(self, r: Reader) -> None:
         """Pass an in-game message on to the other players in the room, unchanged."""

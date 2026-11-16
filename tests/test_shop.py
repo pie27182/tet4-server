@@ -55,14 +55,14 @@ class WalletTest(unittest.TestCase):
                          [(b"TP", shop.START_POINTS)])
 
 
-class ShopDatabaseTest(unittest.IsolatedAsyncioTestCase):
-    async def test_wallets_persist(self):
+class ShopDatabaseTest(unittest.TestCase):
+    def test_wallets_persist(self):
         with tempfile.TemporaryDirectory() as tmp:
             db = Database(Path(tmp) / "tet4.db")
             store = shop.Shop(db)
-            self.assertIsNone(await store.buy(b"alice", "PF0HT10005D007", 1))
-            self.assertEqual(await store.earn(b"alice", 30), (9650, 9680))
-            self.assertEqual(await store.buy(b"alice", "PP0HT10006D030", 1), "TP가 부족합니다.")
+            self.assertIsNone(store.buy(b"alice", "PF0HT10005D007", 1))
+            self.assertEqual(store.earn(b"alice", 30), (9650, 9680))
+            self.assertEqual(store.buy(b"alice", "PP0HT10006D030", 1), "TP가 부족합니다.")
             db.close()
             db = Database(Path(tmp) / "tet4.db")
             again = shop.Shop(db).wallet(b"alice")

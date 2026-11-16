@@ -344,6 +344,8 @@ NAMES = {
     "Room_DeleteMemberToC": "k50e k57e k58e k3e k8e",
     "Room_GetMemberListToC": "k25e k116e k50e k103e k104e k3e members",
     "Room_GetRoomInfoToC": "room",
+    "_UseAbleItem": "k3e hold next _ _",
+    "Room_OrderTypeStartNewGameTetrisToC": "items",
     # Shop (Tet4.exe CShopData 0x0051C750, CShopInventory 0x005113B0)
     "_Board": "code name groups",
     "_ProductGroup": "code name products _",

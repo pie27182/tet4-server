@@ -258,8 +258,8 @@ class ChannelConnection:
         member = self.player.member_id
         wallet = self.lobby.shop.wallet(member)
         before = wallet.points
-        error = await self.lobby.shop.buy(member, request["code"].decode("latin-1"),
-                                          request["quantity"])
+        error = self.lobby.shop.buy(member, request["code"].decode("latin-1"),
+                                    request["quantity"])
         await self.session.send(schema.pack(
             "Shop_ResBuyProductToC", code=request["code"], quantity=request["quantity"],
             gift=request["gift"], receiver=request["receiver"], result=int(error is not None),

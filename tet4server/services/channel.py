@@ -94,6 +94,7 @@ class ChannelConnection(Connection):
         # have played in another channel since this one last saw them.
         await self.lobby.shop.load(member)
         await self.lobby.records.load(member)
+        await self.lobby.ratings.load(member)
         # The client sends sub_id and channel_id back in its room requests, and seats a
         # room's members by room_size (so that it knows which room each member is in).
         await self.session.send(pack("Channel_EnterChannelToC", sub_id=request["sub_id"],
@@ -115,7 +116,7 @@ class ChannelConnection(Connection):
         players = list(self.lobby.players.values())
         await self.session.send(
             pack("Channel_GetMemberListToC", CHANNEL,
-                 members=[views.member_row(p) for p in players]),
+                 members=[views.member_row(self.lobby, p) for p in players]),
             pack("Channel_OrderTypeGetMemberListTetrisToC",
                  profiles=[views.profile(self.lobby, p.member_id) for p in players]))
 

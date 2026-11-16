@@ -164,8 +164,13 @@ str k22e | str k23e | str k24e | str k149e | u32 k167e | str k442e | str k441e |
 u32 x2 | str x2 | u32 x3 | str k1e` (Serialize 0x6012E4A0). Converter 0x60139620
 maps string 3 to k23e and string 8 to k24e; k1e must be present and not `v2e`
 (0x60111AC0). Msg_FillChannelInfo (0x609077E0) stores k23e and k24e in MetpInfo(4),
-where CChannelLobbyModel::Msg_SendEnterRoom (0x6090B480) reads them. The server
-echoes the request's k23e and k24e. **live**
+where CChannelLobbyModel::Msg_SendEnterRoom (0x6090B480) reads them. The keys follow
+the fields in order (`k3e k22e k23e k60e k73e k61e k62e k69e k70e k63e k129e k130e
+k128e k24e k99e k35e k154e k1e`); k62e, the second number, is a room's size, which
+_UpdateRoomMembers (0x60911D00) reads to seat the members a room info lists, and the
+create dialog offers as the player limit. With 0 no member is ever seated, so every
+player stays in the waiting room for the others. The server echoes the request's
+k23e and k24e and sends k62e 6. **live**
 
 **Cmd_Channel_GetMemberInfoToC** 0x060BC39A, sent after EnterChannelToC:
 `u32 id | str k3e | str x3 | u32 | str | u64 | u32 x7 | str | u32 x2 | str | u64 |
@@ -183,20 +188,24 @@ _TetrisSchoolInfo (u8 | str | u32 | u16) | u32 x2 | str | 12 bytes | str x2 | u6
 vector<_SingleModeInfo>`, an inventory `vector | str | u32`. The converter stores
 the Tetris profile in the game model (FUN_004EC400); the Single Mode scene reads
 one _SingleModeInfo per mode every frame (FUN_00461E70, FUN_00461FA0) and faults at
-0x00461E9D without them. Sent with the player's records (section 8). **live**
+0x00461E9D without them. Sent with the player's records (section 10). **live**
 
 **Cmd_Channel_GetMemberListToS** 0x0AE3BBDA: `u32 id | str k22e | str k23e |
 str k24e`. **wire**
-**Cmd_Channel_GetMemberListToC** 0x06B816EA: `u32 id | str x3 | vector<member> |
-str` (Serialize 0x601301D0). Sent empty. **live**
+**Cmd_Channel_GetMemberListToC** 0x06B816EA: `u32 id | str x3 | vector<_MemberInfo> |
+str` (Serialize 0x601301D0), one row per player in the channel. Msg_FillMemberList
+(0x60908F60) splits each row into fields in order; the 21st, k151e, is the room the
+player is in (CMemberData+0x338, 0 for the waiting room): the member list shows it,
+and accepting an invitation finds the inviter's room by it. Its layer-3 slot is
+Tet4.exe's GetMemberListTetrisToC, the players' Tetris profiles. **live**
 
 **Cmd_Channel_GetRoomListToS** 0x0DDA299A: `u32 id | str x3`, captured as `TET4`
 and two empty strings; its Serialize (0x60129450) has a trailing byte the capture
 lacks. **wire**
-**Cmd_Channel_GetRoomListToC** 0x0226968A: `u32 id | str x3 | u32 | str |
-vector<_RoomInfo>` (Serialize 0x60130630). The server lists the rooms that exist;
-before a CreateRoomToS there are none. **live** for the empty list, **code** for
-entries.
+**Cmd_Channel_GetRoomListToC** 0x0226968A: `u32 id | str x3 | u32 k51e | str |
+vector<_RoomInfo>` (Serialize 0x60130630). Msg_FillRoomList (0x60909BE0) reads k51e
+rooms, not the vector's length, and a later RoomInfoToC only updates a room already
+listed, so the server lists all 100 slots, an empty one with only its number. **live**
 
 **Cmd_Item_GetItemStateToS** 0x075BAC2A: `u32 id | str member | u8`. **wire**
 **Cmd_Item_GetItemStateToC** 0x0C446ADA: `u32 id | u8 | str | vector<item>`
@@ -205,9 +214,10 @@ about three seconds later. **live**
 
 **Room fields**, shared by AutoEnterToS and CreateRoomToS (Serialize 0x004A18F0):
 `str member | u32 k42e | str k67e | str k45e | str k46e | u32 k127e | u32 k66e |
-str k200e | u32 | str k22e | str k23e | str k24e`. k46e is the room option, a mode
-letter and flags, and k66e the room number. **code**, keys from the AutoEnter
-converter.
+str k200e | u32 | str k22e | str k23e | str k24e`. k42e is the room number (-1 for
+any), k67e the password, k45e the title, k46e the room option (a mode letter, the
+map and flags: `Y000MNN` item battle, `N000MNN` no items, `R...` race, `S` at index
+4 Single Mode) and k66e the player limit (SetLimitCnt). **live**
 
 **Cmd_Room_OrderTypeAutoEnterSingleModeRoomTetrisToS** 0x031AC76A, layer 3: the
 room fields, with k46e `N000S`, k22e `TET4` and k23e/k24e from MetpInfo(4); the
@@ -247,10 +257,8 @@ str k200e | u32 k47e | str k116e | str k50e | u32 k143e | vector k48e | vector k
 vector`. **code**
 
 Received without a reply: Cmd_Channel_TicketReissueToS 0x0A101CBA, sent
-periodically (its reply 0x0C6600AA is not recovered); layer-3
-Cmd_Channel_OrderTypeGetDisplayMemberInfoTetrisToS 0x0E4772BA, `u32 id | str member |
-u32`, whose reply 0x0C3B49AA fills the profile dialog (Tet4.exe 0x00459EF0); and
-Cmd_Shop_GetInventoryInfoToS 0x04762CEA.
+periodically (its reply 0x0C6600AA is not recovered). The lobby's other messages are
+in sections 8 and 9.
 
 ## 7. Game messages
 
@@ -342,7 +350,122 @@ socket and returns to the lobby. **live**
 Cmd_Room_OrderTypeSetSpeedLevelTetris 0x0F5DE7AA, layer 3, follows; no reply.
 **wire**
 
-## 8. Single Mode records
+## 8. Lobby and multiplayer rooms
+
+All **live** with two clients unless marked. Every message's layout is in
+`tet4server/catalog.py`, generated from the client's Serialize and Deserialize
+functions; the field names there are the converters' keys.
+
+**Presence and chat.** A player entering the channel is announced to the others with
+Cmd_Channel_AddMemberToC 0x0AB84D0A (a member row, its Tetris profile at layer 3 as
+AddMemberTetrisToC) and leaving with Cmd_Channel_DeleteMemberToC. Lobby chat is
+Chatting_HanChatStringToS 0x08054C3A on the channel socket, echoed to everyone, the
+sender included (the client shows its own line from the echo), with k3e set to the
+sender; room chat is Chatting_ChatStringToS 0x0D14CF4A on the game socket, to the
+room. Whispers (`/w name`) stay in the client: nothing is sent.
+
+**Creating a room.** The create dialog (Msg_SetCreateRoomReturn, Tet4.exe 0x004CA230)
+sends Channel_AutoEnterRoomToS 0x00233D9A with k42e -1 and the room fields; the reply
+Channel_AutoEnterRoomToC only reports success (HgCtr3 0x6020A4B0 acts on failure
+alone), and CreateRoomToC after it makes the client connect to the game socket. A
+room may only be created when the player has room-creation days left
+(Channel_OrderTypeDayCntInfoTetrisToC at layer 3: allowed - used > 0, FUN_00491830),
+or a room-host item, or a PC방; the server sends allowed 99.
+
+**Room states** (k47e): 0 an empty slot (double-click creates a room there), 1, 2
+and 4 joinable, 5 watch only. Quick join (바로입장, HgModel3
+CChannelLobbyModel::Msg_AutoEnterRoom 0x6090CD70) is the client's own: it picks the
+fullest room in state 4 that is neither private nor playing and joins it, so the
+server reports waiting rooms as 4.
+
+**Joining.** Channel_GameJoinRoomToS 0x0AE830EA (`k3e k42e k67e`) → GameJoinRoomToC
+with the room fields and the game endpoint; failcode 1 no such room (or sent away
+from it), 2 wrong password, 3 full or playing. On the game socket EnterRoomToS, then
+Room_AddMemberToC for every member to the newcomer and for the newcomer to the
+others. The room info (RoomInfoToC, and Room_GetRoomInfoToC 0x02C1F9DA for the
+members) lists the members as `str id | u32 seat`; the converter turns them into
+k48e (the count) and k3e<i>/k43e<i>, from which _UpdateRoomMembers seats them and
+records their room.
+
+**Invitations** (초대). Channel_InviteGameToMemberToS 0x0264355A (`k3e inviter | u32 |
+str message | str target | u8`) → Channel_InviteGameToMemberToC 0x08E980CA to the
+target in the waiting room, with the room number (k42e), title (k65e) and password
+(k67e). The answer Channel_ResponseInviteGameToS 0x02163F5A is `str invited | str
+inviter | u8` (0 accepted); the server passes it to the inviter as
+ResponseInviteGameToC, which closes the waiting dialog. Accepting, the invited
+client joins the room by itself.
+
+**In the room.** The host's Room_AlterRoomToS 0x0D31FDDA (`k42e k45e k67e k46e`)
+changes the title, password and options; the members get Room_GetRoomInfoToC and the
+lobby RoomInfoToC. Single Mode sends an empty one before every game, which is
+ignored. The host's map choice is Room_OrderTypeMapSetTetrisToS 0x05D396AA, layer 3
+(`u8 seat | u32 place in the map list | u32 random kind | u8 | u8`, from the map
+packet 0x00425560); the others get MapSetTetrisToC 0x017AC2FA, which carries the map
+by name (`u8 | str name | u32 random | u8 | u8`, applied by 0x00576790; the name is
+looked up in the client's encrypted map files). The server learns names from game
+starts. Room_ReqBanishMemberToS 0x0A13C22A (`str member`) from the host sends a
+member away (**scripted only**): the member gets ReqBanishMemberToC and leaves.
+
+**A game.** The host's Room_OrderTypeLetsGameStartTetris 0x010016CA (layer 3: `u8 |
+str map | u32 place | vector<u8> | u32 | u8 | vector<str> players | vector<u8>`) →
+LetsGameStartOkTetris 0x008A128A to every member, the host included, which starts the
+game on that map (FUN_004586B0). In the game the clients' OrderType messages are
+passed unchanged to the others at layer 3 (Tet4.exe registers them at 0x0045B410).
+A player who tops out sends IWillDieTetris 0x0FE1E36A (`u8 seat`); the last one in
+sends it too. Then LetsGameEndTetrisToC (one _TetrisGameReport per player, winner
+first: rank, team, name, levels) shows the result board, and Room_GameReportToC at
+layer 0 with Tet4.exe's GameReportTetrisToC at layer 3 (`u32 room | reports`,
+converter 0x0045B070) resets the seats and closes the board five seconds later.
+Players then get TP (section 9).
+
+## 9. Shop, items and profiles
+
+All at layer 3 of the channel socket; Tet4.exe registers the shop's converters at
+0x005424A0, and they hand each message to CShopData, CShopInventory and the shop
+windows. All **live** unless marked.
+
+**Catalog.** Shop_GetShopInfoToS 0x06AE698A → Shop_GetShopInfoToC 0x04441EBA:
+`str | vector<_Board> | vector<_ProductGroup> | vector<_Product> |
+vector<_MissionProduct>` (CShopData::SetShopInfo, 0x0051C750). Boards BDT001,
+BDT002 and BDT003 are the tabs (tickets, items, emblems and titles), each a list of
+group codes; a group is a code and its products' codes, dropped by the client when
+none of them is known; a product is `str code | str name | str currency (HANCOIN, TP
+or WON) | u64 price | u8 sold by the piece | u8 | u8 | vector<str> | vector<str> |
+str`. The client takes names, descriptions and icons from its own
+Tet4/Shop/Data/ShopDataList.xml. Product codes are P, a kind letter, 0, two letters,
+five digits and a period (Dnnn days, Hnnn hours, Cnnn uses, D000 and U000 for
+ever); the inventory item is T and the five digits.
+
+**Buying.** Shop_ReqBuyProductToS 0x00ACFC7A (`str code | u32 quantity | str | u8 gift |
+str receiver | str message`) → Shop_ResBuyProductToC 0x0808E5FA (`str code | u32 |
+u8 | str | str | u32 result | str error | str status | str`): result 0 and status
+`C` complete the purchase in the buy window (0x0054DEB0); any other result shows the
+error text. Then Shop_ChangePointInfoToC 0x0F62BA9A (`str kind | str | u64 before |
+u64 after`) updates the balance shown, and the inventory follows.
+
+**Inventory.** Shop_GetInventoryInfoToS 0x04762CEA (on entering the lobby and from the
+shop) → Shop_GetInventoryInfoToC 0x00A1CEBA: three `_Inventory` (items, emblems,
+titles: `str | str | vector<_ItemInfo> | u32 slots`), the gift box, the club
+membership, `vector<_Point>` (`str kind | str | u64 amount`; the lobby shows TP from
+it) and the time now (CShopInventory, 0x005113B0). An _ItemInfo is `str code | str |
+str kind | str start | str end | str | u32 count | u32`, kind T with dates
+(`YYYYMMDDHHMMSS`, parsed by 0x0052A710) or C with uses. The client checks items by
+code: room creation by T10003, T10014, T10006 or a club (FUN_00491830).
+Single Mode's StartNewGameToC carries Tet4.exe's layer-3 part, each player's
+`_UseAbleItem` (`str | u8 unlimited hold | u8 next | u8 | u8`, 0x00459BD0).
+
+**Profiles.** Channel_OrderTypeGetDisplayMemberInfoTetrisToS 0x0E4772BA (`str member |
+u32`), sent on entering the lobby and by the emblem and title buttons →
+GetDisplayMemberInfoTetrisToC 0x0C3B49AA: the member, the Tetris profile, and the
+emblem and title inventories (`vector<str code | str name | u32 mission> | str |
+u32 slots`). The emblem list looks up the mission of any emblem whose mission is not
+-1 and faults when there is none (0x004853C0). In the Tetris profile the string at
++0x8C is the emblem shown and at +0xA8 the title. Showing one:
+Channel_OrderTypeChangeDisplayMemberInfoToS 0x08DB6E9A (`str emblem | str title`)
+→ ChangeDisplayMemberInfoToC 0x0F6AFA1A (`str member | str emblem | str title`) to
+everyone.
+
+## 10. Single Mode records
 
 **_SingleModeInfo**, nested (Deserialize 0x004596D0): `u32 mode | u32 | u32 rank |
 u32 ranked | vector<u32> values | vector<str> dates | u32 result | u32 plays`. **code**
@@ -369,7 +492,7 @@ players it knows and dates records `YYYY.MM.DD` (the client's own date format is
 not known). Records live in memory, or in the SQLite database with `--db FILE`. The
 profile at channel entry and every game report carry them.
 
-## 9. Debugging
+## 11. Debugging
 
 The full procedure for recording a run is in [`DEBUGGING.md`](DEBUGGING.md).
 
@@ -394,11 +517,14 @@ The full procedure for recording a run is in [`DEBUGGING.md`](DEBUGGING.md).
   `HKCU\Software\Wine\Debug` to `user32.MessageBoxA;user32.MessageBoxW` and run
   with `WINEDEBUG=+relay`; the strings are CP949.
 
-## 10. Corrected conclusions
+## 12. Corrected conclusions
 
 Notes in this repository's history concluded otherwise on these points:
 
-- k66e is the u32 room number, not a room-type string; the mode is in k46e.
+- k42e is the room number and k66e the player limit (an earlier note had k66e as
+  the room number); the mode is in k46e.
+- Rooms only reach the other clients when the room list has every slot and k51e says
+  how many, and members only show in their rooms when EnterChannelToC gives k62e.
 - CreateRoomToC's host is the string right before the port, and its room option
   comes from AutoEnter, not from CreateRoomToS.
 - RoomInfoToC has no second ID before its _RoomInfo.

@@ -12,26 +12,36 @@ describes the protocol and the evidence for every reply.
 
 ## Status
 
-Single Mode plays end to end with the real client (Wine, headless under Xvfb):
+Tested with two real clients at once (Wine, headless under Xvfb):
 
-- TPack login, the CDS channel directory and the secure socket;
-- the lobby: authorization, channel entry, the player's member record and Tetris
-  profile, and the member, room and item lists;
-- Single Mode: AutoEnter, room creation and entry, the game itself in Marathon,
-  40 lines and Ultra, game over with NEW RECORD, rank and the player's five best
-  results per mode, retry (Enter or 다시도전), back to the mode selection (ESC or
-  확인), and 나가기 back to the lobby.
+- **Login and lobby**: TPack login, the CDS channel directory and the secure
+  socket; accounts and tickets with `--db`; the member list with the room each
+  player is in, joins and leaves, lobby chat, the room list (100 slots), quick
+  join (바로입장), the member info dialog, and emblems and titles to show.
+- **Rooms**: the create dialog (item battle, no-item battle, race), passwords,
+  joining from the room list, quick join and invitations (초대), the host's title,
+  options and map choice, the game start for everyone, the in-game traffic between
+  players, the end with the ranking, results and TP, and leaving. The host sending
+  a member away (강퇴) is tested with scripted clients only.
+- **Single Mode**: Marathon, 40 lines and Ultra, game over with NEW RECORD, rank
+  and the five best results per mode, retry, and back to the lobby. Ultra opens
+  after 500 games, as the client requires.
+- **Shop (상점) and My Items (내 아이템)**: the three tabs (room-host tickets and
+  clubs, items for the game, emblems and titles) at the prices the client shows,
+  buying with TP, and the inventory with each item's period or uses. Players start
+  with 10,000 TP and earn 30, 20 or 10 TP per multiplayer game by rank.
 
-The client runs the game; the server keeps the records. Ultra opens after 500
-games, counted over all modes, as the client requires.
+The client runs the game; the server keeps the players, rooms, records and
+wallets, and passes the game traffic between the players in a room.
 
 With a database the server requires accounts: players register and log in with a
-name and password through `tools/client.py play`, and records are ranked across
-all players. [`docs/DEPLOY.md`](docs/DEPLOY.md) sets this up on a VPS.
+name and password through `tools/client.py play`, and records and wallets are kept.
+[`docs/DEPLOY.md`](docs/DEPLOY.md) sets this up on a VPS.
 
-Not implemented: multiplayer rooms (versus, team and item battles), the shop,
-items, guilds, friends and chat. Their messages are not recovered yet; the client
-sends some of them and gets no reply.
+Not implemented yet: whispers, friends, guilds, gifts and the gift box, the Happy
+Cube, missions, spectating a room from the lobby, and the effects of the items that
+are used up (rating and record items, nickname change); they can be bought but do
+nothing. Survival and painting rooms are created like the others but untested.
 
 ## Running
 
@@ -72,19 +82,22 @@ python3 tools/client.py run
 writes `client-patched/`, whose `Tet4.exe` connects to the TPack server on this machine
 (`--host ADDRESS` for a server elsewhere). `run` starts it with the test account in
 `tools/bootstrap-sample.txt` and the Korean locale; against a server with
-accounts, `play --server ADDRESS [--register]` logs in and starts it instead. The lobby shows the 내 아이템, 상점 and 싱글모드 (Single Mode) buttons.
+accounts, `play --server ADDRESS [--register]` logs in and starts it instead.
 
 ## Layout
 
 ```
 tet4server/  the server
   xdr.py       wire primitives          crypto.py   handshake and stream cipher
-  xlbp.py      secure session, batches  messages.py message IDs and layouts
-  tpack.py     account service          cds.py      channel directory
-  channel.py   channel service          game.py     game service
-  lobby.py     rooms, records           server.py   listeners and command line
+  xlbp.py      secure session, batches  schema.py   message codec over catalog.py
+  catalog.py   every message layout     messages.py hand-written layouts, IDs
+  tpack.py     TPack login              cds.py      channel directory
+  channel.py   channel service          game.py     game service (rooms)
+  lobby.py     players, rooms, chat     room.py     a room's seats, host, games
+  profiles.py  member rows, profiles    records.py  Single Mode records
+  shop.py      catalog, TP, inventory   server.py   listeners and command line
   accounts.py  accounts, tickets, database, account service
-tests/       captured vectors, layouts, and a scripted client session
+tests/       captured vectors, layouts, scripted clients for every service
 tools/       client.py, the sample bootstrap, a winedbg command file
 docs/        PROTOCOL.md, DEBUGGING.md, DEPLOY.md
 ```

@@ -7,9 +7,9 @@ how the messages fit together and gives the evidence.
 
 **Reading an entry.** The heading is the client's class name without `Cmd_`. Then
 the message ID, the direction, the batch layer it travels in (PROTOCOL.md section
-5) and what the server does. The fields follow in wire order: a field the server
+6.2) and what the server does. The fields follow in wire order: a field the server
 names is `name` type, with the client's key in parentheses where it is known
-(PROTOCOL.md section 6.2); a field nobody has named is its type alone, read and
+(PROTOCOL.md section 6.3); a field nobody has named is its type alone, read and
 written as `f0`, `f1`, ... by position. Types: `u8` `u16` `u32` `u64` `i32` `i64`
 `f32` are big-endian numbers, `str` is a u32 length and the bytes (CP949 text),
 `_Name` a structure written inline, `[type]` a u32 count and the elements.

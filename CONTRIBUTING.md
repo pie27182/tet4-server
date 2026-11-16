@@ -16,6 +16,12 @@ This server answers an existing client, so a protocol change needs evidence.
 `python3 -m unittest discover -s tests -t .` must pass. Protocol changes come with
 tests, from captured bytes where they exist.
 
+Where things go: a setting or a fixed value of the client in `tet4server/config.py`;
+a message's layout and its field names in `tet4server/protocol/catalog.py`, after
+which `python3 tools/messages.py` rewrites `docs/MESSAGES.md`; client addresses and
+other evidence in `docs/PROTOCOL.md`, not in code comments.
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) explains the rest.
+
 GitHub Issues are for defects and unexplained client behavior: expected and
 actual behavior, steps, evidence, and what would show it fixed. Open protocol
 questions are the messages `docs/PROTOCOL.md` lists as received without a reply

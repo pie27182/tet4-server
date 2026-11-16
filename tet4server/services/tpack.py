@@ -1,7 +1,7 @@
 """TPack, the client's first login step, on plain frames: AuthSession and LoginTPack.
 
 Each reply echoes the request's method name and context with result 0, the replies
-the client accepted (docs/PROTOCOL.md section 2). Accounts are checked later, by the
+the client accepted (docs/PROTOCOL.md section 3). Accounts are checked later, by the
 channel's AuthToS.
 """
 import logging

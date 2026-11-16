@@ -7,10 +7,16 @@ them across everyone on the server. The client stays unmodified apart from its
 TPack host names, which point at the server.
 
 The server implements the protocol the client already speaks, reconstructed from
-captured traffic and the client's code. [`docs/PROTOCOL.md`](docs/PROTOCOL.md)
-describes the protocol and the evidence for every reply, and
-[`docs/MESSAGES.md`](docs/MESSAGES.md) lists all 233 messages the client knows with
-what the server does with each.
+captured traffic and the client's code, and documented so that it could be built
+again from the documents alone:
+
+- [`docs/PROTOCOL.md`](docs/PROTOCOL.md): the protocol as a specification, from the
+  ciphers to every feature's messages, with the evidence for each fact and what is
+  known of the features not implemented yet;
+- [`docs/MESSAGES.md`](docs/MESSAGES.md): all 233 messages the client knows, field by
+  field, with what the server does with each (generated from the code);
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): how the server is built and how to
+  extend it.
 
 ## Status
 
@@ -40,10 +46,12 @@ With a database the server requires accounts: players register and log in with a
 name and password through `tools/client.py play`, and records and wallets are kept.
 [`docs/DEPLOY.md`](docs/DEPLOY.md) sets this up on a VPS.
 
-Not implemented yet: whispers, friends, guilds, gifts and the gift box, the Happy
-Cube, missions, spectating a room from the lobby, and the effects of the items that
-are used up (rating and record items, nickname change); they can be bought but do
-nothing. Survival and painting rooms are created like the others but untested.
+Not implemented yet (PROTOCOL.md section 13 has what is known of each): watching a
+room, nicknames, friends, gifts and coupons, the Happy Cube, club payments,
+missions and levels, room notices, operator notices, and the effects of the items
+that are used up (rating and record items, nickname change), which can be bought but
+do nothing. Whispers never reach the server. Survival and painting rooms are created
+like the others but untested.
 
 ## Running
 
@@ -58,7 +66,8 @@ python3 -m tet4server
 ```
 
 This listens on 127.0.0.1: TPack 10454, CDS 15000, and one channel on 15001 (game
-15002). Any account name is accepted and records last until the server stops.
+15002); every setting is in [`tet4server/config.py`](tet4server/config.py). Any
+account name is accepted and records last until the server stops.
 `--db FILE` keeps accounts, records and wallets in an SQLite file and requires a
 login (the account service listens on 10455); `--channels N` runs N channels of up
 to 300 players, each in its own process, sharing that file. `--host` and
@@ -90,20 +99,19 @@ accounts, `play --server ADDRESS [--register]` logs in and starts it instead.
 ## Layout
 
 ```
-tet4server/  the server
-  xdr.py       wire primitives          crypto.py   handshake and stream cipher
-  xlbp.py      secure session, batches  schema.py   message codec over catalog.py
-  catalog.py   every message layout     messages.py hand-written layouts, IDs
-  tpack.py     TPack login              cds.py      channel directory
-  channel.py   channel service          game.py     game service (rooms)
-  lobby.py     players, rooms, chat     room.py     a room's seats, host, games
-  profiles.py  member rows, profiles    records.py  Single Mode records
-  shop.py      catalog, TP, inventory   server.py   listeners and command line
-  accounts.py  accounts, tickets, database, account service
-tests/       captured vectors, layouts, scripted clients for every service
-tools/       client.py (check, patch, run the client), loadtest.py, messages.py
-             (writes docs/MESSAGES.md), the sample bootstrap, a winedbg command file
-docs/        PROTOCOL.md, MESSAGES.md, DEPLOY.md, DEBUGGING.md
+tet4server/
+  config.py      every setting, and every fixed value of the client
+  server.py      processes, listeners, the command line
+  storage.py     the SQLite database: accounts, tickets, records, wallets, presence
+  protocol/      wire.py cipher.py catalog.py codec.py session.py dispatch.py:
+                 bytes to messages with named fields and back
+  domain/        lobby.py room.py records.py shop.py: the state and the rules
+  services/      tpack.py directory.py accounts.py channel.py game.py views.py:
+                 one module per socket, messages to the domain and back
+tests/           captured vectors, layouts, scripted clients for every service
+tools/           client.py (check, patch, run the client), loadtest.py, messages.py
+                 (writes docs/MESSAGES.md), the sample bootstrap, a winedbg command file
+docs/            PROTOCOL.md, MESSAGES.md, ARCHITECTURE.md, DEPLOY.md, DEBUGGING.md
 ```
 
 The decompiled client and the analysis scripts used to recover the protocol are

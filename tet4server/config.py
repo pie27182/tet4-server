@@ -30,14 +30,14 @@ MAX_MEMBERS = 300           # players in one channel. Every lobby event (a playe
                             # a room changing, a chat line) goes to all of them, so more
                             # players means more channels, not bigger ones.
 MAX_CHANNELS = 99           # --channels, each a process of its own
-MAX_FRAME = 1 << 20         # bytes in one frame: far above any message, guards garbage lengths
-MAX_BACKLOG = 1 << 20       # unsent bytes to one client before it counts as stuck and is cut off
+MAX_FRAME = 1 << 20         # bytes in a frame: far above any message; stops garbage lengths
+MAX_BACKLOG = 1 << 20       # bytes unsent to a client before it counts as stuck: cut off
 MAX_ACCOUNT_REQUEST = 4096  # bytes in one account service request
-MAP_PLACES = 1000           # map places the server learns names for (the client lists about 60)
+MAP_PLACES = 1000           # map places whose names the server learns (the client has ~60)
 
 # --- Timing (seconds) ----------------------------------------------------------------
 
-GAME_HANDSHAKE_DELAY = 0.2  # how late the game socket answers a key share (see PROTOCOL.md 7)
+GAME_HANDSHAKE_DELAY = 0.2  # how late the game socket answers a key share (PROTOCOL.md 5.3)
 PRESENCE_CHECK = 2.0        # how often a channel looks for its players logged in elsewhere
 RECORDS_REFRESH = 60.0      # how often a channel rereads everyone's records, for the ranks
 ACCOUNT_TIMEOUT = 30.0      # how long the account service waits for a request
@@ -90,8 +90,9 @@ FAILED = b"v2e"             # a reply's result string (k1e) for failure; empty i
 # WAITING and only watch rooms in PLAYING; quick join picks the fullest WAITING room.
 ROOM_EMPTY, ROOM_WAITING, ROOM_PLAYING = 0, 4, 5
 
-# A room's options (k46e): the mode letter first (Y item battle, N no items, R race),
-# the map and flags after it, and SINGLE_MODE at index 4 for a Single Mode room.
+# A room's options (k46e): the mode letter first (Y item battle, N no items, R race,
+# S survival, H painting, X a custom board), the map and flags after it, and
+# SINGLE_MODE at index 4 for a Single Mode room.
 SINGLE_MODE = b"S"
 
 # Why a room was refused (the failcode of CreateRoomToC, GameJoinRoomToC and

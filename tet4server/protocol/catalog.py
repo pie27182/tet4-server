@@ -87,7 +87,7 @@ STRUCTS = {
 }
 
 # name: (ID, layer, fields). The name is the client's class name without "Cmd_". The
-# layer is the batch slot the message travels in (docs/PROTOCOL.md section 5): 0 for
+# layer is the batch slot the message travels in (docs/PROTOCOL.md section 6): 0 for
 # HgCom3's messages, 3 for Tet4.exe's, 1 for the Korean services, and where Tet4.exe
 # replaces HgCom3's converter, the layer it registers.
 MESSAGES = {

@@ -12,7 +12,7 @@ an MT19937 generator seeded with init_by_array. For byte j of each 8-byte block:
 
 After the eighth byte the block is TEA-encrypted under the key
 (chain0, chain1, chain0, chain1) and becomes the new chain, and two generator
-outputs form the next keystream. docs/PROTOCOL.md section 4 has the details.
+outputs form the next keystream. docs/PROTOCOL.md section 5 has the details.
 """
 import random
 import secrets

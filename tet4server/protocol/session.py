@@ -9,7 +9,7 @@ a filled one is a 4-byte LayerAlignment marker, and trailing empty slots are lef
 The receiver reads the first real message ID and runs that type's converter for each
 slot, so a message is known by its ID and layer together: the client takes its own
 Tetris messages and the Tetris extensions of generic ones at layer 3, the generic
-messages at layer 0 (docs/PROTOCOL.md section 5).
+messages at layer 0 (docs/PROTOCOL.md section 6).
 """
 import asyncio
 import json

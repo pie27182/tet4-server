@@ -795,11 +795,16 @@ MESSAGES.md has every layout.
   added, and a whisper is shown only to its sender. In the game protocol,
   `Channel_OrderTypeFriendMemberInfoTetrisToS` (`str · str`) → `...ToC` is a
   friend's profile. **live**
-- **Visiting a player** (게임 신청하기 in a player's menu or profile). Msg_VisitFriend
-  (HgModel3 0x6090F270) looks the target's `k140e` up in the arena list and, without
-  a `k137e` (the member list's path sends none), takes a path that sends nothing
-  and leaves the lobby waiting: until the client restarts, the room list's 입장
-  buttons do nothing (quick join still works). **live**
+- **Visiting a player** (게임 신청하기 in a player's menu or profile). Tet4.exe sends
+  the client's own sub id as `k140e`, its channel as `k24e` and the target's room as
+  `k42e` to Msg_VisitFriend (HgModel3 0x6090F270), which looks `k140e` up in the arena
+  groups the directory listed. Not found (this server's sub id is empty), it clears
+  the channel list: until the client restarts, the room list's 입장 buttons do
+  nothing (quick join still works). Found, it would reconnect to the directory and
+  join the room from Msg_ProcessVisitFriend; a sub id of `01D0A` makes it found but
+  the client then calls the arena the practice arena (연습경기장, "not reflected in
+  records") and still asks the directory nothing, so the server keeps it empty.
+  **live**
 - **Gifts and coupons.** `Shop_ReqBuyProductToS` already carries `gift`, `receiver`
   and `message`; `Shop_RequestUseGiftToS` (`u64 · str · str`) →
   `ResponseUseGiftToC` takes one from the gift box (the inventory's `gifts`);

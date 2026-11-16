@@ -339,8 +339,8 @@ NAMES = {
                                "k200e k52e k53e k82e",
     # Room
     "Room_EnterRoomToC": "k1e failcode k2e",
-    "Room_OrderTypeLetsGameStartTetris": "kind f1 f2 f3 f4 f5 members flags",
-    "Room_OrderTypeLetsGameStartOkTetris": "f1 f2 f3 f4 f5 members flags last",
+    "Room_OrderTypeLetsGameStartTetris": "kind map place f3 f4 f5 members flags",
+    "Room_OrderTypeLetsGameStartOkTetris": "map place f3 f4 f5 members flags last",
     "Room_OrderTypeIWillDieTetris": "seat",
     "Room_OrderTypeLetsGameEndTetrisToC": "_ _ reports",
     "_TetrisGameReport": "k3e rank team title level level_after",
@@ -354,6 +354,9 @@ NAMES = {
     "Room_DeleteMemberToC": "k50e k57e k58e k3e k8e",
     "Room_GetMemberListToC": "k25e k116e k50e k103e k104e k3e members",
     "Room_GetRoomInfoToC": "room",
+    "Room_AlterRoomToS": "k42e k45e k67e k46e _",
+    "Room_OrderTypeMapSetTetrisToS": "seat place random f50 f51",
+    "Room_OrderTypeMapSetTetrisToC": "seat name random f50 f51",
     "_UseAbleItem": "k3e hold next _ _",
     "Room_OrderTypeStartNewGameTetrisToC": "items",
     # Shop (Tet4.exe CShopData 0x0051C750, CShopInventory 0x005113B0)

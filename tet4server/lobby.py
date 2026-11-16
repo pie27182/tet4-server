@@ -38,6 +38,9 @@ class Lobby:
         self.db = db
         self.players: dict[bytes, Player] = {}
         self.rooms: dict[int, Room] = {}
+        # Map names by mode letter and place in the client's map list, learnt from game
+        # starts: the map choice the host sends carries only the place (MapSetTetrisToS).
+        self.map_names: dict[tuple[bytes, int], bytes] = {}
 
     @property
     def requires_login(self) -> bool:

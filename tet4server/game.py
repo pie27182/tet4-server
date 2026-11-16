@@ -1,4 +1,5 @@
 """Game service: a room on the socket that AutoEnter, CreateRoom and GameJoinRoom name."""
+import dataclasses
 import logging
 
 from . import messages as m
@@ -68,6 +69,8 @@ class GameConnection:
             (0, schema.message_id("Chatting_ChatStringToS")): self.on_chat,
             (3, schema.message_id("Room_OrderTypeLetsGameStartTetris")): self.on_lets_game_start,
             (3, schema.message_id("Room_OrderTypeIWillDieTetris")): self.on_out,
+            (0, Msg.Room_AlterRoomToS): self.on_alter_room,
+            (3, schema.message_id("Room_OrderTypeMapSetTetrisToS")): self.on_map_set,
         }
         for msg_id in RELAYED:
             self.handlers[(3, msg_id)] = self.relay
@@ -136,6 +139,8 @@ class GameConnection:
             return
         start = schema.unpack("Room_OrderTypeLetsGameStartTetris", r)
         start.pop("kind")
+        if start["map"]:
+            self.lobby.map_names[(room.fields.k46e[:1], start["place"])] = start["map"]
         room.start_game()
         room.post(schema.pack("Room_OrderTypeLetsGameStartOkTetris", start), layer=3)
         self.lobby.room_changed(room)
@@ -179,6 +184,32 @@ class GameConnection:
             player = self.lobby.players.get(member_id)
             if player:
                 player.channel.session.post(shop.change_point_info_to_c(before, after), layer=3)
+
+    async def on_alter_room(self, r: Reader) -> None:
+        """The host changes the room's title, password or options (the map is the second
+        character of the options): the members' rooms and the room list update."""
+        f = schema.unpack("Room_AlterRoomToS", r)
+        room = self.room
+        if room is None or room.single or room.host != self.member_id:
+            return              # Single Mode sends an empty one before every game
+        room.fields = dataclasses.replace(room.fields, k45e=f["k45e"], k67e=f["k67e"],
+                                          k46e=f["k46e"] or room.fields.k46e)
+        room.post(schema.pack("Room_GetRoomInfoToC", room=room.info()))
+        self.lobby.room_changed(room)
+
+    async def on_map_set(self, r: Reader) -> None:
+        """The host's map choice for the other members' games: MapSetTetrisToC (converter
+        0x00445E90) fills the map packet the host's game sent (0x00425560) and applies
+        it (0x00576790): `random` 1-3 a random kind, else the map by name. The host sends
+        the map's place in the list; the name is known once a game was played on it (the
+        game itself always starts on the host's map, LetsGameStart carries the name)."""
+        f = schema.unpack("Room_OrderTypeMapSetTetrisToS", r)
+        room = self.room
+        if room is not None:
+            name = self.lobby.map_names.get((room.fields.k46e[:1], f["place"]), b"")
+            room.post(schema.pack(
+                "Room_OrderTypeMapSetTetrisToC", seat=f["seat"], name=name, random=f["random"],
+                f50=f["f50"], f51=f["f51"]), layer=3, exclude=self)
 
     async def relay(self, r: Reader) -> None:
         """Pass an in-game message on to the other players in the room, unchanged."""

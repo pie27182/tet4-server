@@ -35,7 +35,7 @@ class Schema:
         self.fields = [(given[i] if i < len(given) and given[i] != "_" else f"f{i}", t)
                        for i, t in enumerate(types)]
 
-    def pack(self, values: dict | None = None, **kw) -> bytes:
+    def pack(self, values: dict | None = None, /, **kw) -> bytes:
         """The message (with its ID) or nested structure (without) from field values."""
         values = {**(values or {}), **kw}
         unknown = set(values) - {n for n, _ in self.fields}
@@ -95,7 +95,7 @@ MESSAGES = {name: Schema(name, types, catalog.NAMES.get(name, ""), msg_id)
 BY_ID = {s.id: s for s in MESSAGES.values()}
 
 
-def pack(name: str, values: dict | None = None, **kw) -> bytes:
+def pack(name: str, values: dict | None = None, /, **kw) -> bytes:
     return MESSAGES[name].pack(values, **kw)
 
 
@@ -103,7 +103,7 @@ def unpack(name: str, r: Reader) -> dict:
     return MESSAGES[name].unpack(r)
 
 
-def pack_as(id_name: str, name: str, values: dict | None = None, **kw) -> bytes:
+def pack_as(id_name: str, name: str, values: dict | None = None, /, **kw) -> bytes:
     """`name`'s fields under the ID of `id_name`: a Tet4.exe layer-3 extension rides in
     the same batch as the HgCom3 message it extends, under that message's ID."""
     schema = MESSAGES.get(name) or STRUCTS[name]

@@ -115,7 +115,7 @@ class MultiplayerTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(other["k3e"], b"bob")
 
         # Only the host starts; everyone, the host included, gets LetsGameStartOk.
-        start = pack("Room_OrderTypeLetsGameStartTetris", f1=b"map",
+        start = pack("Room_OrderTypeLetsGameStartTetris", map="거북이", place=4,
                      members=[b"alice", b"bob", b"", b"", b"", b""], flags=[0] * 6)
         await bob.game.send(start, layer=3)
         await alice.game.send(start, layer=3)
@@ -123,6 +123,12 @@ class MultiplayerTest(unittest.IsolatedAsyncioTestCase):
         for player in (alice, bob):
             go = fields(await player.until(player.game, go_id, 3), "Room_OrderTypeLetsGameStartOkTetris")
             self.assertEqual(go["members"][:2], [b"alice", b"bob"])
+
+        # The map's name is learnt from the start: the host's map choice now shows it.
+        await alice.game.send(pack("Room_OrderTypeMapSetTetrisToS", place=4), layer=3)
+        choice = fields(await bob.until(bob.game, ID("Room_OrderTypeMapSetTetrisToC"), 3),
+                        "Room_OrderTypeMapSetTetrisToC")
+        self.assertEqual(choice["name"].decode("cp949"), "거북이")
 
         # Pieces go to the other player only, unchanged.
         piece = pack("Room_OrderTypePolyMinoPutTetris")

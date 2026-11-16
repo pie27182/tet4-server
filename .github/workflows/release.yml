@@ -1,0 +1,46 @@
+name: Windows release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the tagged source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Run test suite
+        run: python -m unittest discover -s tests -t .
+
+      - name: Build Windows launcher ZIP
+        run: |
+          mkdir -p dist/tet4-windows/tools
+          cp start-client.bat dist/tet4-windows/
+          cp tools/client.py tools/bootstrap-sample.txt dist/tet4-windows/tools/
+          cp docs/WINDOWS.md dist/tet4-windows/README-WINDOWS.md
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZIP_DEFLATED, ZipFile
+
+          source = Path("dist/tet4-windows")
+          with ZipFile("dist/tet4-windows.zip", "w", ZIP_DEFLATED) as archive:
+              for path in sorted(source.rglob("*")):
+                  if path.is_file():
+                      archive.write(path, path.relative_to(source))
+          PY
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/tet4-windows.zip --title "Tet4 $GITHUB_REF_NAME" --generate-notes

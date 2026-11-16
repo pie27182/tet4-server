@@ -21,3 +21,7 @@ __pycache__/
 /live-runs
 /captures
 /game
+
+# Per-machine launcher settings and old local records.
+/.tet4_launcher.json
+/records.json

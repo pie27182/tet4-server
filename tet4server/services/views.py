@@ -23,20 +23,22 @@ CHANNEL = dict(game_id=GAME_ID, sub_id=SUB_ID, channel_id=CHANNEL_ID)
 
 # --- players -------------------------------------------------------------------------
 
-def member_row(player: Player) -> dict:
-    """A row of the lobby's member list (_MemberInfo): the member and the room it is in,
-    0 in the lobby, which the list shows and an accepted invitation looks the room up
-    by. The client accepted rows with k7e the member id again and k11e "M"."""
+def member_row(lobby: Lobby, player: Player) -> dict:
+    """A lobby row (_MemberInfo), including the player's current multiplayer points."""
     room = player.room
     return dict(member=player.member_id, k7e=player.member_id, k11e=b"M",
+                k31e=lobby.ratings.standing(player.member_id).points,
                 room=room.number if room and not room.single else 0)
 
-
 def profile(lobby: Lobby, member_id: bytes) -> dict:
-    """A member's Tetris profile (_TetrisMemberInfo): the emblem and title shown and the
-    Single Mode records."""
+    """A member's profile: decorations, Single Mode records and multiplayer rating."""
     wallet = lobby.shop.wallet(member_id)
-    return dict(member=member_id, emblem=wallet.emblem.encode(), title=wallet.title.encode(),
+    rating = lobby.ratings.standing(member_id)
+    # _TetrisSchoolInfo's field order is u8, str, u32, u16. The u32 is the
+    # rating-point value; the grade label/threshold table is still being recovered.
+    school = dict(f0=0, f1=b"", f2=rating.points, f3=0)
+    return dict(member=member_id, school=school, emblem=wallet.emblem.encode(),
+                title=wallet.title.encode(),
                 single_modes=[single_mode(mode, lobby.records.standing(member_id, mode))
                               for mode in range(SINGLE_MODES)])
 
@@ -62,7 +64,7 @@ def decorations(wallet: Wallet, kind: str) -> dict:
 
 def arrival(lobby: Lobby, player: Player) -> tuple[Message, Message]:
     """A member entering the channel, for the others: its row and its Tetris profile."""
-    return (pack("Channel_AddMemberToC", {**CHANNEL, **member_row(player)}),
+    return (pack("Channel_AddMemberToC", {**CHANNEL, **member_row(lobby, player)}),
             pack("Channel_OrderTypeAddMemberTetrisToC", profile=profile(lobby, player.member_id)))
 
 

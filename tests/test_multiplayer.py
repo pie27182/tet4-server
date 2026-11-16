@@ -148,6 +148,33 @@ class MultiplayerTest(Lobby):
             self.assertEqual((gone["member"], gone["host"]), (b"bob", b"alice"))
         self.assertEqual([m.member_id for m in self.services.lobby.rooms[1].members], [b"alice"])
 
+    @mock.patch.object(game, "MIN_GAME_SECONDS", 999)
+    async def test_room_host_bonus_does_not_bypass_short_game_cutoff(self):
+        alice, bob = self.alice, self.bob
+        shop = self.services.lobby.shop
+        self.assertIsNone(await shop.buy(b"alice", "PU0HT10003D001", 1))
+        await alice.create_room(title=b"short", limit=2)
+        await alice.enter_game(1)
+        await bob.enter_game(1)
+
+        await alice.game.send(pack("Room_OrderTypeLetsGameStartTetris", map="",
+                                   place=0, players=[b"alice", b"bob", b"", b"", b"", b""],
+                                   flags=[0] * 6))
+        for player in (alice, bob):
+            await player.until(player.game, "Room_OrderTypeLetsGameStartOkTetris")
+
+        await alice.game.send(pack("Room_OrderTypeIWillDieTetris", seat=0))
+        await bob.message(bob.game, "Room_OrderTypeIWillDieTetris")
+        await bob.game.send(pack("Room_OrderTypeIWillDieTetris", seat=1))
+        for player in (alice, bob):
+            end = await player.until(player.game, "Room_OrderTypeLetsGameEndTetrisToC")
+            self.assertEqual([(r["member"], r["tp"]) for r in end["reports"]],
+                             [(b"bob", 0), (b"alice", 0)])
+
+        # T10003 costs 1,500 TP; a short match must not refund 10 TP to its host.
+        self.assertEqual(shop.wallet(b"alice").points, 8_500)
+        self.assertEqual(shop.wallet(b"bob").points, 10_000)
+
     async def test_join_refusals(self):
         alice, bob = self.alice, self.bob
         await bob.channel.send(pack("Channel_GameJoinRoomToS", member=b"bob", room=7))

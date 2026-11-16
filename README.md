@@ -15,8 +15,9 @@ folder, the one that contains `Tet4.exe`.
    it. Nothing else needs to be installed. Windows may warn about an unknown
    publisher: click **More info**, then **Run anyway**.
 2. Click **Browse...** and choose your game folder (the one with `Tet4.exe`).
-3. Type an account name and a password. The first time, click **Create account**;
-   after that, **Log in and play** (or press Enter).
+3. Type an account name and a password, then click **Play**. The launcher first
+   tries to log in; if the login is refused, it offers to create the account (the
+   name must be available).
 
 **Keys and speed...** sets your keys (up to three per action, items included) and
 the movement speeds: DAS, the wait before a held key repeats; ARR, the time between

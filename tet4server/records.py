@@ -1,6 +1,8 @@
 """Single Mode records: plays and the best results per player and mode."""
 import logging
 import time
+from bisect import bisect_left, bisect_right, insort
+from collections import defaultdict
 from dataclasses import dataclass, field
 
 from .accounts import Database
@@ -19,21 +21,30 @@ class Records:
     def __init__(self, db: Database | None = None):
         """With `db`, records are loaded from and written to the database."""
         self._played: dict[tuple[bytes, int], _Played] = {}
+        # Everyone's best per mode, sorted, so that a rank is a binary search: every
+        # member list carries the ranks of everyone in it.
+        self._bests: dict[int, list[int]] = defaultdict(list)
         self._db = db
         for name, mode, plays, top in db.load_single_mode() if db else []:
-            self._played[(name.encode("latin-1"), mode)] = _Played(
+            played = self._played[(name.encode("latin-1"), mode)] = _Played(
                 plays, [(value, date.encode()) for value, date in top])
+            if played.top:
+                self._bests[mode].append(played.top[0][0])
+        for bests in self._bests.values():
+            bests.sort()
 
     def single_mode(self, member_id: bytes, mode: int) -> SingleMode:
-        """A player's games and best results in a mode, ranked against everyone's best."""
+        """A player's games and best results in a mode, ranked against everyone's best:
+        the number of better bests, plus one."""
         own = self._played.get((member_id, mode), _Played())
-        bests = sorted((p.top[0][0] for (_, m), p in self._played.items() if m == mode and p.top),
-                       reverse=mode != FORTY_LINES)
-        rank = bests.index(own.top[0][0]) + 1 if own.top else 0
+        bests = self._bests[mode]
+        rank = 0
+        if own.top:
+            best = own.top[0][0]
+            better = (bisect_left(bests, best) if mode == FORTY_LINES
+                      else len(bests) - bisect_right(bests, best))
+            rank = better + 1
         return SingleMode(own.top, own.plays, rank, len(bests))
-
-    def plays(self, member_id: bytes) -> int:
-        return sum(p.plays for (m, _), p in self._played.items() if m == member_id)
 
     async def add_game(self, report: GameReport) -> SingleMode:
         """Count a finished game and keep its result among the best TOP. Higher scores
@@ -42,10 +53,16 @@ class Records:
         played.plays += 1
         kept = False
         if report.completed and report.value:
+            before = played.top[0][0] if played.top else None
             entry = (report.value, time.strftime("%Y.%m.%d").encode())
             played.top = sorted(played.top + [entry], key=lambda r: r[0],
                                 reverse=report.mode != FORTY_LINES)[:TOP]
             kept = entry in played.top
+            if played.top[0][0] != before:
+                bests = self._bests[report.mode]
+                if before is not None:
+                    del bests[bisect_left(bests, before)]
+                insort(bests, played.top[0][0])
         log.info("%r mode %d: %d%s", report.member_id, report.mode, report.value,
                  ", kept among the best" if kept else "")
         if self._db:

@@ -569,7 +569,7 @@ def window(secure: bool) -> int:
     password = tk.StringVar(value=get_saved_password(settings["server"], settings["name"]) or "")
     for field in ("server", "name"):
         fields[field].trace_add("write", lambda *_: password.set(""))
-    status = tk.StringVar(value="Choose your game folder, then log in or create an account.")
+    status = tk.StringVar(value="Choose your game folder, then log in or create an account to play.")
 
     def row(number: int, label: str, variable, **options):
         ttk.Label(frame, text=label).grid(row=number, column=0, sticky="w", pady=3)
@@ -593,14 +593,21 @@ def window(secure: bool) -> int:
     ttk.Label(frame, textvariable=status, wraplength=420, justify="left").grid(
         row=5, column=0, columnspan=3, sticky="w")
 
-    def go(op: str):
-        values = {key: variable.get().strip() for key, variable in fields.items()}
+    def enable_buttons():
+        for button in buttons.winfo_children():
+            button.state(["!disabled"])
+
+    def go(op: str, previous=None):
+        values = previous[0] if previous else {
+            key: variable.get().strip() for key, variable in fields.items()}
+
         if not values["game"]:
             browse()
             values["game"] = fields["game"].get().strip()
             if not values["game"]:
                 return
-        password_value = password.get() or get_saved_password(values["server"], values["name"])
+        password_value = (previous[1] if previous else password.get() or
+                          get_saved_password(values["server"], values["name"]))
         if not values["name"] or not password_value:
             status.set("Enter your account name and password.")
             (name_entry if not values["name"] else password_entry).focus()
@@ -609,6 +616,7 @@ def window(secure: bool) -> int:
                 "Create account", "Type the password again:", show="•",
                 parent=root) != password_value:
             status.set("The passwords did not match. Try again.")
+            enable_buttons()
             return
         save_settings(values)
         for button in buttons.winfo_children():
@@ -619,7 +627,10 @@ def window(secure: bool) -> int:
                 play(Path(values["game"]), values["server"], op, values["name"], password_value,
                      secure, report=lambda text: root.after(0, status.set, text))
             except LaunchError as exc:
-                root.after(0, failed, str(exc))
+                if op == "login" and str(exc) == "Wrong name or password.":
+                    root.after(0, offer_register, values, password_value)
+                else:
+                    root.after(0, failed, str(exc))
             except Exception as exc:          # a bug: say so instead of vanishing
                 root.after(0, failed, f"Unexpected error: {exc!r}")
             else:
@@ -634,16 +645,23 @@ def window(secure: bool) -> int:
     def failed(message: str):
         status.set("Not started.")
         messagebox.showerror("Tet4 Launcher", message, parent=root)
-        for button in buttons.winfo_children():
-            button.state(["!disabled"])
+        enable_buttons()
 
-    ttk.Button(buttons, text="Log in and play", command=lambda: go("login")).grid(
+    def offer_register(values, password_value):
+        if messagebox.askyesno(
+                "Create account",
+                "Login failed (wrong name or password). Try creating an account?\n"
+                "The name must be available.", parent=root):
+            go("register", (values, password_value))
+        else:
+            status.set("Login cancelled.")
+            enable_buttons()
+
+    ttk.Button(buttons, text="Play", command=lambda: go("login")).grid(
         row=0, column=0, padx=4)
-    ttk.Button(buttons, text="Create account", command=lambda: go("register")).grid(
-        row=0, column=1, padx=4)
     ttk.Button(buttons, text="Keys and speed...",
                command=lambda: controls_window(root, fields["game"].get().strip())).grid(
-        row=0, column=2, padx=4)
+        row=0, column=1, padx=4)
     root.bind("<Return>", lambda event: go("login"))
     (password_entry if fields["name"].get() else name_entry).focus()
     root.mainloop()

@@ -15,6 +15,7 @@ from typing import Coroutine
 from ..config import REPORT_CHAT_LINES, REPORT_INTERVAL, REPORT_TEXT, ROOM_SLOTS
 from ..storage import Database
 from .records import Records
+from .rating import Ratings
 from .room import Room, Settings
 from .shop import Shop
 
@@ -42,6 +43,7 @@ class Lobby:
         self.db = db
         self.number = number                  # the channel's
         self.records = Records(db)
+        self.ratings = Ratings(db)
         self.shop = Shop(db)
         self.players: dict[bytes, Player] = {}
         self.rooms: dict[int, Room] = {}

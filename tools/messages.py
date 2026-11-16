@@ -18,8 +18,8 @@ from tet4server.protocol import catalog, codec  # noqa: E402
 from tet4server.services.channel import ChannelConnection  # noqa: E402
 from tet4server.services.game import GameConnection  # noqa: E402
 
-KOREAN = "not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, " \
-         "client options, memberships), not part of the game"
+KOREAN = "not implemented: Hangame Korea's own services (avatars, Gaea promotions, client " \
+         "options, memberships, the report terms), not part of the game"
 NICKNAME = "not implemented: choosing or changing a nickname (and the nickname change item); " \
            "an account's name is its nickname"
 ENTRY = "not implemented: another launcher's way in; this client enters with " \
@@ -32,7 +32,7 @@ NO_REPLY = "no reply needed"
 NOTES = {
     "Channel_AvatarChange": KOREAN, "Room_AvatarChange": KOREAN,
     "Channel_ClientOptionInfo": KOREAN, "Room_ClientOptionInfo": KOREAN,
-    "Channel_Complaint": KOREAN, "Room_Complaint": KOREAN,
+    "Channel_ComplaintAgree": KOREAN,
     "Channel_Gaea": KOREAN, "Room_Gaea": KOREAN,
     "Item_Provoke": KOREAN, "Item_ReserveChance": KOREAN,
     "Channel_GetMemberShipStateSvcKorToC": KOREAN,

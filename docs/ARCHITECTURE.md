@@ -153,7 +153,9 @@ capture, the client's code, or a live run.
 | `test_multiplayer` | Two scripted clients: presence, chat, rooms, a game to its end, invitations, banishing |
 | `test_shop` | The catalog, wallets, buying, the inventory, items in a game, profiles |
 | `test_accounts` | The database, the account service, tickets, logins across channels |
+| `test_reports` | Players' reports: logged, kept in the database, listed by `tools/reports.py` |
+| `test_launcher` | The launcher's settings, game copies, key settings and login |
 | `test_docs` | MESSAGES.md is current |
 
-`tools/loadtest.py` measures capacity; [`DEBUGGING.md`](DEBUGGING.md) runs the real
-client.
+`tools/loadtest.py` measures capacity; `tools/reports.py` lists players' reports;
+[`DEBUGGING.md`](DEBUGGING.md) runs the real client.

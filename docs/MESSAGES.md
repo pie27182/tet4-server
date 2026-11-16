@@ -16,10 +16,10 @@ written as `f0`, `f1`, ... by position. Types: `u8` `u16` `u32` `u64` `i32` `i64
 
 | What the server does | Messages |
 |---|---|
-| not implemented | 73 |
+| not implemented | 71 |
 | sent | 49 |
-| passed on to the room | 42 |
-| handled | 36 |
+| passed on to the room | 41 |
+| handled | 39 |
 | not sent | 30 |
 | no reply needed | 8 |
 | not a message | 1 |
@@ -34,7 +34,7 @@ str · u32 · u8
 
 ### Channel_AddMemberSvcKorToC
 
-`0x0AB84D0A` · server → client · layer 1 · rides under Channel_AddMemberToC (own ID `0x01E0041A`) · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x0AB84D0A` · server → client · layer 1 · rides under Channel_AddMemberToC (own ID `0x01E0041A`) · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 u64
 
@@ -58,13 +58,13 @@ u64
 
 ### Channel_AvatarChangeSvcKorToC
 
-`0x0293164A` · server → client · layer 1 · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x0293164A` · server → client · layer 1 · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 str · str
 
 ### Channel_AvatarChangeSvcKorToS
 
-`0x0293954A` · client → server · layer 1 · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x0293954A` · client → server · layer 1 · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 str · str
 
@@ -100,33 +100,33 @@ str
 
 ### Channel_ClientOptionInfoSvcKorToC
 
-`0x0E0B0A2A` · server → client · layer 1 · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x0E0B0A2A` · server → client · layer 1 · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 str · [u32]
 
 ### Channel_ClientOptionInfoSvcKorToS
 
-`0x04AB113A` · client → server · layer 1 · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x04AB113A` · client → server · layer 1 · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 str · [_ClientOptionInfoSlotSvcKor]
 
 ### Channel_ComplaintAgreeSvcKorToC
 
-`0x0C8C6FDA` · server → client · layer 1 · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x0C8C6FDA` · server → client · layer 1 · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 u32
 
 ### Channel_ComplaintAgreeSvcKorToS
 
-`0x0C8C3FDA` · client → server · layer 1 · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x0C8C3FDA` · client → server · layer 1 · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 u32
 
 ### Channel_ComplaintSvcKorToS
 
-`0x0A57CA8A` · client → server · layer 1 · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x0A57CA8A` · client → server · layer 1 · **handled by `ChannelConnection.report`**
 
-str · str · u32 · str · [_ChatInfo] · str
+`game_id` str · `reporter` str · u32 · `reason` str · `chat` [_ChatInfo] · `reported` str
 
 ### Channel_CouponCountToC
 
@@ -190,7 +190,7 @@ str · str · str · str · str · u32 · str
 
 ### Channel_EnterChannelSvcKorToC
 
-`0x00C0FC8A` · server → client · layer 1 · rides under Channel_EnterChannelToC (own ID `0x0793DB4A`) · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x00C0FC8A` · server → client · layer 1 · rides under Channel_EnterChannelToC (own ID `0x0793DB4A`) · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 u32 · u32 · u32
 
@@ -232,19 +232,19 @@ str · str · str · str
 
 ### Channel_GaeaGameValueSvcKorToS
 
-`0x07BF049A` · client → server · layer 1 · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x07BF049A` · client → server · layer 1 · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 [_GaeaGameValue]
 
 ### Channel_GaeaPrizeDataSvcKorToC
 
-`0x0BAE4A1A` · server → client · layer 1 · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x0BAE4A1A` · server → client · layer 1 · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 str · u32 · u32 · str · u64 · u64 · u64 · u64 · u64 · str
 
 ### Channel_GaeaPromotionDataSvcKorToC
 
-`0x0E0E045A` · server → client · layer 1 · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x0E0E045A` · server → client · layer 1 · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 str · [_PromotionMastInfoSvcKor] · [_PromotionUserInfoSvcKor] · str
 
@@ -262,7 +262,7 @@ str · [_PromotionMastInfoSvcKor] · [_PromotionUserInfoSvcKor] · str
 
 ### Channel_GetMemberInfoSvcKorToC
 
-`0x060BC39A` · server → client · layer 1 · rides under Channel_GetMemberInfoToC (own ID `0x0F78858A`) · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x060BC39A` · server → client · layer 1 · rides under Channel_GetMemberInfoToC (own ID `0x0F78858A`) · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 u64 · u32
 
@@ -274,7 +274,7 @@ u64 · u32
 
 ### Channel_GetMemberListSvcKorToC
 
-`0x06B816EA` · server → client · layer 1 · rides under Channel_GetMemberListToC (own ID `0x0651FEBA`) · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x06B816EA` · server → client · layer 1 · rides under Channel_GetMemberListToC (own ID `0x0651FEBA`) · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 [_MemberInfoChannelSvcKor]
 
@@ -298,7 +298,7 @@ u64 · u32
 
 ### Channel_GetMemberShipStateSvcKorToC
 
-`0x048F27FA` · server → client · layer 1 · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x048F27FA` · server → client · layer 1 · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 [_MembershipState]
 
@@ -596,25 +596,25 @@ u8 · str · [_ItemState]
 
 ### Item_ProvokeSvcKorToC
 
-`0x081E37FA` · server → client · layer 1 · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x081E37FA` · server → client · layer 1 · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 u32 · str
 
 ### Item_ProvokeSvcKorToS
 
-`0x081E87FA` · client → server · layer 1 · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x081E87FA` · client → server · layer 1 · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 u32 · str
 
 ### Item_ReserveChanceSvcKorToC
 
-`0x05750DDA` · server → client · layer 1 · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x05750DDA` · server → client · layer 1 · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 str · u32 · str · str · u8 · u32
 
 ### Item_ReserveChanceSvcKorToS
 
-`0x00E7500A` · client → server · layer 1 · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x00E7500A` · client → server · layer 1 · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 str · u8
 
@@ -768,7 +768,7 @@ u8
 
 ### Room_AddMemberSvcKorToC
 
-`0x0619233A` · server → client · layer 1 · rides under Room_AddMemberToC (own ID `0x02ED64DA`) · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x0619233A` · server → client · layer 1 · rides under Room_AddMemberToC (own ID `0x02ED64DA`) · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 u8 · u8 · u8
 
@@ -786,13 +786,13 @@ u8 · u8 · u8
 
 ### Room_AvatarChangeSvcKorToC
 
-`0x0E423E5A` · server → client · layer 1 · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x0E423E5A` · server → client · layer 1 · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 str · str
 
 ### Room_AvatarChangeSvcKorToS
 
-`0x0E421B5A` · client → server · layer 1 · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x0E421B5A` · client → server · layer 1 · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 str · str
 
@@ -804,21 +804,21 @@ u32 · str · u32
 
 ### Room_ClientOptionInfoSvcKorToC
 
-`0x089BEB5A` · server → client · layer 1 · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x089BEB5A` · server → client · layer 1 · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 str · [u32]
 
 ### Room_ClientOptionInfoSvcKorToS
 
-`0x0299935A` · client → server · layer 1 · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x0299935A` · client → server · layer 1 · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 str · [_ClientOptionInfoSlotSvcKor]
 
 ### Room_ComplaintSvcKorToS
 
-`0x079D42FA` · client → server · layer 1 · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x079D42FA` · client → server · layer 1 · **handled by `GameConnection.report`**
 
-str · str · u32 · str · [_ChatInfo] · str
+`game_id` str · `reporter` str · u32 · `reason` str · `chat` [_ChatInfo] · `reported` str
 
 ### Room_ConnectTypeErrorToC
 
@@ -864,25 +864,25 @@ str · u32 · `member` str · str
 
 ### Room_GaeaGameValueSvcKorToS
 
-`0x09C5368A` · client → server · layer 1 · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x09C5368A` · client → server · layer 1 · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 [_GaeaGameValue]
 
 ### Room_GaeaPrizeDataSvcKorToC
 
-`0x025A9BEA` · server → client · layer 1 · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x025A9BEA` · server → client · layer 1 · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 str · u32 · u32 · str · u64 · u64 · u64 · u64 · u64 · str
 
 ### Room_GaeaPromotionDataSvcKorToC
 
-`0x091B06CA` · server → client · layer 1 · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x091B06CA` · server → client · layer 1 · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 str · [_PromotionMastInfoSvcKor] · [_PromotionUserInfoSvcKor] · str
 
 ### Room_GameReportSvcKorToC
 
-`0x0EC0F66A` · server → client · layer 1 · rides under Room_GameReportToC (own ID `0x034AF4BA`) · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x0EC0F66A` · server → client · layer 1 · rides under Room_GameReportToC (own ID `0x034AF4BA`) · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 [_MemberScoreReportSvcKor]
 
@@ -900,7 +900,7 @@ str · [_PromotionMastInfoSvcKor] · [_PromotionUserInfoSvcKor] · str
 
 ### Room_GetMemberListSvcKorToC
 
-`0x03753C2A` · server → client · layer 1 · rides under Room_GetMemberListToC (own ID `0x086ECFCA`) · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x03753C2A` · server → client · layer 1 · rides under Room_GetMemberListToC (own ID `0x086ECFCA`) · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 [_MemberInfoRoomSvcKor]
 
@@ -930,7 +930,7 @@ u8 · u32
 
 ### Room_ItemUsePowerChanceSvcKorToC
 
-`0x0BBFEBAA` · server → client · layer 1 · rides under Room_ItemUsePowerChanceToC (own ID `0x0922038A`) · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x0BBFEBAA` · server → client · layer 1 · rides under Room_ItemUsePowerChanceToC (own ID `0x0922038A`) · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 u32 · u32
 
@@ -942,7 +942,7 @@ u32 · u32
 
 ### Room_ItemUseRecoveryItemSvcKorToC
 
-`0x0250A3FA` · server → client · layer 1 · rides under Room_ItemUseRecoveryItemToC (own ID `0x0CA3FA3A`) · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x0250A3FA` · server → client · layer 1 · rides under Room_ItemUseRecoveryItemToC (own ID `0x0CA3FA3A`) · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 u32
 
@@ -1188,9 +1188,9 @@ u8 · u8
 
 ### Room_OrderTypeMapSetTetris
 
-`0x06D289DA` · client → server → the room · layer 3 · **passed on to the room by `GameConnection.relay`**
+`0x06D289DA` · client → server → the room · layer 3 · **handled by `GameConnection.map_preview`**
 
-u8 · str · [u8] · u32 · u8 · u8
+`seat` u8 · `name` str · `cells` [u8] · `random` u32 · `unknown1` u8 · `unknown2` u8
 
 ### Room_OrderTypeMapSetTetrisToC
 
@@ -1380,7 +1380,7 @@ u32 · u32 · u32
 
 ### Room_StartNewGameSvcKorToC
 
-`0x0F809B5A` · server → client · layer 1 · rides under Room_StartNewGameToC (own ID `0x013AA2DA`) · **not implemented: Hangame Korea's own services (avatars, reports, Gaea promotions, client options, memberships), not part of the game**
+`0x0F809B5A` · server → client · layer 1 · rides under Room_StartNewGameToC (own ID `0x013AA2DA`) · **not implemented: Hangame Korea's own services (avatars, Gaea promotions, client options, memberships, the report terms), not part of the game**
 
 `members` [_MemberInfoStartNewGame]
 
@@ -1504,7 +1504,7 @@ str · u32
 
 ### _ChatInfo
 
-str · str · str · u32
+`member` str · `time` str · `text` str · u32
 
 ### _ClientOptionInfoSlotSvcKor
 

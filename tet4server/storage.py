@@ -1,5 +1,6 @@
-"""The database: accounts and login tickets, Single Mode records, wallets, and who is
-logged in where, in one SQLite file that every channel process shares.
+"""The database: accounts and login tickets, Single Mode records, wallets, who is
+logged in where, and the players' reports, in one SQLite file that every channel
+process shares.
 """
 import asyncio
 import hashlib
@@ -37,6 +38,11 @@ CREATE TABLE IF NOT EXISTS presence (
 CREATE TABLE IF NOT EXISTS wallets (
     name TEXT PRIMARY KEY, points INTEGER NOT NULL, items TEXT NOT NULL,
     title TEXT NOT NULL, emblem TEXT NOT NULL);
+-- Players' reports of each other (신고), for the operators; chat is a JSON list of
+-- [time, member, text], the lines the reporter's client sent with the report.
+CREATE TABLE IF NOT EXISTS reports (
+    time REAL NOT NULL, channel INTEGER NOT NULL, reporter TEXT NOT NULL,
+    reported TEXT NOT NULL, reason TEXT NOT NULL, chat TEXT NOT NULL);
 """
 
 
@@ -171,3 +177,11 @@ class Database:
     def save_wallet(self, name: str, points: int, items: str, title: str, emblem: str) -> None:
         self._run("INSERT OR REPLACE INTO wallets VALUES (?, ?, ?, ?, ?)",
                   (name, points, items, title, emblem))
+
+    def add_report(self, report: tuple[float, int, str, str, str, str]) -> None:
+        """Keep a report: time, channel, reporter, reported, reason and the chat (JSON)."""
+        self._run("INSERT INTO reports VALUES (?, ?, ?, ?, ?, ?)", report)
+
+    def reports(self, last: int = 20) -> list[tuple[float, int, str, str, str, str]]:
+        """The last reports, newest first."""
+        return self._run("SELECT * FROM reports ORDER BY time DESC LIMIT ?", (last,))

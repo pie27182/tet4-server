@@ -11,7 +11,7 @@ from ..config import (FAILED, GAME_POINTS, MAP_PLACES, MIN_GAME_SECONDS, NEXT_PI
 from ..domain.lobby import Lobby
 from ..domain.records import GameReport
 from ..domain.room import Member, Room
-from ..protocol.codec import Message, pack
+from ..protocol.codec import Message, pack, unpack
 from ..protocol.dispatch import Connection, on
 from ..protocol.session import Session
 from . import views
@@ -33,7 +33,7 @@ RELAYED = (
     "Room_OrderTypeItemStealTetris", "Room_OrderTypeItemStoleTetris",
     "Room_OrderTypeItemStolenTetris", "Room_OrderTypeItemUseTetris",
     "Room_OrderTypeLineUpTetris", "Room_OrderTypeMapSetSyncTetris",
-    "Room_OrderTypeMapSetTetris", "Room_OrderTypeMapUpdateTetris",
+    "Room_OrderTypeMapUpdateTetris",
     "Room_OrderTypePolyMinoPutPieceTetris", "Room_OrderTypePolyMinoPutTetris",
     "Room_OrderTypeRankOfMeTetris", "Room_OrderTypeRequestBanishMemberTetris",
     "Room_OrderTypeResponseBanishMemberTetris", "Room_OrderTypeRoomInfoTetris",
@@ -63,6 +63,7 @@ class GameConnection(Connection):
         self.lobby = lobby
         self.member_id: bytes | None = None
         self.room: Room | None = None
+        self.map_name = b""     # the map this client last showed the room
 
     async def run(self) -> None:
         try:
@@ -169,23 +170,44 @@ class GameConnection(Connection):
         room.post(pack("Room_GetRoomInfoToC", info=views.room_info(room)))
         self._show(room)
 
+    @on("Room_OrderTypeMapSetTetris", raw=True)
+    async def map_preview(self, message: Message) -> None:
+        """The host's map, name and cells, which the others show on their waiting boards.
+        The MapSetTetrisToS right after it gives only the map's place in the list: its
+        name is learned here."""
+        if self.room is not None:
+            self.map_name = unpack("Room_OrderTypeMapSetTetris", message.body)["name"][:64]
+            self.room.post(message, exclude=self)
+
     @on("Room_OrderTypeMapSetTetrisToS")
     async def map_set(self, request: dict) -> None:
-        """The host's map choice, for the other members' games, which apply it by name or,
-        with `random` 1-3, pick a random map of that kind. The host sends the map's place
-        in the list; its name is known once a game was played on it (a game itself always
-        starts on the host's map: LetsGameStart carries the name)."""
+        """The host's map choice, for the other members' games, which load the map by name
+        or, with `random` 1-3, pick a random map of that kind. An empty name would clear
+        the map the preview just showed, so a map whose name is not known is not sent
+        (a game itself always starts on the host's map: LetsGameStart carries it)."""
         room = self.room
-        if room is not None:
-            name = self.lobby.map_names.get((room.mode, request["place"]), b"")
+        if room is None:
+            return
+        place, random = request["place"], request["random"]
+        if self.map_name and not random and place < MAP_PLACES:
+            self.lobby.map_names[(room.mode, place)] = self.map_name
+        self.map_name = b""     # a choice sent alone (for a newcomer) is looked up
+        name = self.lobby.map_names.get((room.mode, place), b"")
+        if name or random:
             room.post(pack("Room_OrderTypeMapSetTetrisToC", seat=request["seat"], name=name,
-                           random=request["random"], unknown1=request["unknown1"],
+                           random=random, unknown1=request["unknown1"],
                            unknown2=request["unknown2"]), exclude=self)
 
     @on("Chatting_ChatStringToS")
     async def chat(self, request: dict) -> None:
         if self.room is not None:
             self.room.post(pack("Chatting_ChatStringToC", request, member=self.member_id))
+
+    @on("Room_ComplaintSvcKorToS")
+    async def report(self, request: dict) -> None:
+        """The room's report button (신고), as in the lobby."""
+        if self.room is not None:
+            self.lobby.report(self.member_id, request)
 
     @on(*RELAYED, raw=True)
     async def relay(self, message: Message) -> None:

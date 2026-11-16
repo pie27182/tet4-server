@@ -127,9 +127,6 @@ class LoginTest(unittest.IsolatedAsyncioTestCase):
         await game.close()
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class PresenceTest(unittest.IsolatedAsyncioTestCase):
     @mock.patch.object(server, "PRESENCE_CHECK", 0.05)
@@ -165,3 +162,7 @@ class PresenceTest(unittest.IsolatedAsyncioTestCase):
                 await asyncio.sleep(0.02)
             self.assertEqual(list(channels[0].lobby.players), [])
             self.assertEqual(list(channels[1].lobby.players), [b"alice"])
+
+
+if __name__ == "__main__":
+    unittest.main()

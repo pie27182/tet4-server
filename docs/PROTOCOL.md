@@ -767,20 +767,24 @@ MESSAGES.md has every layout.
 - **Ratings and records** (내공, 등급, 전적). NHN announced this grade system
   in 2008: 내공 goes up or down with player skill. The current client stores the
   school/rating in `_TetrisSchoolInfo` (`u8 · str · u32 · u16`); its 24-grade lookup
-  table is at Tet4.exe 0x005DC870. A 2008 player report places a new rating near
-  1600 and says the amount changes with the opponent's rating. The server now stores
-  global multiplayer points, games, wins, losses, win rate and current/best streaks
-  in `multiplayer_ratings`; each completed multiplayer room updates them atomically.
-  The implementation provisionally puts points in member-row `k31e` (which the
-  bootstrap also seeds with 1360) and in `_TetrisSchoolInfo`'s third field; their
-  exact UI semantics still need confirmation from the client. 
+  table is at Tet4.exe 0x005DC870. The six values immediately after `school` in
+  `_TetrisMemberInfo` are used for wins, losses, win-rate text, best combo, streak
+  and best grade. The server now sends wins, losses, win rate and its current
+  winning streak; combo and best grade are still zero. The member row's `k31e`
+  (the bootstrap seeds 1360) and `_TetrisSchoolInfo`'s third value are used here
+  as provisional 내공 points; the precise mapping still needs live verification.
+  The server stores points, games, wins, losses, win rate, streaks and best points
+  globally in `multiplayer_ratings`; each completed multiplayer room updates them
+  atomically.
   The score update is a provisional zero-sum, placement-based Elo reconstruction
   (initial 1600, K=32), **not a recovered copy of Hangame's exact formula**.
-  NHN's 2010 patent describes score rules that differ by grade (beginner, middle,
-  expert), but does not prove that the same algorithm or constants shipped in this
-  1.3.4 client. The exact 24 thresholds/name mapping, original score transfer,
-  best-combo accumulation, best-grade field and rank-locked arenas remain open.
-  The evidence and current implementation status are collected in [RATINGS.md](RATINGS.md).
+  A player-reported starting value near 1600 and the client's bootstrap seed 1360
+  do not agree, so the initial value is provisional too. NHN's 2010 patent describes
+  grade-dependent scoring (beginners gain even on a loss, intermediate players lose
+  less than they gain, advanced players gain/lose by result), but does not prove
+  those examples or constants shipped in this 1.3.4 client. The exact 24 thresholds,
+  names, point transfer tables and rank-locked arena rules remain to be recovered.
+  See [RATINGS.md](RATINGS.md) and `tools/dump_rating_table.py` for the PE dump step.
   NHN separately announced public Single Ranking and Multi Ranking lists in
   November 2008. Equivalent read-only HTML pages are now available at
   `http://server:10456/rankings`, with JSON at `/api/rankings/multiplayer` and

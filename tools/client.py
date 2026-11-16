@@ -328,6 +328,33 @@ def start_game(copy: Path, boot: str) -> Path:
 
 # --- the account -------------------------------------------------------------------
 
+KEYRING_SERVICE = "Tet4 Launcher"
+
+
+def load_password(server: str, name: str) -> str | None:
+    try:
+        import keyring
+        return keyring.get_password(KEYRING_SERVICE, f"{server.strip().lower()}:{name.strip().lower()}")
+    except Exception:
+        return None
+
+
+def save_password(server: str, name: str, password: str) -> bool:
+    try:
+        import keyring
+        keyring.set_password(KEYRING_SERVICE, f"{server.strip().lower()}:{name.strip().lower()}",
+                             password)
+        return True
+    except Exception:
+        return False
+
+
+def ask_to_save_password(server: str, name: str, password: str) -> None:
+    if input("Remember password in the system keyring? [y/N] ").strip().lower() in ("y", "yes"):
+        if not save_password(server, name, password):
+            print("Could not save the password. Install keyring and enable a system keyring.")
+
+
 def request_ticket(server: str, op: str, name: str, password: str,
                    secure: bool = True, port: int = ACCOUNTS_PORT) -> str:
     """Log in (op "login") or create an account ("register"); the ticket the game
@@ -539,6 +566,7 @@ def window(secure: bool) -> int:
     frame.grid()
     fields = {key: tk.StringVar(value=settings[key]) for key in ("server", "game", "name")}
     password = tk.StringVar()
+    remember_password = tk.BooleanVar(value=False)
     status = tk.StringVar(value="Choose your game folder, then log in or create an account.")
 
     def row(number: int, label: str, variable, **options):
@@ -558,10 +586,12 @@ def window(secure: bool) -> int:
     ttk.Button(frame, text="Browse...", command=browse).grid(row=1, column=2, padx=(6, 0))
     name_entry = row(2, "Account name", fields["name"])
     password_entry = row(3, "Password", password, show="•")
+    ttk.Checkbutton(frame, text="Remember password in system keyring",
+                    variable=remember_password).grid(row=4, column=0, columnspan=3, sticky="w")
     buttons = ttk.Frame(frame)
-    buttons.grid(row=4, column=0, columnspan=3, pady=(12, 6))
+    buttons.grid(row=5, column=0, columnspan=3, pady=(8, 6))
     ttk.Label(frame, textvariable=status, wraplength=420, justify="left").grid(
-        row=5, column=0, columnspan=3, sticky="w")
+        row=6, column=0, columnspan=3, sticky="w")
 
     def go(op: str):
         values = {key: variable.get().strip() for key, variable in fields.items()}
@@ -570,7 +600,10 @@ def window(secure: bool) -> int:
             values["game"] = fields["game"].get().strip()
             if not values["game"]:
                 return
-        if not values["name"] or not password.get():
+        saved_password = load_password(values["server"], values["name"])
+        secret = password.get() or saved_password
+        remember = remember_password.get() or saved_password is not None
+        if not values["name"] or not secret:
             status.set("Enter your account name and password.")
             (name_entry if not values["name"] else password_entry).focus()
             return
@@ -585,14 +618,17 @@ def window(secure: bool) -> int:
 
         def work():
             try:
-                play(Path(values["game"]), values["server"], op, values["name"], password.get(),
+                play(Path(values["game"]), values["server"], op, values["name"], secret,
                      secure, report=lambda text: root.after(0, status.set, text))
             except LaunchError as exc:
                 root.after(0, failed, str(exc))
             except Exception as exc:          # a bug: say so instead of vanishing
                 root.after(0, failed, f"Unexpected error: {exc!r}")
             else:
-                root.after(0, status.set, "The game is starting. Have fun!")
+                if remember and not save_password(values["server"], values["name"], secret):
+                    root.after(0, status.set, "Game is starting, but the password could not be saved.")
+                else:
+                    root.after(0, status.set, "The game is starting. Have fun!")
                 root.after(3000, root.destroy)
 
         threading.Thread(target=work, daemon=True).start()
@@ -629,7 +665,9 @@ def console(secure: bool) -> int:
     settings["game"] = ask("Game folder (the one with Tet4.exe)", settings["game"])
     register = ask("Do you have an account? (y/n)", "y").lower().startswith("n")
     settings["name"] = ask("Account name", settings["name"])
-    password = getpass.getpass("Password: ")
+    password = load_password(settings["server"], settings["name"])
+    if not password:
+        password = getpass.getpass("Password: ")
     if register and getpass.getpass("Password again: ") != password:
         print("The passwords did not match.")
         return 1
@@ -640,6 +678,8 @@ def console(secure: bool) -> int:
     except LaunchError as exc:
         print(f"\n{exc}")
         return 1
+    if not load_password(settings["server"], settings["name"]):
+        ask_to_save_password(settings["server"], settings["name"], password)
     print(f"The game is starting. Its log is {log}.")
     return 0
 
@@ -700,11 +740,14 @@ def main(argv: list[str] | None = None) -> int:
         settings = load_settings()
         game = args.game or Path(settings["game"])
         name = args.name or input("Account name: ")
-        password = getpass.getpass("Password: ")
+        password = load_password(args.server, name) or getpass.getpass("Password: ")
         if args.register and getpass.getpass("Password again: ") != password:
             raise LaunchError("The passwords did not match.")
-        print(play(game, args.server, "register" if args.register else "login", name,
-                   password, secure))
+        log = play(game, args.server, "register" if args.register else "login", name,
+                   password, secure)
+        if not load_password(args.server, name):
+            ask_to_save_password(args.server, name, password)
+        print(log)
         return 0
     except LaunchError as exc:
         print(exc, file=sys.stderr)

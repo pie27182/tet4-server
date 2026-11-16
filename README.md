@@ -85,9 +85,17 @@ Tested with two real clients at once, button by button:
 - **Shop (상점) and My Items (내 아이템)**: buying with TP. Players start with 10,000
   TP and earn 30, 20 or 10 TP per multiplayer game by rank.
 
+Partially implemented:
+
+- multiplayer 내공 points now change after ranked room results, with lifetime games,
+  wins, losses, win rate and streaks saved globally; the score-transfer curve is a
+  documented reconstruction, not yet verified against the original client;
+- the original 24 grade thresholds, best-combo tracking and grade-locked arenas are
+  not yet recovered, and the original in-game/web Multi Ranking presentation is not
+  yet reproduced.
+
 Not yet:
 
-- ratings and records: 내공, grades, arenas by grade, wins and losses (shown as 0);
 - friends, whispers and blocking, which went through Hangame's separate messenger;
 - visiting a player (게임 신청하기 in a player's menu): it does nothing, and the
   room list's 입장 buttons then stop working until the game is restarted;

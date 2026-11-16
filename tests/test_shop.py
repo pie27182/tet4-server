@@ -69,11 +69,12 @@ class WalletTest(unittest.TestCase):
 
     def test_bulk_rating_boost_cannot_cross_the_mawang_purchase_limit(self):
         store = shop.Shop()
-        wallet = store.wallet(b"alice")
-        wallet.points = 100_000
-        wallet.record = replace(wallet.record, rating=72_000)  # 제왕, below the limit
 
         async def run():
+            await store.earn(b"alice", 0)  # create and cache the in-memory wallet
+            wallet = store.wallet(b"alice")
+            wallet.points = 100_000
+            wallet.record = replace(wallet.record, rating=72_000)  # 제왕, below the limit
             # One +2,000 purchase is allowed from 제왕, even though it raises the
             # player's resulting grade above 마왕.
             self.assertIsNone(await store.buy(b"alice", "PF0HT10018C001", 1))

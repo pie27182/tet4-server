@@ -1,16 +1,5 @@
-"""Accounts, login tickets, Single Mode records and wallets in one SQLite database,
-and the account service that registers players and hands out tickets.
-
-The client never sends a password. A launcher (`tools/client.py play`) logs in
-here first, receives a ticket and starts the client with it in the bootstrap
-(`k3e` the account, `k8e` and `k300e` the ticket); the channel service checks the
-ticket in Cmd_AuthToS. The game protocol's cipher has a fixed key, so the ticket is
-readable on the wire: it expires, and passwords only ever travel to this service,
-which should run behind TLS on a public server.
-
-Account service protocol: one JSON object per line each way.
-    {"op": "register" | "login", "name": "...", "password": "..."}
-    {"ok": true, "ticket": "..."}  or  {"ok": false, "error": "..."}
+"""The database: accounts and login tickets, Single Mode records, wallets, and who is
+logged in where, in one SQLite file that every channel process shares.
 """
 import asyncio
 import hashlib
@@ -23,20 +12,15 @@ import sqlite3
 import string
 import threading
 import time
-from collections import defaultdict, deque
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 
-log = logging.getLogger("tet4.accounts")
+from .config import NAME_PATTERN, PASSWORD_LENGTH, SCRYPT, TICKET_LENGTH, TICKET_LIFETIME
 
-NAME = re.compile(r"[a-z0-9_]{3,12}")   # the client shows member ids as they are
-PASSWORD_LENGTH = (8, 128)
+log = logging.getLogger("tet4.storage")
+
+NAME = re.compile(NAME_PATTERN)
 TICKET_ALPHABET = string.ascii_letters + string.digits
-TICKET_LENGTH = 32                      # the width of k8e and k300e in the bootstrap
-TICKET_LIFETIME = 12 * 3600             # seconds
-SCRYPT = dict(n=2 ** 14, r=8, p=1, dklen=32)
-FAILURES_PER_MINUTE = 10                # per client address, then refused
-MAX_LINE = 4096
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS accounts (
@@ -47,6 +31,7 @@ CREATE TABLE IF NOT EXISTS tickets (
 CREATE TABLE IF NOT EXISTS single_mode (
     name TEXT NOT NULL, mode INTEGER NOT NULL, plays INTEGER NOT NULL,
     top TEXT NOT NULL, PRIMARY KEY (name, mode));
+-- Who is logged in where: a player's channel and login id ("session").
 CREATE TABLE IF NOT EXISTS presence (
     name TEXT PRIMARY KEY, channel INTEGER NOT NULL, session TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS wallets (
@@ -159,16 +144,17 @@ class Database:
         self._run("INSERT OR REPLACE INTO single_mode VALUES (?, ?, ?, ?)",
                   (name, mode, plays, json.dumps(top)))
 
-    # Presence: the channel and session each logged-in player is in, so that a player
-    # logging in again in another channel's process ends the older session there.
+    # Presence: the channel and login each logged-in player is in, so that a player
+    # logging in again in another channel's process ends the older login there.
 
-    def arrive(self, name: str, channel: int, session: str) -> None:
-        self._run("INSERT OR REPLACE INTO presence VALUES (?, ?, ?)", (name, channel, session))
+    def arrive(self, name: str, channel: int, login_id: str) -> None:
+        self._run("INSERT OR REPLACE INTO presence VALUES (?, ?, ?)", (name, channel, login_id))
 
-    def depart(self, name: str, session: str) -> None:
-        self._run("DELETE FROM presence WHERE name = ? AND session = ?", (name, session))
+    def depart(self, name: str, login_id: str) -> None:
+        self._run("DELETE FROM presence WHERE name = ? AND session = ?", (name, login_id))
 
-    def sessions(self, names: list[str]) -> dict[str, str]:
+    def logins(self, names: list[str]) -> dict[str, str]:
+        """The current login id of each of these players, if logged in anywhere."""
         marks = ",".join("?" * len(names))
         return dict(self._run(f"SELECT name, session FROM presence WHERE name IN ({marks})",
                               names))
@@ -185,46 +171,3 @@ class Database:
     def save_wallet(self, name: str, points: int, items: str, title: str, emblem: str) -> None:
         self._run("INSERT OR REPLACE INTO wallets VALUES (?, ?, ?, ?, ?)",
                   (name, points, items, title, emblem))
-
-
-class AccountService:
-    """Serves registration and login requests (see the module docstring)."""
-
-    def __init__(self, db: Database):
-        self.db = db
-        self._failures: dict[str, deque] = defaultdict(deque)
-
-    def _limited(self, host: str) -> bool:
-        recent = self._failures[host]
-        while recent and recent[0] < time.monotonic() - 60:
-            recent.popleft()
-        return len(recent) >= FAILURES_PER_MINUTE
-
-    async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        host = writer.get_extra_info("peername")[0]
-        try:
-            line = await asyncio.wait_for(reader.readline(), timeout=30)
-        except (asyncio.TimeoutError, ValueError, ConnectionError):
-            return
-        reply = await self.answer(host, line[:MAX_LINE])
-        writer.write(json.dumps(reply).encode() + b"\n")
-        await writer.drain()
-
-    async def answer(self, host: str, line: bytes) -> dict:
-        if self._limited(host):
-            return {"ok": False, "error": "too many attempts, wait a minute"}
-        try:
-            request = json.loads(line)
-            op, name, password = request["op"], str(request["name"]), str(request["password"])
-            if op not in ("register", "login"):
-                raise KeyError(op)
-        except (ValueError, KeyError, TypeError):
-            return {"ok": False, "error": "bad request"}
-        try:
-            ticket = await asyncio.to_thread(getattr(self.db, op), name, password)
-        except AccountError as exc:
-            self._failures[host].append(time.monotonic())
-            log.info("%s %s %r refused: %s", host, op, name, exc)
-            return {"ok": False, "error": str(exc)}
-        log.info("%s %s %r", host, op, name)
-        return {"ok": True, "ticket": ticket}

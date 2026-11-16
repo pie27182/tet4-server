@@ -17,39 +17,31 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable
 
-from . import cds, tpack
-from .accounts import AccountService, Database
-from .channel import ChannelConnection
-from .game import GameConnection
-from .lobby import PRESENCE, Lobby
-from .messages import Endpoint
-from .records import REFRESH
-from .xdr import ProtocolError, frame, read_frame
-from .xlbp import Session, Tracer
-
-HOST = "127.0.0.1"
-
-# Single Mode opens the game socket twice: AutoEnter connects, then CreateRoomToC
-# closes that connection and connects again. If the first connection is keyed
-# before the client handles CreateRoomToC, its queued "connected" notification fires
-# on the second one, which then sends EnterRoomToS unencrypted and later fails with
-# MFC's generic error. Answering game shares a little later lets the client drop the
-# first connection unkeyed.
-GAME_HANDSHAKE_DELAY = 0.2
+from .config import (ACCOUNTS_PORT, CDS_PORT, CHANNEL_PORT, CHANNEL_START_TIMEOUT,
+                     GAME_HANDSHAKE_DELAY, GAME_PORT, HOST, MAX_CHANNELS, PRESENCE_CHECK,
+                     RECORDS_REFRESH, TPACK_PORT)
+from .domain.lobby import Lobby
+from .protocol.session import Session, Tracer
+from .protocol.wire import Endpoint, ProtocolError, frame, read_frame
+from .services import directory, tpack
+from .services.accounts import AccountService
+from .services.channel import ChannelConnection
+from .services.game import GameConnection
+from .storage import Database
 
 log = logging.getLogger("tet4.server")
 
 
 @dataclass(frozen=True)
 class Ports:
-    """The client's bootstrap string fixes the TPack and CDS ports; the CDS and room
-    replies announce the channel and game ports to it. Channel n listens on
-    channel + 2(n - 1) and game + 2(n - 1)."""
-    tpack: int = 10454
-    cds: int = 15000
-    channel: int = 15001
-    game: int = 15002
-    accounts: int = 10455    # registration and login, used by the launcher; with a database
+    """The client's bootstrap string names the TPack and CDS ports; the directory and the
+    room replies announce the channel and game ports. Channel n listens on
+    channel + 2(n - 1) and game + 2(n - 1). Port 0 binds any free port."""
+    tpack: int = TPACK_PORT
+    cds: int = CDS_PORT
+    channel: int = CHANNEL_PORT
+    game: int = GAME_PORT
+    accounts: int = ACCOUNTS_PORT
 
     def of_channel(self, number: int) -> "Ports":
         step = 2 * (number - 1)
@@ -93,6 +85,8 @@ class Listeners:
                 log.debug("%s %s: closed by the client", service, session.peer)
             except (ProtocolError, ConnectionError, asyncio.IncompleteReadError) as exc:
                 log.info("%s connection closed: %s", service, str(exc) or type(exc).__name__)
+            except Exception:
+                log.exception("%s connection failed", service)
         return handler
 
     async def close(self) -> None:
@@ -137,9 +131,9 @@ class Channel:
             # Other channels share the database: their games change the ranks, and their
             # logins can replace a session here.
             await asyncio.to_thread(self.db.clear_channel, self.number)
-            self._chores = [asyncio.create_task(_every(REFRESH, self.lobby.records.refresh)),
-                            asyncio.create_task(_every(PRESENCE,
-                                                       self.lobby.end_replaced_sessions))]
+            self._chores = [
+                asyncio.create_task(_every(RECORDS_REFRESH, self.lobby.records.refresh)),
+                asyncio.create_task(_every(PRESENCE_CHECK, self.lobby.end_replaced_logins))]
         return self
 
     @property
@@ -199,7 +193,7 @@ class Services:
                 ports = replace(self.ports, channel=endpoints[0].port)
             listen = self._listeners.listen
             cds_port = await listen(self.ports.cds, _plain("CDS", functools.partial(
-                cds.answer, channels=endpoints, members=self._member_counts)))
+                directory.answer, channels=endpoints, members=self._member_counts)))
             tpack_port = await listen(self.ports.tpack, _plain("TPack", tpack.answer))
             accounts_port = 0
             if self.db:
@@ -231,7 +225,7 @@ class Services:
             self._processes.append(process)
         endpoints: dict[int, Endpoint] = {}
         while len(endpoints) < self._count:
-            number, port = await asyncio.to_thread(ready.get, timeout=30)
+            number, port = await asyncio.to_thread(ready.get, timeout=CHANNEL_START_TIMEOUT)
             if port is None:
                 raise OSError(f"channel {number} could not start")
             endpoints[number] = Endpoint(self.public_host, port)
@@ -353,8 +347,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--host 0.0.0.0 needs --public-host, the address clients connect to")
     if bool(args.tls_cert) != bool(args.tls_key):
         parser.error("--tls-cert and --tls-key go together")
-    if not 1 <= args.channels <= 99:
-        parser.error("--channels: 1 to 99")
+    if not 1 <= args.channels <= MAX_CHANNELS:
+        parser.error(f"--channels: 1 to {MAX_CHANNELS}")
     if args.channels > 1 and not args.db:
         parser.error("--channels above 1 needs --db, which the channels share")
     logging.basicConfig(level=args.log_level,

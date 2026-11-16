@@ -118,29 +118,17 @@ name each channel with its ports. With `--channels N` open the channel ports up 
 
 ## 5. Players
 
-Each player needs their own copy of the client (it is not distributed with
-this repository) and Wine. They point a patched copy at the server once; the
-TPack host has room for 30 characters, so use the domain or the IP:
+Players need their own copy of the original game (it is not distributed with this
+repository). On Windows they run `Tet4Launcher.exe` from the project's releases; on
+Linux, `python3 tools/client.py` with Wine. In the launcher they enter your server's
+address (the game has room for 30 characters: use the domain or the IP), choose
+their game folder, and create an account or log in. The launcher receives a ticket
+from your account service over TLS and starts the game with it; the README has the
+players' instructions. Names are 3 to 12 characters of `a-z`, `0-9` and `_`;
+passwords at least 8 characters.
 
-```bash
-python3 tools/client.py patch --host tetris.example.org
-```
-
-Then, the first time:
-
-```bash
-python3 tools/client.py play --server tetris.example.org --register
-```
-
-and afterwards:
-
-```bash
-python3 tools/client.py play --server tetris.example.org
-```
-
-`play` asks for the name and password, receives a ticket from the account service
-over TLS, and starts the client with it. Names are 3 to 12 characters of `a-z`,
-`0-9` and `_`; passwords at least 8 characters.
+To make the launcher suggest your server, change `DEFAULT_SERVER` in
+`tools/client.py` and publish a release (README, "Releasing").
 
 ## 6. Upkeep
 

@@ -28,7 +28,7 @@ conclusions
 
 `Tet4.exe` is started as `Tet4.exe "<bootstrap>"`. The bootstrap is
 `metp://<cds host>:<cds port>//go/go;` followed by `key:length=value` fields joined
-by `&` (`tools/bootstrap-sample.txt`): `k3e` is the account, `k8e` and `k300e` the
+by `&` (the template is in `tools/client.py`): `k3e` is the account, `k8e` and `k300e` the
 login ticket (32 characters each), `k602e` the TPack port, `k22e` the game (`TET4`).
 It also carries member fields under the keys the member rows use (`k10e` 31,
 `k11e` M, `k13e` 1000000, `k31e` 1360, `k37e` 999999), which look like age, sex,
@@ -48,7 +48,8 @@ The client then talks to four services, in this order:
 The unmodified client connects to three hard-coded TPack hosts
 (`tpacksvr.tp.casual.hangame.com` and its `dev-` and `alpha-` variants, at file
 offsets 0x1F9520, 0x1F9544 and 0x1F956C) and never reaches another TPack server;
-`tools/client.py patch` writes a copy with those names pointing at the server.
+The launcher (`tools/client.py`) makes a copy with those names pointing at the
+server.
 **live** Everything else follows from the bootstrap and the replies, so a server
 can run on any host. A player's own launcher (here `tools/client.py play`) logs in
 to the server's account service first and puts the ticket in the bootstrap

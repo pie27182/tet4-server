@@ -25,6 +25,7 @@ import os
 import shutil
 import socket
 import ssl
+import struct
 import subprocess
 import sys
 import threading
@@ -89,6 +90,129 @@ def save_settings(settings: dict) -> None:
         (data_dir() / "launcher.json").write_text(json.dumps(settings, indent=2), "utf-8")
     except OSError:
         pass                    # only a convenience: the next start asks again
+
+
+# --- keys and speed ----------------------------------------------------------------
+#
+# The game reads .\controls.runtime.bin when it starts: "HTC2", version 1, DAS, ARR,
+# a 256-byte table from DirectInput scan code to action, and SDF (all u32 little-
+# endian but the table). It first sets its own keys, then applies every table entry
+# below 22: an action, or 0 to switch the key off. Without the file the game keeps
+# its own key presets and speeds (DAS 145 ms, ARR 33 ms, SDF 33 ms).
+
+KEYS = {   # key name -> DirectInput scan code
+    **{chr(65 + i): code for i, code in enumerate((
+        0x1E, 0x30, 0x2E, 0x20, 0x12, 0x21, 0x22, 0x23, 0x17, 0x24, 0x25, 0x26, 0x32,
+        0x31, 0x18, 0x19, 0x10, 0x13, 0x1F, 0x14, 0x16, 0x2F, 0x11, 0x2D, 0x15, 0x2C))},
+    **{str(n): 0x01 + n for n in range(1, 10)}, "0": 0x0B,
+    "Left": 0xCB, "Right": 0xCD, "Up": 0xC8, "Down": 0xD0, "Space": 0x39,
+    "LShift": 0x2A, "RShift": 0x36, "LControl": 0x1D, "RControl": 0x9D,
+    "Home": 0xC7, "End": 0xCF, "PageUp": 0xC9, "PageDown": 0xD1, "Insert": 0xD2,
+    "Delete": 0xD3, "CapsLock": 0x3A, "Backspace": 0x0E, "Grave": 0x29, "Minus": 0x0C,
+    "Equals": 0x0D, "LeftBracket": 0x1A, "RightBracket": 0x1B, "Backslash": 0x2B,
+    "Semicolon": 0x27, "Quote": 0x28, "Comma": 0x33, "Period": 0x34, "Slash": 0x35,
+    **{f"NumPad{n}": code for n, code in enumerate(
+        (0x52, 0x4F, 0x50, 0x51, 0x4B, 0x4C, 0x4D, 0x47, 0x48, 0x49))},
+    "Decimal": 0x53, "Add": 0x4E, "Subtract": 0x4A, "Multiply": 0x37, "Divide": 0xB5,
+}
+# action -> (label, the game's action number, the game's own keys for it)
+ACTIONS = {
+    "left": ("Move left", 1, ("Left",)),
+    "right": ("Move right", 2, ("Right",)),
+    "soft_drop": ("Soft drop", 4, ("Down",)),
+    "hard_drop": ("Hard drop", 5, ("Space",)),
+    "rotate_cw": ("Rotate clockwise", 7, ("Up", "X", "End", "PageUp")),
+    "rotate_ccw": ("Rotate counterclockwise", 8,
+                   ("Z", "LControl", "RControl", "Home", "PageDown")),
+    "hold": ("Hold", 6, ("LShift", "RShift", "C", "Insert")),
+    **{f"item_target_{n}": (f"Item target {n}", 8 + n, (str(n), "QWEASD"[n - 1]))
+       for n in range(1, 7)},
+    "use_item": ("Use item", 15, ("Grave", "V")),
+    "discard_item": ("Discard item", 16, ("T", "R")),
+}
+REQUIRED = ("left", "right", "soft_drop", "hard_drop", "rotate_cw", "rotate_ccw", "hold")
+ORIGINAL_SPEED = {"das_ms": 145, "arr_ms": 33, "soft_drop_arr_ms": 33}
+SPEED_LIMITS = {"das_ms": 1000, "arr_ms": 500, "soft_drop_arr_ms": 500}
+SPEED_NAMES = {"das_ms": "DAS", "arr_ms": "ARR", "soft_drop_arr_ms": "SDF"}
+DEFAULT_CONTROLS = {
+    "enabled": True, **ORIGINAL_SPEED,
+    "keys": {"left": ["Left"], "right": ["Right"], "soft_drop": ["Down"],
+             "hard_drop": ["Space"], "rotate_cw": ["Up", "X"],
+             "rotate_ccw": ["Z", "LControl", "RControl"], "hold": ["LShift", "RShift", "C"]},
+}
+
+
+def check_controls(controls: dict) -> dict:
+    """Controls as the launcher keeps them (the format of h-tetra's controls.json),
+    checked; raises LaunchError saying what is wrong."""
+    try:
+        out = {"enabled": bool(controls.get("enabled", True))}
+        for field, limit in SPEED_LIMITS.items():
+            value = str(controls.get(field, ORIGINAL_SPEED[field])).strip()
+            if not value.isdigit() or int(value) > limit:
+                raise LaunchError(f"{SPEED_NAMES[field]} must be a whole number from 0 to "
+                                  f"{limit} (ms).")
+            out[field] = int(value)
+        keys, seen = {}, set()
+        for action, names in dict(controls.get("keys") or {}).items():
+            if action not in ACTIONS:
+                raise LaunchError(f"Unknown action: {action}")
+            for name in names:
+                if name not in KEYS:
+                    raise LaunchError(f"Unsupported key: {name}")
+                if name in seen:
+                    raise LaunchError(f"{name} is set for two actions.")
+                seen.add(name)
+            if names:
+                keys[action] = list(names)
+    except (TypeError, ValueError, AttributeError):
+        raise LaunchError("The key settings are not valid.") from None
+    missing = [ACTIONS[a][0] for a in REQUIRED if a not in keys]
+    if missing:
+        raise LaunchError("Set a key for: " + ", ".join(missing) + ".")
+    out["keys"] = keys
+    return out
+
+
+def load_controls(game: Path | None = None) -> dict:
+    """The saved controls; at first those of the game folder's own controls.json, if it
+    has a valid one, else the defaults."""
+    for path in (data_dir() / "controls.json", game and game / "controls.json"):
+        try:
+            return check_controls(json.loads(path.read_text(encoding="utf-8")))
+        except (OSError, ValueError, TypeError, AttributeError, LaunchError):
+            continue
+    return json.loads(json.dumps(DEFAULT_CONTROLS))
+
+
+def save_controls(controls: dict) -> None:
+    data_dir().mkdir(parents=True, exist_ok=True)
+    (data_dir() / "controls.json").write_text(
+        json.dumps({"version": 2, **check_controls(controls)}, indent=2), "utf-8")
+
+
+def controls_runtime(controls: dict) -> bytes:
+    """controls.runtime.bin for these controls. An action given keys loses the game's
+    own keys for it; an item action left empty keeps them (unless a key is taken)."""
+    table = bytearray([0xFF] * 256)
+    for action, names in controls["keys"].items():
+        for name in ACTIONS[action][2]:
+            table[KEYS[name]] = 0
+    for action, names in controls["keys"].items():
+        for name in names:
+            table[KEYS[name]] = ACTIONS[action][1]
+    return (struct.pack("<4I", 0x32435448, 1, controls["das_ms"], controls["arr_ms"])
+            + bytes(table) + struct.pack("<I", controls["soft_drop_arr_ms"]))
+
+
+def apply_controls(copy: Path, game: Path) -> None:
+    """Write (or, when switched off, remove) the controls file in a game copy."""
+    controls = load_controls(game)
+    runtime = copy / "controls.runtime.bin"
+    if controls["enabled"]:
+        runtime.write_bytes(controls_runtime(controls))
+    elif runtime.exists():
+        runtime.unlink()
 
 
 # --- the game ----------------------------------------------------------------------
@@ -238,6 +362,7 @@ def play(game: Path, server: str, op: str, name: str, password: str, secure: boo
     if problems:
         raise LaunchError("\n".join(problems[:8]))
     copy = game_copy(game, server, report)
+    apply_controls(copy, game)
     report("Logging in..." if op == "login" else "Creating the account...")
     ticket = request_ticket(server, op, name.strip(), password, secure)
     report("Starting the game...")
@@ -245,6 +370,162 @@ def play(game: Path, server: str, op: str, name: str, password: str, secure: boo
 
 
 # --- the launcher window -----------------------------------------------------------
+
+# Tk's names for keys, where they differ from the game's.
+TK_KEYS = {
+    "space": "Space", "Shift_L": "LShift", "Shift_R": "RShift", "Control_L": "LControl",
+    "Control_R": "RControl", "Prior": "PageUp", "Next": "PageDown", "Caps_Lock": "CapsLock",
+    "BackSpace": "Backspace", "grave": "Grave", "minus": "Minus", "equal": "Equals",
+    "bracketleft": "LeftBracket", "bracketright": "RightBracket", "backslash": "Backslash",
+    "semicolon": "Semicolon", "apostrophe": "Quote", "comma": "Comma", "period": "Period",
+    "slash": "Slash", "KP_Decimal": "Decimal", "KP_Delete": "Decimal", "KP_Add": "Add",
+    "KP_Subtract": "Subtract", "KP_Multiply": "Multiply", "KP_Divide": "Divide",
+    **{f"KP_{n}": f"NumPad{n}" for n in range(10)},
+    **dict(zip(("KP_Insert", "KP_End", "KP_Down", "KP_Next", "KP_Left", "KP_Begin",
+                "KP_Right", "KP_Home", "KP_Up", "KP_Prior"),
+               (f"NumPad{n}" for n in range(10)))),
+}
+# Windows' virtual-key codes of the number pad, which Tk names like the other keys.
+WINDOWS_NUMPAD = {**{0x60 + n: f"NumPad{n}" for n in range(10)}, 0x6A: "Multiply",
+                  0x6B: "Add", 0x6D: "Subtract", 0x6E: "Decimal", 0x6F: "Divide"}
+
+
+def key_name(keysym: str, keycode: int) -> str | None:
+    """The game's name for a key Tk reports, or None for a key the game cannot use."""
+    if os.name == "nt" and keycode in WINDOWS_NUMPAD:
+        return WINDOWS_NUMPAD[keycode]
+    name = TK_KEYS.get(keysym, keysym.upper() if len(keysym) == 1 else keysym)
+    return name if name in KEYS else None
+
+
+def controls_window(parent, game: str) -> None:
+    """The keys and speed settings, as h-tetra's launcher has them."""
+    import tkinter as tk
+    from tkinter import messagebox, ttk
+
+    controls = load_controls(Path(game) if game else None)
+    win = tk.Toplevel(parent)
+    win.title("Keys and speed")
+    win.resizable(False, False)
+    win.transient(parent)
+    frame = ttk.Frame(win, padding=14)
+    frame.grid()
+    ttk.Label(frame, text="Click a box and press a key. Right-click a box to clear it."
+              ).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 8))
+    for column, title in enumerate(("Action", "Key", "Second key", "Third key")):
+        ttk.Label(frame, text=title).grid(row=1, column=column, sticky="w")
+
+    cells: dict[tuple[str, int], tk.StringVar] = {}
+    buttons: dict[tuple[str, int], ttk.Button] = {}
+    waiting: list = [None]           # the box waiting for a key
+
+    def show(keys: dict) -> None:
+        for (action, column), var in cells.items():
+            names = keys.get(action, [])
+            var.set(names[column] if column < len(names) else "—")
+
+    def current() -> dict:
+        keys = {}
+        for (action, column), var in sorted(cells.items(), key=lambda kv: kv[0][1]):
+            if var.get() in KEYS:
+                keys.setdefault(action, []).append(var.get())
+        return keys
+
+    def pick(cell) -> None:
+        if waiting[0]:
+            show(current())
+        waiting[0] = cell
+        cells[cell].set("press a key")
+        win.focus_set()            # keys go to the window, not to the box's button
+
+    def clear(cell) -> None:
+        cells[cell].set("—")
+        waiting[0] = None
+        show(current())
+
+    def pressed(event) -> str:
+        cell = waiting[0]
+        if cell is None:
+            return ""
+        name = key_name(event.keysym, event.keycode)
+        if name is None:
+            return "break"               # not a key the game can use: keep waiting
+        for other, var in cells.items():
+            if var.get() == name:        # one key, one action
+                var.set("—")
+        cells[cell].set(name)
+        waiting[0] = None
+        show(current())
+        return "break"
+
+    for row, (action, (label, _, _)) in enumerate(ACTIONS.items(), 2):
+        ttk.Label(frame, text=label).grid(row=row, column=0, sticky="w", padx=(0, 10))
+        for column in range(3):
+            cell = (action, column)
+            cells[cell] = tk.StringVar()
+            button = ttk.Button(frame, textvariable=cells[cell], width=14, takefocus=False,
+                                command=lambda c=cell: pick(c))
+            button.grid(row=row, column=column + 1, padx=2, pady=1)
+            button.bind("<Button-3>", lambda event, c=cell: clear(c))
+            buttons[cell] = button
+    show(controls["keys"])
+    win.bind("<KeyPress>", pressed)
+
+    row = len(ACTIONS) + 2
+    ttk.Label(frame, text="Item rows left empty keep the game's own item keys (1-6 and "
+              "Q W E A S D, ` or V to use, T or R to discard), except keys used above.",
+              wraplength=520, justify="left").grid(row=row, column=0, columnspan=4,
+                                                   sticky="w", pady=(8, 6))
+    speeds = ttk.Frame(frame)
+    speeds.grid(row=row + 1, column=0, columnspan=4, sticky="w")
+    speed = {}
+    for column, (field, label) in enumerate((("das_ms", "DAS (ms)"), ("arr_ms", "ARR (ms)"),
+                                            ("soft_drop_arr_ms", "SDF (ms)"))):
+        ttk.Label(speeds, text=label).grid(row=0, column=2 * column, padx=(0 if column == 0
+                                                                          else 14, 4))
+        speed[field] = tk.StringVar(value=str(controls[field]))
+        ttk.Spinbox(speeds, from_=0, to=SPEED_LIMITS[field], width=6,
+                    textvariable=speed[field]).grid(row=0, column=2 * column + 1)
+    ttk.Label(frame, text="DAS: the wait before a held key repeats. ARR: the time between "
+              "repeated moves (0: straight to the wall).\nSDF: the time between soft drop "
+              "steps (0: straight down; the lock delay stays the same).",
+              justify="left").grid(row=row + 2, column=0, columnspan=4, sticky="w", pady=6)
+    enabled = tk.BooleanVar(value=controls["enabled"])
+    ttk.Checkbutton(frame, text="Use these keys and speeds (off: the game's own presets)",
+                    variable=enabled).grid(row=row + 3, column=0, columnspan=4, sticky="w")
+    ttk.Label(frame, text="Changes apply from the next game start.", foreground="#b03030"
+              ).grid(row=row + 4, column=0, columnspan=4, sticky="w", pady=(4, 8))
+
+    def reset() -> None:
+        show(DEFAULT_CONTROLS["keys"])
+        original_speed()
+        enabled.set(True)
+
+    def original_speed() -> None:
+        for field, value in ORIGINAL_SPEED.items():
+            speed[field].set(str(value))
+
+    def save() -> None:
+        try:
+            save_controls({"enabled": enabled.get(), "keys": current(),
+                           **{field: var.get().strip() for field, var in speed.items()}})
+        except LaunchError as exc:
+            messagebox.showerror("Keys and speed", str(exc), parent=win)
+            return
+        except OSError as exc:
+            messagebox.showerror("Keys and speed", f"Could not save: {exc}", parent=win)
+            return
+        win.destroy()
+
+    actions = ttk.Frame(frame)
+    actions.grid(row=row + 5, column=0, columnspan=4)
+    for column, (text, command) in enumerate((
+            ("Reset to defaults", reset), ("Original speed", original_speed),
+            ("Save", save), ("Cancel", win.destroy))):
+        ttk.Button(actions, text=text, command=command).grid(row=0, column=column, padx=4)
+    win.grab_set()
+    win.focus_set()
+
 
 def window(secure: bool) -> int:
     import tkinter as tk
@@ -326,6 +607,9 @@ def window(secure: bool) -> int:
         row=0, column=0, padx=4)
     ttk.Button(buttons, text="Create account", command=lambda: go("register")).grid(
         row=0, column=1, padx=4)
+    ttk.Button(buttons, text="Keys and speed...",
+               command=lambda: controls_window(root, fields["game"].get().strip())).grid(
+        row=0, column=2, padx=4)
     root.bind("<Return>", lambda event: go("login"))
     (password_entry if fields["name"].get() else name_entry).focus()
     root.mainloop()

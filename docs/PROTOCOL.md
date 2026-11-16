@@ -55,6 +55,19 @@ can run on any host. A player's own launcher (here `tools/client.py play`) logs 
 to the server's account service first and puts the ticket in the bootstrap
 (section 12).
 
+**Keys and speed.** This `Tet4.exe` (the fan-patched 1.3.4) reads
+`.\controls.runtime.bin` from its folder when it starts (Tet4.exe 0x006591E0): 276
+bytes, `"HTC2"`, u32 version 1, u32 DAS (at most 1000 ms), u32 ARR (at most 500),
+256 bytes indexed by DirectInput scan code, and u32 SDF (at most 500), the numbers
+little-endian. The game first sets its own keys (0x004D0550), then for each table
+byte below 22 maps that key to the action: 0 none, 1 left, 2 right, 4 soft drop, 5
+hard drop, 6 hold, 7 rotate clockwise, 8 counterclockwise, 9-14 item targets 1-6, 15
+use item, 16 discard item, 17 item order (Tab), 21 help (F1). ARR 0 moves straight
+to the wall; SDF 0 drops straight down. Without the file it keeps its own key
+presets, DAS 145 ms and ARR and SDF 33 ms. **code**; **live**: a hard drop moved to
+H took effect and Space no longer dropped. The launcher writes it into its copy of
+the game (`tools/client.py`, `controls_runtime`).
+
 Every channel has its own channel and game sockets; this server gives channel n
 ports 15001 + 2(n − 1) and 15002 + 2(n − 1) (`tet4server/config.py`).
 

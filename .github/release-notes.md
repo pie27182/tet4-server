@@ -9,5 +9,8 @@
 3. Type an account name and a password, then click **Create account** the first
    time, or **Log in and play** after that.
 
+**Keys and speed...** in the launcher sets your keys and DAS, ARR and SDF, as in
+h-tetra's launcher.
+
 The first start on a server takes a few seconds longer while the launcher prepares
 the game for it. More help: the project's README.

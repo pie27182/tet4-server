@@ -133,6 +133,7 @@ class Channel:
             await asyncio.to_thread(self.db.clear_channel, self.number)
             self._chores = [
                 asyncio.create_task(_every(RECORDS_REFRESH, self.lobby.records.refresh)),
+                asyncio.create_task(_every(RECORDS_REFRESH, self.lobby.ratings.refresh)),
                 asyncio.create_task(_every(PRESENCE_CHECK, self.lobby.end_replaced_logins))]
         return self
 

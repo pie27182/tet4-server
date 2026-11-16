@@ -40,6 +40,7 @@ players, and the domain builds no message, so either can change without the othe
 | `services/channel.py` | The channel socket: login, lobby, rooms, invitations, profiles, shop |
 | `services/game.py` | The game socket: entering and leaving a room, its settings, games, relays |
 | `services/views.py` | What clients are shown: member rows, profiles, room info, the shop, the inventory |
+| `services/rankings.py` | Public, read-only Single and Multiplayer ranking pages and JSON endpoints |
 
 ## Processes and concurrency
 
@@ -153,6 +154,7 @@ capture, the client's code, or a live run.
 | `test_server` | A scripted client through login and Single Mode over TCP; records and ranks; channel processes |
 | `test_multiplayer` | Two scripted clients: presence, chat, rooms, a game to its end, multiplayer rating, invitations, banishing |
 | `test_rating` | Multiplayer rating transfers, opponent strength, global order and SQLite persistence |
+| `test_rankings` | Public HTML/JSON leaderboards for Single Mode and multiplayer records |
 | `test_shop` | The catalog, wallets, buying, the inventory, items in a game, profiles |
 | `test_accounts` | The database, the account service, tickets, logins across channels |
 | `test_reports` | Players' reports: logged, kept in the database, listed by `tools/reports.py` |

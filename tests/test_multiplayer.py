@@ -119,6 +119,17 @@ class MultiplayerTest(Lobby):
             change = await player.until(player.channel, "Shop_ChangePointInfoToC")
             self.assertEqual(change["amount"] - change["before"], earned)
 
+        # Multiplayer rating is global, opponent-relative, and shown in the profile.
+        self.assertEqual(self.services.lobby.ratings.standing(b"bob").points, 1616)
+        self.assertEqual(self.services.lobby.ratings.standing(b"alice").points, 1584)
+        await bob.channel.send(pack("Channel_OrderTypeGetDisplayMemberInfoTetrisToS",
+                                    member=b"bob", kind=4))
+        profile = (await bob.until(
+            bob.channel, "Channel_OrderTypeGetDisplayMemberInfoTetrisToC"))["profile"]
+        self.assertEqual(profile["school"]["f2"], 1616)
+        self.assertEqual((profile["f2"], profile["f3"], profile["f4"]),
+                         (1, 0, b"100.00"))
+
         # bob leaves: both hear it; alice stays as the host.
         await bob.game.send(pack("Room_ExitRoomToS"))
         for player in (bob, alice):

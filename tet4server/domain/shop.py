@@ -261,8 +261,17 @@ class Shop:
             if wallet.points < product.price * quantity:
                 return "TP가 부족합니다."
             for code in product.items:
-                if code in GRADE_LIMITS and wallet.record.grade > GRADE_LIMITS[code][0]:
-                    return GRADE_LIMITS[code][1]
+                if code not in GRADE_LIMITS:
+                    continue
+                max_grade, message = GRADE_LIMITS[code]
+                rating = wallet.record.rating
+                # The rating boosts are consumables. Check each requested unit in
+                # order, so a bulk purchase cannot jump past its grade restriction.
+                increase = {"T10017": 1000, "T10018": 2000}.get(code, 0)
+                for _ in range(quantity if increase else 1):
+                    if grade(rating) > max_grade:
+                        return message
+                    rating += increase
             wallet.points -= product.price * quantity
             wallet.add(product, quantity, time.time())
             return None

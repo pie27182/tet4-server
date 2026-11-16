@@ -65,9 +65,11 @@ The repository's client analysis has established:
 - `_MemberInfo` carries `k31e`; the launcher bootstrap currently seeds that field
   with 1360. This makes it a candidate for the rating, but its UI semantics still
   need confirmation.
-- The profile contains additional unnamed fields that may carry wins/losses,
-  percentage, combo, streak and best-grade data. Their exact meaning and offsets
-  have not been confirmed.
+- The reverse-engineering notes map the six values after `school` in
+  `_TetrisMemberInfo` to wins, losses, win-rate text, best combo, streak and best
+  grade, in that order. The server now supplies wins, losses, win rate and the
+  current winning streak; best combo and best grade remain zero because they are
+  not yet accumulated. The rate's exact display formatting still needs a live check.
 - NHN publicly documented Single Ranking and Multi Ranking, but the current
   Tet4 network catalog has no verified request/response for fetching those
   global lists into the original game UI.

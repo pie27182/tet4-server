@@ -64,6 +64,21 @@ class MultiplayerTest(Lobby):
         other = await alice.until(alice.game, "Room_AddMemberToC")
         self.assertEqual(other["member"], b"bob")
 
+        # The host's map: its preview (name and cells) reaches the others as it came, and
+        # names the place of the choice after it. A map whose name is not known is not
+        # sent: an empty name would clear the board the preview showed.
+        preview = pack("Room_OrderTypeMapSetTetris", name="패턴B", cells=[0x3C] * 200,
+                       unknown1=1, unknown2=1)
+        await alice.game.send(preview)
+        await alice.game.send(pack("Room_OrderTypeMapSetTetrisToS", place=2, unknown1=1))
+        await alice.game.send(pack("Room_OrderTypeMapSetTetrisToS", place=3))
+        await alice.game.send(pack("Room_OrderTypeMapSetTetrisToS", place=2))
+        self.assertEqual(await bob.message(bob.game, "Room_OrderTypeMapSetTetris"), preview)
+        for unknown1 in (1, 0):
+            choice = await bob.until(bob.game, "Room_OrderTypeMapSetTetrisToC")
+            self.assertEqual((choice["name"].decode("cp949"), choice["unknown1"]),
+                             ("패턴B", unknown1))
+
         # Only the host starts; everyone, the host included, gets LetsGameStartOk.
         start = pack("Room_OrderTypeLetsGameStartTetris", map="거북이", place=4,
                      players=[b"alice", b"bob", b"", b"", b"", b""], flags=[0] * 6)

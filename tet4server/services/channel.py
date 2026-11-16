@@ -144,6 +144,13 @@ class ChannelConnection(Connection):
             chat = dict(request["chat"], member=self.player.member_id)
             self.lobby.post(pack("Chatting_HanChatStringToC", chat=chat))
 
+    @on("Channel_ComplaintSvcKorToS")
+    async def report(self, request: dict) -> None:
+        """The lobby's report button (신고): kept for the operators. The client confirms
+        it to the player by itself."""
+        if self.player:
+            self.lobby.report(self.player.member_id, request)
+
     # --- creating and joining rooms ------------------------------------------------------
 
     @on("Room_OrderTypeAutoEnterSingleModeRoomTetrisToS")

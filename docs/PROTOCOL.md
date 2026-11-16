@@ -368,6 +368,22 @@ Every change to a room (created, a member in or out, its settings, a game starte
 or ended) goes to everyone in the channel as `Channel_RoomInfoToC`; a closed room
 as its slot, empty again (`room` and state 0). **live**
 
+### 8.4 Reports
+
+The report button (신고) of the lobby and of a room opens a form once someone has
+chatted: the reporter picks a player among the chat's speakers and a reason. It
+sends **Channel_ComplaintSvcKorToS** on the channel socket, or
+**Room_ComplaintSvcKorToS** on the game socket, both at layer 1: `game_id`,
+`reporter`, a number (0), `reason` (the reason's label, CP949, e.g. `욕설`), `chat`
+(the lines the reporter's client shows, each `_ChatInfo`: `member`, `time` as
+`2026/11/16 17:54:27`, `text`, a number) and `reported`. The client then tells the
+player the report was received, without waiting for a reply. **live**
+
+The server keeps a report, with the connection's own member as the reporter, the
+last 50 chat lines and at most one report per player every 10 seconds
+(`config.REPORT_*`): logged, and with a database stored in its `reports` table;
+`tools/reports.py` lists them for the operators.
+
 ## 9. Rooms
 
 ### 9.1 Room settings
@@ -384,7 +400,13 @@ The room requests (`Channel_CreateRoomToS`, `Room_OrderTypeAutoEnterSingleModeRo
   of LetsGameStart) — and `S` at index 4 for a Single Mode room (`N000S`). **code**
   for the letters (the map loader's switch, Tet4.exe 0x004AB626). The map is the
   second character; the client's scenes switch on the first (DoExActive 0x004FDBC0;
-  with options empty the room scene stays null, fault at 0x004FE2D5);
+  with options empty the room scene stays null, fault at 0x004FE2D5). `F` at index 6
+  (`S000MNF`) marks a friends room (친구끼리방, the create dialog's check box, which
+  excludes a password): the client leaves it out of quick join (0x004F9632), refuses
+  to enter it from the room list or by visiting a member ("친구끼리 방이라 방에 입장할
+  수 없습니다"), and its 초대하기 button copies a tetris.hangame.com invitation link,
+  a page that no longer exists. Invitations (section 9.7) still bring players in;
+  **live**
 - `limit` (k66e): players asked for (the create dialog offers 2 to `room_size`);
 - `k127e`, `k200e` (`G` in captures; the create path checks an `S` there against
   an item, HgModel3 0x6090C638) and `k69e`: sent back as they came;
@@ -465,12 +487,18 @@ seats players too but sets neither, so the server never sends it. **live**
 - **Room_AlterRoomToS** (`room`, `title`, `password`, `options`): the host changes
   the room; the members get **Room_GetRoomInfoToC** and the lobby RoomInfoToC.
   Single Mode sends an empty one before every game, which is ignored. **live**
-- **Room_OrderTypeMapSetTetrisToS** (layer 3, from the map packet 0x00425560):
-  `seat`, `place` (the map's place in the client's list), `random` (1-3: a random
-  map of that kind) and two bytes. The others get **MapSetTetrisToC** (converter
-  0x00445E90, applied by 0x00576790), which carries the map by **name** (looked up
-  in the client's encrypted map files): the server learns names from game starts
-  (LetsGameStart carries the host's map name and place). **live**
+- A map choice of the host comes as two messages. First
+  **Room_OrderTypeMapSetTetris** (layer 3, converter 0x00458880): `seat`, the map's
+  `name`, its 200 `cells`, `random` and two bytes; the server passes it to the others,
+  whose waiting boards show the map. Then **Room_OrderTypeMapSetTetrisToS** (from the
+  map packet 0x00425560): `seat`, `place` (the map's place in the client's list),
+  `random` (1-3: a random map of that kind) and two bytes; the host also sends this
+  one alone when a member joins. The others get **MapSetTetrisToC** (converter
+  0x00445E90, applied by 0x00576790), which names the map; the client loads it from
+  its encrypted map files, and clears the board when it cannot (an empty name). The
+  server learns a place's name from the preview before it and from game starts
+  (LetsGameStart carries the host's map name and place), and does not send a choice
+  whose name it does not know, which would clear the preview. **live**
 - **Room_ReqBanishMemberToS** (`member`) from the host sends a member away (강퇴):
   the member gets **Room_ReqBanishMemberToC** (converter 0x6013E0B0), leaves as with
   the exit button, and cannot rejoin (GameJoinRoomToC `failcode` 1). **code**,
@@ -687,23 +715,52 @@ MESSAGES.md has every layout.
   socket). A watcher would enter the game socket and receive the room's in-game
   messages without a seat; `Room_ViewerToPlayerToS`/`ToC` move a watcher into a free
   seat. Rooms already list `watchers`, and LetsGameStart leaves members in watch
-  mode out of a game. **code**
+  mode out of a game. **code** The room's own 관전 모드 button lights up and sends
+  only `Room_OrderTypeSetSpeedLevelTetris` (seat, 1, 1, 8), which the server passes
+  on; the host's next LetsGameStart still seats that player. **live**
 - **Nicknames.** `Channel_CheckUserIdToS`, `CheckCharacterIdExistToS`,
   `MakeUserIdToS` (choosing one) and `Channel_OrderTypeChangeUserIdTetrisToS` (the
   nickname change item T10020) with their replies. Here an account's name is its
   nickname. **code**
-- **Friends.** `Channel_OrderTypeFriendMemberInfoTetrisToS` (`str · str`) →
-  `...ToC`, a friend's profile; the lobby's 친구 tab. **code**
+- **Friends, whispers and blocking.** The 친구 tab, 친구추가 (add a friend), 귓말
+  (`/w name`) and 귓말거부 (blocking) go through Hangame's messenger, CasualComm.dll
+  (CasualNet: it asks a GMS server for a CMS address, then logs in to the CMS), a
+  protocol of its own that neither this server nor its documents cover. Without it
+  the 친구 tab shows "채팅 서버 점검" (chat server maintenance), a friend is never
+  added, and a whisper is shown only to its sender. In the game protocol,
+  `Channel_OrderTypeFriendMemberInfoTetrisToS` (`str · str`) → `...ToC` is a
+  friend's profile. **live**
+- **Visiting a player** (게임 신청하기 in a player's menu or profile). Msg_VisitFriend
+  (HgModel3 0x6090F270) looks the target's `k140e` up in the arena list and, without
+  a `k137e` (the member list's path sends none), takes a path that sends nothing
+  and leaves the lobby waiting: until the client restarts, the room list's 입장
+  buttons do nothing (quick join still works). **live**
 - **Gifts and coupons.** `Shop_ReqBuyProductToS` already carries `gift`, `receiver`
   and `message`; `Shop_RequestUseGiftToS` (`u64 · str · str`) →
   `ResponseUseGiftToC` takes one from the gift box (the inventory's `gifts`);
   `Shop_GetCouponListToC` lists coupons. **code**
-- **The Happy Cube** (해피큐브). `Shop_RequestUseHappyCubeHammerToS` (no fields) →
-  `ResponseUseHappyCubeHammerToC` (`str · str · str · u32`); the hammer is item
-  T10015. **code**
-- **Club payments.** `Shop_RequestChangeLiqidMethodToS` and
-  `RequestReserveSurrenderToS` (cancelling) with their replies, for clubs paid
-  monthly; here TP pays a club once. **code**
+- **The Happy Cube** (해피큐브). In some games (painting, survival) a cube falls
+  among the pieces; the client counts the cubes a player lands and reports them as
+  `Room_GaeaGameValueSvcKorToS` (`[{_GaeaGameValue}]`: `HappyCubeEvent`, the count,
+  ""), which the server ignores. **live** The counts the lobby shows come from
+  Hangame's promotion messages (`GaeaPromotionDataSvcKorToC`); opening a cube is
+  `Shop_RequestUseHappyCubeHammerToS` (no fields) → `ResponseUseHappyCubeHammerToC`
+  (`str · str · str · u32`), with a hammer (item T10015, which can be bought). **code**
+- **Real money and club payments.** The shop's 한코인 충전 (Han coin top-up) opens
+  `https://bill.hangame.com/pay/charge.nhn?CHNL=HG` in the client, and the club tab,
+  banners and coupons point at tetris.hangame.com pages: Hangame's billing site,
+  gone. Here TP pays for everything, clubs included. **live**
+  `Shop_RequestChangeLiqidMethodToS` and `RequestReserveSurrenderToS` (cancelling)
+  with their replies were for clubs paid monthly. **code**
+- **Arenas** (경기장). 경기장 변경 lists the arenas, and choosing one makes the client
+  close and relaunch through the Hangame web site (Msg_Destroy → reloadHanGame →
+  ReloadLogonHangameWeb): here it simply closes. Arenas by grade (초보, 고수, ...)
+  need the ratings below. **live**
+- **Ratings and records** (내공, 등급, 전적). The profile, the member list and the exit
+  dialog show 내공 (rating points), a grade from it (24 grades from 초보 to 절대신,
+  table at Tet4.exe 0x005DC870), wins, losses, win rate, best combo and streak, the
+  best grade and today's TP; the server sends them all as 0: games are ranked and
+  paid in TP, but no record is kept of them. **live**
 - **Missions and levels.** `_TetrisMissionMastInfo`/`_TetrisMissionUserInfo` in the
   profiles (sent empty), `Channel_OrderTypeMissionCompleteTetrisToC`,
   `Room_OrderTypeMissionCompleteTetrisToC`, `Room_OrderTypeSetEmblemTetrisToC` (an
@@ -720,10 +777,10 @@ MESSAGES.md has every layout.
   a member's row), today's match counts (`TodayMatchInfo`), attack speeds
   (`Room_OrderTypeAvgAttackSpeedTetrisToS`, `TotalAvgAttackSpeedTetrisToC`), the
   mini game's report. **code**
-- **Hangame's other services.** The SvcKor messages (avatars, complaints, client
-  options, memberships, the Gaea promotions at layer 1) and HgCom3's generic room
-  features (money, power and recovery items, zero-sum checks) are not part of this
-  game. **code**
+- **Hangame's other services.** The SvcKor messages (avatars, the report terms,
+  client options, memberships, the Gaea promotions at layer 1) and HgCom3's generic
+  room features (money, power and recovery items, zero-sum checks) are not part of
+  this game. **code**
 
 ## 14. What the client sends
 

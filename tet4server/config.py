@@ -54,6 +54,12 @@ GAME_POINTS = (30, 20, 10)  # TP for a multiplayer game by rank; later ranks get
 MIN_GAME_SECONDS = 30       # shorter games earn nothing, so quick games are no TP farm
 MAX_QUANTITY = 99           # products bought at once
 
+# --- Reports (신고) -------------------------------------------------------------------
+
+REPORT_INTERVAL = 10.0      # seconds between two reports kept from the same player
+REPORT_CHAT_LINES = 50      # the last chat lines of a report that are kept
+REPORT_TEXT = 200           # characters kept of a name, a reason or a chat line
+
 # --- Accounts ------------------------------------------------------------------------
 
 NAME_PATTERN = r"[a-z0-9_]{3,12}"   # account names; the client shows them as they are

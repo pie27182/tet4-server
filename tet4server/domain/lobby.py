@@ -5,12 +5,14 @@ locks. Messages to other players go out with Session.post, which never waits.
 """
 import asyncio
 import itertools
+import json
 import logging
 import secrets
+import time
 from dataclasses import dataclass, field
 from typing import Coroutine
 
-from ..config import ROOM_SLOTS
+from ..config import REPORT_CHAT_LINES, REPORT_INTERVAL, REPORT_TEXT, ROOM_SLOTS
 from ..storage import Database
 from .records import Records
 from .room import Room, Settings
@@ -46,6 +48,7 @@ class Lobby:
         # Map names by mode letter and place in the client's map list, learnt from game
         # starts: the host's map choice carries only the place.
         self.map_names: dict[tuple[bytes, int], bytes] = {}
+        self._reported: dict[bytes, float] = {}     # when each player last reported
         self._tasks: set[asyncio.Task] = set()
 
     @property
@@ -112,6 +115,26 @@ class Lobby:
         for player in list(self.players.values()):
             if player is not exclude:
                 player.session.post(*messages)
+
+    def report(self, reporter: bytes, complaint: dict) -> None:
+        """A player reports another (신고, from the lobby or a room) with the chat lines
+        its client saw: logged, and kept in the database for the operators
+        (tools/reports.py lists them). One report per player every REPORT_INTERVAL."""
+        now = time.time()
+        if now - self._reported.get(reporter, 0.0) < REPORT_INTERVAL:
+            return
+        self._reported[reporter] = now
+
+        def text(value: bytes) -> str:
+            return value.decode("cp949", "replace")[:REPORT_TEXT]
+
+        chat = [[text(line["time"]), text(line["member"]), text(line["text"])]
+                for line in complaint["chat"][-REPORT_CHAT_LINES:]]
+        report = (now, self.number, text(reporter), text(complaint["reported"]),
+                  text(complaint["reason"]), json.dumps(chat, ensure_ascii=False))
+        log.info("%s reports %s: %s (%d chat lines)", *report[2:5], len(chat))
+        if self.db:
+            self.db.submit(self.db.add_report, report)
 
     # --- rooms ---------------------------------------------------------------------------
 

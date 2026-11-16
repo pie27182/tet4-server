@@ -144,6 +144,13 @@ Back up the database while the server runs:
 sqlite3 /var/lib/tet4/tet4.db ".backup /var/lib/tet4/backup-$(date +%F).db"
 ```
 
+Read what players reported (the game's 신고 button), with the chat lines that came
+with each report:
+
+```bash
+python3 /opt/tet4-server/tools/reports.py --db /var/lib/tet4/tet4.db --last 20
+```
+
 A restart ends the players' sessions; they log in again with `play`.
 
 ## 7. Security and capacity

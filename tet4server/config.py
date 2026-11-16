@@ -25,6 +25,7 @@ CDS_PORT = 15000            # the bootstrap's metp:// address names it
 CHANNEL_PORT = 15001        # channel 1's channel socket; channel n's is 15001 + 2(n - 1)
 GAME_PORT = 15002           # channel 1's game socket; channel n's is 15002 + 2(n - 1)
 ACCOUNTS_PORT = 10455       # registration and login, with a database
+RANKINGS_PORT = 10456       # public Single and Multiplayer ranking pages (with --db)
 
 # --- Capacity ------------------------------------------------------------------------
 

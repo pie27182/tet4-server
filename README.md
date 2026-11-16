@@ -12,6 +12,28 @@ describes the protocol and the evidence for every reply, and
 [`docs/MESSAGES.md`](docs/MESSAGES.md) lists all 233 messages the client knows with
 what the server does with each.
 
+## Quick start for players
+
+This project does not ship the game client files. You must have a full, legal
+copy of the 2012 Hangame `Tet4.exe` game already installed on your machine.
+
+For Windows users, double-click this file:
+
+```bat
+start-client.bat
+```
+
+For Linux users, run from the repo root:
+
+```bash
+python3 tools/client.py
+```
+
+The launcher will ask for the server address, help you choose the original game
+folder, verify the files, prepare a patched copy, and then either log in or
+register an account. The original game files stay where they are; the launcher
+uses its own patched copy in `client-patched/`.
+
 ## Status
 
 Tested with two real clients at once (Wine, headless under Xvfb):
@@ -45,7 +67,7 @@ Cube, missions, spectating a room from the lobby, and the effects of the items t
 are used up (rating and record items, nickname change); they can be bought but do
 nothing. Survival and painting rooms are created like the others but untested.
 
-## Running
+## Running the server
 
 Python 3.10 or newer, standard library only.
 
@@ -64,28 +86,6 @@ login (the account service listens on 10455); `--channels N` runs N channels of 
 to 300 players, each in its own process, sharing that file. `--host` and
 `--public-host` set the address to listen on and the one announced to clients.
 `--trace FILE` appends every decrypted message to FILE.
-
-To run the client against it, copy your client folder into `client/` (it is
-git-ignored), then check it, make the patched copy and start it under Wine in a
-second terminal:
-
-```bash
-python3 tools/client.py check
-```
-
-```bash
-python3 tools/client.py patch
-```
-
-```bash
-python3 tools/client.py run
-```
-
-`check` compares every file with the client's own `files.sha256.json`. `patch`
-writes `client-patched/`, whose `Tet4.exe` connects to the TPack server on this machine
-(`--host ADDRESS` for a server elsewhere). `run` starts it with the test account in
-`tools/bootstrap-sample.txt` and the Korean locale; against a server with
-accounts, `play --server ADDRESS [--register]` logs in and starts it instead.
 
 ## Layout
 

@@ -116,7 +116,9 @@ class LoginTest(unittest.IsolatedAsyncioTestCase):
         channel = await SecureClient.connect(self.services.ports.channel)
         self.addAsyncCleanup(channel.close)
         self.assertEqual(await self.auth_result(channel, auth("test", reply["ticket"])), 0)
-        self.assertTrue(self.services.lobby.online_from(b"test", "127.0.0.1"))
+        # Another account's name is refused on the logged-in connection.
+        await channel.send(u32(Msg.Channel_GetUserIdByMemberIdToS) + string(b"other"))
+        self.assertEqual(await asyncio.wait_for(channel.reader.read(), TIMEOUT), b"")
 
     async def test_game_socket_needs_a_logged_in_member(self):
         game = await SecureClient.connect(self.services.ports.game)

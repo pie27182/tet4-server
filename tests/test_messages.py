@@ -1,7 +1,10 @@
 import unittest
 
 from tet4server import messages as m
-from tet4server.messages import Endpoint, Msg, Room, RoomRequest
+from tet4server import schema
+from tet4server.channel import create_room_to_c
+from tet4server.messages import Endpoint, Msg, RoomRequest
+from tet4server.room import Room, room_info_to_c
 from tet4server.xdr import ProtocolError, Reader, string, u32
 from tet4server.xlbp import decode_batch, encode_batch
 
@@ -9,7 +12,9 @@ SINGLE_MODE = RoomRequest(  # the captured Single Mode request
     member_id=b"test", k42e=0, k67e=b"", k45e=b"", k46e=b"N000S", k127e=0, k66e=0,
     k200e=b"", k69e=0, k22e=b"TET4", k23e=b"", k24e=b"1")
 GAME = Endpoint("127.0.0.1", 15002)
-ROOM = Room(7, b"test", SINGLE_MODE)
+ROOM = Room(7, b"test", SINGLE_MODE, single=True)
+VERSUS = Room(8, b"x", RoomRequest(b"x", 0, b"", b"title", b"N000MNN", 0, 4, b"G", 0,
+                                   b"TET4", b"", b"1"), single=False)
 
 
 def parse(body: bytes, layout: str) -> list:
@@ -79,16 +84,17 @@ class ReplyLayoutTest(unittest.TestCase):
         self.assertEqual(fields[0], b"test")
 
     def test_room_info_follows_the_message_id_directly(self):
-        fields = parse(m.room_info_to_c(ROOM), ROOM_INFO)
-        self.assertEqual(fields[3], 7)          # k66e: room number
-        self.assertEqual(fields[4], 0)          # k68e
-        self.assertEqual(fields[5], b"N000S")   # k46e: room option
+        fields = parse(room_info_to_c(VERSUS), ROOM_INFO)
+        self.assertEqual(fields[0], 8)          # k42e: room number (SetRoomInfo's key)
+        self.assertEqual(fields[3], 4)          # k66e: player limit (SetLimitCnt)
+        self.assertEqual(fields[5], b"N000MNN") # k46e: room option
+        self.assertEqual(fields[7], 0)          # k47e: state, 0 while nobody is inside
 
     def test_room_list_holds_nested_room_infos(self):
-        fields = parse(m.get_room_list_to_c([ROOM, Room(8, b"x", SINGLE_MODE)]),
-                       "s s s u32 s u32 " + ROOM_INFO + " " + ROOM_INFO)
+        body = schema.pack("Channel_GetRoomListToC", rooms=[ROOM.info(), VERSUS.info()])
+        fields = parse(body, "s s s u32 s u32 " + ROOM_INFO + " " + ROOM_INFO)
         self.assertEqual(fields[5], 2)
-        self.assertEqual((fields[6 + 3], fields[6 + 14 + 3]), (7, 8))
+        self.assertEqual((fields[6], fields[6 + 14]), (7, 8))
 
     def test_auto_enter_reply_echoes_the_room_and_names_the_game_endpoint(self):
         fields = parse(m.auto_enter_single_mode_to_c(SINGLE_MODE, GAME),
@@ -100,16 +106,43 @@ class ReplyLayoutTest(unittest.TestCase):
         self.assertEqual(fields[15:17], [b"127.0.0.1", 15002])    # k52e, k53e
 
     def test_create_room_reply_names_the_room_and_the_game_endpoint(self):
-        fields = parse(m.create_room_to_c(ROOM, GAME),
+        fields = parse(create_room_to_c(ROOM, SINGLE_MODE, GAME),
                        "s u32 s s u32 s s s u32 u32 s u32 s s s s s u32 s")
         self.assertEqual(fields[1], 0)                            # failcode
-        self.assertEqual((fields[7], fields[9]), (b"N000S", 7))   # k46e, k66e
+        self.assertEqual((fields[4], fields[7], fields[9]), (7, b"N000S", 1))  # k42e, k46e, k66e
         self.assertEqual(fields[12:15], [b"TET4", b"", b"1"])     # k22e, k23e, k24e
         self.assertEqual((fields[15], fields[16], fields[17]), (b"", b"127.0.0.1", 15002))
 
     def test_start_new_game_lists_the_members(self):
         fields = parse(m.start_new_game_to_c([b"test"]), "u32 s u8 u8 u8")
         self.assertEqual(fields, [1, b"test", 0, 0, 0])
+
+
+class SchemaTest(unittest.TestCase):
+    """The catalog's generated layouts against encoders checked with the real client."""
+
+    def test_schema_matches_the_hand_written_encoders(self):
+        self.assertEqual(schema.pack("Room_DeleteMemberToC", k3e=b"test"),
+                         b"".join([u32(Msg.Room_DeleteMemberToC), string(b""), string(b""),
+                                   u32(0), string(b"test"), string(b"")]))
+        self.assertEqual(schema.pack("Room_EnterRoomToC"), m.enter_room_to_c())
+        self.assertEqual(schema.pack("Room_OrderTypeSingleModeGameReportTetrisToC")[:4],
+                         u32(Msg.Room_OrderTypeSingleModeGameReportTetrisToC))
+
+    def test_round_trip_of_every_message(self):
+        for name, s in schema.MESSAGES.items():
+            with self.subTest(name=name):
+                body = s.pack()
+                r = Reader(body)
+                self.assertEqual(r.u32(), s.id)
+                s.unpack(r)
+                self.assertEqual(r.remaining(), 0)
+
+    def test_extension_rides_under_the_extended_id(self):
+        body = schema.pack_as("Channel_AddMemberToC", "Channel_OrderTypeAddMemberTetrisToC",
+                              member=dict(k3e=b"x"))
+        self.assertEqual(body[:4], u32(schema.message_id("Channel_AddMemberToC")))
+        self.assertEqual(Reader(body[4:]).string(), b"x")
 
 
 if __name__ == "__main__":

@@ -1,13 +1,58 @@
-"""Game service: the Single Mode room on the socket that AutoEnter/CreateRoom name."""
+"""Game service: a room on the socket that AutoEnter, CreateRoom and GameJoinRoom name."""
 import logging
 
 from . import messages as m
+from . import schema
 from .lobby import Lobby
 from .messages import Msg
+from .room import Member, Room
 from .xdr import Reader
 from .xlbp import Session, serve_messages
 
 log = logging.getLogger("tet4.game")
+
+# In-game messages a client sends for the other players in its room: Tet4.exe
+# registers each of them for receiving at layer 3 (0x0045B410) under the same ID.
+RELAYED = {schema.message_id(name) for name in (
+    "Room_OrderTypeAbnormalEndTetris", "Room_OrderTypeAdjustStableTetris",
+    "Room_OrderTypeBasicDataTetris", "Room_OrderTypeChangeTeamTetris",
+    "Room_OrderTypeCheckBombTetris", "Room_OrderTypeCheckCollapseTetris",
+    "Room_OrderTypeComboTetris", "Room_OrderTypeGameEndOkTetris",
+    "Room_OrderTypeGameStartOkTetris", "Room_OrderTypeGarbageSendTetris",
+    "Room_OrderTypeIWillDieTetris", "Room_OrderTypeItemApplyTetris",
+    "Room_OrderTypeItemGetTetris", "Room_OrderTypeItemRemoveTetris",
+    "Room_OrderTypeItemReflectTetris", "Room_OrderTypeItemStealTetris",
+    "Room_OrderTypeItemStoleTetris", "Room_OrderTypeItemStolenTetris",
+    "Room_OrderTypeItemUseTetris", "Room_OrderTypeItemSendTetris",
+    "Room_OrderTypeLetsGameStartTetris", "Room_OrderTypeLetsGameStartOkTetris",
+    "Room_OrderTypeLineUpTetris", "Room_OrderTypeMapSetSyncTetris",
+    "Room_OrderTypePolyMinoPutTetris", "Room_OrderTypePolyMinoPutPieceTetris",
+    "Room_OrderTypeRankOfMeTetris", "Room_OrderTypeRoomInfoTetris",
+    "Room_OrderTypeSwitchMatrixTetris", "Room_OrderTypeSwitchResultTetris",
+    "Room_OrderTypeTeamSetAutoTetris", "Room_OrderTypeTon10Tetris",
+    "Room_OrderTypeTriTetTetris", "Room_OrderTypeIMSITetris",
+    "Room_OrderTypeSetSpeedLevelTetris", "Room_OrderTypeRoomOptionRelay",
+    "Room_OrderTypeIAmClearTetris", "Room_OrderTypeMapSetTetris",
+    "Room_OrderTypeMapUpdateTetris", "Room_OrderTypeGageInfoTetris",
+    "RoomOrderTypeSetSkipCountTetris", "RoomOrderTypeShadowTimeoverTetris",
+    "RoomOrderTypeShadowEndTetris", "Room_OrderTypeRequestBanishMemberTetris",
+    "Room_OrderTypeResponseBanishMemberTetris",
+)}
+
+
+def add_member_to_c(room: Room, member: Member) -> bytes:
+    """Room_AddMemberToC: seats the member in the receiver's game (Msg_AddRoomMember,
+    HgModel3 0x60915600); for the receiver itself it also keeps the counts the client
+    reads when it leaves the room."""
+    return schema.pack("Room_AddMemberToC", k50e=room.host, k58e=member.seat,
+                       k3e=member.member_id, k7e=member.member_id, k11e=b"M")
+
+
+def delete_member_to_c(room: Room, member: Member) -> bytes:
+    """Room_DeleteMemberToC: the member left; for the leaver itself the client
+    disconnects and returns to the lobby (Msg_DeleteRoomMember, 0x60915FC0)."""
+    return schema.pack("Room_DeleteMemberToC", k50e=room.host, k58e=member.seat,
+                       k3e=member.member_id)
 
 
 class GameConnection:
@@ -15,48 +60,104 @@ class GameConnection:
         self.session = session
         self.lobby = lobby
         self.member_id: bytes | None = None
+        self.room: Room | None = None
         self.handlers = {
             (0, Msg.Room_EnterRoomToS): self.on_enter_room,
             (0, Msg.Room_StartNewGameToS): self.on_start_new_game,
-            (3, Msg.Room_OrderTypeSingleModeGameReportTetrisToS): self.on_game_report,
+            (3, Msg.Room_OrderTypeSingleModeGameReportTetrisToS): self.on_single_mode_report,
             (0, Msg.Room_ExitRoomToS): self.on_exit_room,
+            (0, schema.message_id("Chatting_ChatStringToS")): self.on_chat,
         }
+        for msg_id in RELAYED:
+            self.handlers[(3, msg_id)] = self.relay
 
     async def run(self) -> None:
         try:
             await serve_messages(self.session, self.handlers)
         finally:
-            if self.member_id:
-                self.lobby.close_rooms_of(self.member_id)
+            self.leave_room(tell_self=False)
 
     async def on_enter_room(self, r: Reader) -> None:
-        member_id = m.read_enter_room(r)
+        request = schema.unpack("Room_EnterRoomToS", r)
+        member_id = request["k3e"]
         # The game socket carries no ticket: with accounts, the member must be logged
         # in on a channel connection from the same address.
         if self.lobby.requires_login and not self.lobby.online_from(member_id, self.session.host):
             raise ConnectionRefusedError(f"{member_id!r} is not logged in from {self.session.host}")
-        self.member_id = member_id
+        room = self.lobby.rooms.get(request["k42e"])
+        if room is None or room.member(member_id) or (seat := room.add(self)) is None:
+            log.info("%r cannot enter room %d", member_id, request["k42e"])
+            await self.session.send(schema.pack("Room_EnterRoomToC", failcode=1, k1e=b"v2e"))
+            raise ConnectionRefusedError(f"room {request['k42e']} refused {member_id!r}")
+        self.member_id, self.room = member_id, room
+        player = self.lobby.players.get(member_id)
+        if player:
+            player.room = room
+        log.info("%r entered room %d, seat %d", member_id, room.number, seat.seat)
         await self.session.send(m.enter_room_to_c())
-        # The player joins the room: this seats it in the game.
-        await self.session.send(m.room_add_member_to_c(self.member_id))
+        # Everyone in the room, the player included, seated in the player's game; the
+        # others seat the player.
+        for member in room.members:
+            self.session.post(add_member_to_c(room, member))
+        room.post(add_member_to_c(room, seat), exclude=self)
+        self.lobby.room_changed(room)
 
     async def on_start_new_game(self, r: Reader) -> None:
-        # Sent by CTetSingleMainBody::Start through CF5GameWnd::SendStartNewGame.
-        if self.member_id is None:
-            log.warning("%s: StartNewGameToS before EnterRoomToS", self.session.peer)
+        # Sent by CTetMainBody::Start through CF5GameWnd::SendStartNewGame.
+        room = self.room
+        if room is None:
+            log.warning("%s: StartNewGameToS outside a room", self.session.peer)
             return
-        await self.session.send(m.start_new_game_to_c([self.member_id]))
+        if room.host != self.member_id and not room.single:
+            log.info("%r is not the host of room %d", self.member_id, room.number)
+            return
+        room.playing = True
+        room.post(m.start_new_game_to_c([member.member_id for member in room.members]))
+        self.lobby.room_changed(room)
 
-    async def on_game_report(self, r: Reader) -> None:
+    async def relay(self, r: Reader) -> None:
+        """Pass an in-game message on to the other players in the room, unchanged."""
+        if self.room is not None:
+            self.room.post(r.data, layer=3, exclude=self)
+
+    async def on_chat(self, r: Reader) -> None:
+        chat = schema.unpack("Chatting_ChatStringToS", r)
+        if self.room is not None:
+            chat["k3e"] = self.member_id
+            self.room.post(schema.pack("Chatting_ChatStringToC", chat))
+
+    async def on_single_mode_report(self, r: Reader) -> None:
         # Sent at game over; the reply carries the mode's updated standing.
         report = m.read_game_report(r)
         if report.member_id != self.member_id:
             log.warning("%s: report for %r ignored", self.session.peer, report.member_id)
             return
-        standing = await self.lobby.add_game(report)
+        standing = await self.lobby.records.add_game(report)
         await self.session.send(m.single_mode_game_report_to_c(report, standing), layer=3)
 
     async def on_exit_room(self, r: Reader) -> None:
         # The exit button: the client leaves once told that the player left the room.
-        if self.member_id is not None:
-            await self.session.send(m.room_delete_member_to_c(self.member_id))
+        self.leave_room(tell_self=True)
+
+    def leave_room(self, tell_self: bool) -> None:
+        room, self.room = self.room, None
+        if room is None:
+            return
+        member = room.remove(self)
+        if member is None:
+            return
+        log.info("%r left room %d", member.member_id, room.number)
+        notice = delete_member_to_c(room, member)
+        if tell_self:
+            self.session.post(notice)
+        room.post(notice)
+        player = self.lobby.players.get(member.member_id)
+        if player and player.room is room:
+            player.room = None
+        if not room.members:
+            room.playing = False
+            self.lobby.close_room(room)
+        else:
+            if room.playing and len(room.members) < 2:
+                room.playing = False
+            self.lobby.room_changed(room)

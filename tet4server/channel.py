@@ -1,16 +1,58 @@
-"""Channel service: login, lobby lists and Single Mode room creation."""
+"""Channel service: login, the lobby (players, chat, room list) and room creation."""
 import asyncio
 import dataclasses
 import logging
 
 from . import messages as m
-from .lobby import Lobby
-from .messages import Endpoint, Msg
-from .xdr import Reader
+from . import schema
 from .accounts import Database
+from .lobby import Lobby, Player
+from .messages import Endpoint, Msg
+from .room import Room, room_info_to_c
+from .xdr import Reader
 from .xlbp import Session, serve_messages
 
 log = logging.getLogger("tet4.channel")
+
+CHANNEL_KEYS = dict(k22e=b"TET4", k23e=b"", k24e=b"1")   # GameID, sub id, channel
+DAILY_ROOMS = 99          # rooms a player may create per day without a room-host item
+
+
+def member_info(member_id: bytes) -> dict:
+    """A lobby member list row (_MemberInfo)."""
+    return dict(k3e=member_id, k7e=member_id, k11e=b"M")
+
+
+def tetris_info(lobby: Lobby, member_id: bytes) -> dict:
+    """A member's Tetris profile (_TetrisMemberInfo) with its Single Mode records."""
+    return dict(k3e=member_id, single_modes=[
+        dict(mode=mode, values=[v for v, _ in (s.top + [(0, b"")] * m.TOP)[:m.TOP]],
+             dates=[d for _, d in (s.top + [(0, b"")] * m.TOP)[:m.TOP]],
+             rank=s.rank, ranked=s.ranked, plays=s.plays)
+        for mode, s in ((mode, lobby.records.single_mode(member_id, mode))
+                        for mode in range(m.SINGLE_MODES))])
+
+
+def add_member_batch(lobby: Lobby, member_id: bytes) -> dict[int, bytes]:
+    """Channel_AddMemberToC with its Tetris profile at layer 3, for the other players."""
+    return {
+        0: schema.pack("Channel_AddMemberToC", CHANNEL_KEYS, k3e=member_id, k7e=member_id,
+                       k11e=b"M"),
+        3: schema.pack_as("Channel_AddMemberToC", "Channel_OrderTypeAddMemberTetrisToC",
+                          member=tetris_info(lobby, member_id)),
+    }
+
+
+def create_room_to_c(room: Room | None, request: m.RoomRequest, game: Endpoint) -> bytes:
+    """Channel_CreateRoomToC (Tet4.exe converter 0x00441E90): the room's fields back with
+    its number in k42e and its player limit in k66e, and the game endpoint, the host
+    in the string right before the port. failcode 1 refuses (no free room slot)."""
+    f = room.fields if room else request
+    return schema.pack(
+        "Channel_CreateRoomToC", failcode=0 if room else 1, k1e=b"" if room else b"v2e",
+        k42e=room.number if room else 0, k67e=f.k67e, k45e=f.k45e, k46e=f.k46e,
+        k127e=f.k127e, k66e=room.limit if room else 0, k200e=f.k200e, k69e=f.k69e,
+        k22e=f.k22e, k23e=f.k23e, k24e=f.k24e, k52e=game.host.encode("ascii"), k53e=game.port)
 
 
 class ChannelConnection:
@@ -22,6 +64,7 @@ class ChannelConnection:
         self.db = db
         self.account: bytes | None = None    # set by a valid ticket when db is set
         self.member_id: bytes | None = None
+        self.player: Player | None = None
         self.auto_enter: m.RoomRequest | None = None
         self.handlers = {
             (0, Msg.AuthToS): self.on_auth,
@@ -32,16 +75,23 @@ class ChannelConnection:
             (0, Msg.Item_GetItemStateToS): self.on_get_item_state,
             (3, Msg.Room_OrderTypeAutoEnterSingleModeRoomTetrisToS): self.on_auto_enter,
             (0, Msg.Channel_CreateRoomToS): self.on_create_room,
+            (0, schema.message_id("Channel_GameJoinRoomToS")): self.on_join_room,
+            (0, schema.message_id("Chatting_ChatStringToS")): self.on_chat,
+            (0, schema.message_id("Chatting_HanChatStringToS")): self.on_han_chat,
         }
 
     async def run(self) -> None:
         try:
             await serve_messages(self.session, self.handlers)
         finally:
-            if self.member_id:
-                self.lobby.close_rooms_of(self.member_id)
-            if self.account:
-                self.lobby.log_out(self.account, self.session.host)
+            self.leave()
+
+    def leave(self) -> None:
+        if self.player and self.lobby.leave(self.player):
+            self.lobby.post(schema.pack("Channel_DeleteMemberToC", CHANNEL_KEYS,
+                                        k3e=self.player.member_id))
+        if self.member_id:
+            self.lobby.close_rooms_of(self.member_id)
 
     def _claim(self, member_id: bytes) -> bytes:
         """The member this connection acts as; with accounts, only the logged-in one."""
@@ -60,7 +110,6 @@ class ChannelConnection:
             await self.session.send(m.auth_to_c(result=1))
             raise ConnectionRefusedError(f"invalid ticket for {account!r}")
         self.account = account
-        self.lobby.log_in(account, self.session.host)
         log.info("%s logged in as %r", self.session.peer, account)
         await self.session.send(m.auth_to_c())
 
@@ -70,26 +119,59 @@ class ChannelConnection:
 
     async def on_enter_channel(self, r: Reader) -> None:
         request = m.read_enter_channel(r)
-        self.member_id = self._claim(request.member_id)
+        member = self.member_id = self._claim(request.member_id)
         # MetpInfo(4).k23e/k24e come back from this reply; Msg_SendEnterRoom needs them.
         await self.session.send(m.enter_channel_to_c(request.k23e, request.k24e))
         # The player's own record (layer 0, found by SGlobalInfo::MyData()) and its
         # Tetris profile (layer 3, read by the Single Mode scene).
-        member = request.member_id
         await self.session.send_layers({
             0: m.get_member_info_to_c(member),
             3: m.get_member_info_tetris(
-                member, [self.lobby.single_mode(member, mode) for mode in range(m.SINGLE_MODES)]),
+                member, [self.lobby.records.single_mode(member, mode)
+                         for mode in range(m.SINGLE_MODES)]),
         })
+        # Rooms a player may still create today (FUN_00491830 compares allowed - used).
+        await self.session.send(schema.pack(
+            "Channel_OrderTypeDayCntInfoTetrisToC", k3e=member, used=0, allowed=DAILY_ROOMS),
+            layer=3)
+        self.player = Player(member, self.session.host, self)
+        old = self.lobby.enter(self.player)
+        if old is not None and old.channel is not self:
+            old.channel.session.close()
+        self.lobby.post(add_member_batch(self.lobby, member), exclude=self.player)
 
     async def on_get_member_list(self, r: Reader) -> None:
-        await self.session.send(m.get_member_list_to_c())
+        players = list(self.lobby.players.values())
+        await self.session.send_layers({
+            0: schema.pack("Channel_GetMemberListToC", CHANNEL_KEYS,
+                           members=[member_info(p.member_id) for p in players]),
+            3: schema.pack_as("Channel_GetMemberListToC", "Channel_OrderTypeGetMemberListTetrisToC",
+                              members=[tetris_info(self.lobby, p.member_id) for p in players]),
+        })
 
     async def on_get_room_list(self, r: Reader) -> None:
-        await self.session.send(m.get_room_list_to_c(self.lobby.rooms()))
+        await self.session.send(schema.pack(
+            "Channel_GetRoomListToC", CHANNEL_KEYS,
+            rooms=[room.info() for room in self.lobby.listed_rooms()]))
 
     async def on_get_item_state(self, r: Reader) -> None:
         await self.session.send(m.get_item_state_to_c())
+
+    async def on_chat(self, r: Reader) -> None:
+        chat = schema.unpack("Chatting_ChatStringToS", r)
+        if self.player is None:
+            return
+        chat["k3e"] = self.player.member_id
+        self.lobby.post(schema.pack("Chatting_ChatStringToC", chat))
+
+    async def on_han_chat(self, r: Reader) -> None:
+        """Lobby chat: echoed to everyone in the channel, the sender included (the client
+        shows its own line from the echo), under the sender's real member id."""
+        chat = schema.unpack("Chatting_HanChatStringToS", r)["chat"]
+        if self.player is None:
+            return
+        chat["k3e"] = self.player.member_id
+        self.lobby.post(schema.pack("Chatting_HanChatStringToC", chat=chat))
 
     async def on_auto_enter(self, r: Reader) -> None:
         # Echo the requested room with room number 0 and the game endpoint; the
@@ -106,5 +188,23 @@ class ChannelConnection:
             request = dataclasses.replace(request, k46e=self.auto_enter.k46e)
         self.auto_enter = None
         room = self.lobby.create_room(self.member_id or request.member_id, request)
-        await self.session.send(m.create_room_to_c(room, self.game))
-        await self.session.send(m.room_info_to_c(room))
+        await self.session.send(create_room_to_c(room, request, self.game))
+        if room is not None and room.single:
+            await self.session.send(room_info_to_c(room))
+
+    async def on_join_room(self, r: Reader) -> None:
+        request = schema.unpack("Channel_GameJoinRoomToS", r)
+        room = self.lobby.rooms.get(request["k42e"])
+        failcode = 0
+        if room is None or room.single:
+            failcode = 1
+        elif room.private and request["k67e"] != room.fields.k67e:
+            failcode = 2
+        elif room.seat_free() is None or room.playing:
+            failcode = 3
+        f = room.fields if room else m.RoomRequest(b"", 0, b"", b"", b"", 0, 0, b"", 0, b"", b"", b"")
+        await self.session.send(schema.pack(
+            "Channel_GameJoinRoomToC", CHANNEL_KEYS, failcode=failcode,
+            k1e=b"v2e" if failcode else b"", k42e=request["k42e"], k45e=f.k45e, k67e=f.k67e,
+            k127e=f.k127e, k66e=room.limit if room else 0, k46e=f.k46e, k200e=f.k200e,
+            k52e=self.game.host.encode("ascii"), k53e=self.game.port))

@@ -6,11 +6,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tet4server import crypto
+from tet4server import crypto, schema
 from tet4server import messages as m
 from tet4server.accounts import Database
 from tet4server.lobby import Lobby
-from tet4server.messages import GameReport, Msg
+from tet4server.messages import GameReport, Msg, describe
+from tet4server.records import Records
 from tet4server.server import Ports, Services
 from tet4server.xdr import Reader, frame, read_frame, string, u8, u32, u64
 from tet4server.xlbp import MAGIC, Message, decode_batch, encode_batch
@@ -85,12 +86,12 @@ def room_request(msg_id: int) -> bytes:
 
 
 class RecordTest(unittest.IsolatedAsyncioTestCase):
-    async def play(self, lobby: Lobby, games, member: bytes = MEMBER) -> None:
+    async def play(self, lobby: Records, games, member: bytes = MEMBER) -> None:
         for mode, value, completed in games:
             await lobby.add_game(GameReport(member, mode, value, completed))
 
     async def test_best_five_per_mode(self):
-        lobby = Lobby()
+        lobby = Records()
         await self.play(lobby, [(0, 300, True), (0, 100, True), (0, 200, True), (0, 50, True),
                                 (0, 50, True), (0, 40, True), (1, 9000, True), (1, 7000, True),
                                 (1, 5000, False), (2, 0, True)])
@@ -102,7 +103,7 @@ class RecordTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(lobby.single_mode(b"other", 0), m.SingleMode([], 0, 0, 1))
 
     async def test_rank_among_players(self):
-        lobby = Lobby()
+        lobby = Records()
         await self.play(lobby, [(0, 500, True), (1, 4000, True)], member=b"first")
         await self.play(lobby, [(0, 300, True), (1, 3000, True)])
         self.assertEqual(lobby.single_mode(MEMBER, 0)[2:], (2, 2))
@@ -111,8 +112,8 @@ class RecordTest(unittest.IsolatedAsyncioTestCase):
     async def test_records_survive_in_the_database(self):
         with tempfile.TemporaryDirectory() as tmp:
             db = Database(Path(tmp) / "tet4.db")
-            await self.play(Lobby(db), [(0, 300, True), (1, 7000, False)])
-            again = Lobby(db)
+            await self.play(Records(db), [(0, 300, True), (1, 7000, False)])
+            again = Records(db)
             marathon = again.single_mode(MEMBER, 0)
             self.assertEqual(([v for v, _ in marathon.top], marathon.plays), ([300], 1))
             self.assertEqual(again.single_mode(MEMBER, 1).plays, 1)
@@ -139,7 +140,7 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
 
     async def expect(self, client: SecureClient, msg_id: int, layer: int = 0) -> Message:
         message = await client.receive()
-        self.assertEqual((message.layer, Msg(message.id).name), (layer, Msg(msg_id).name))
+        self.assertEqual((message.layer, describe(message.id)), (layer, describe(msg_id)))
         return message
 
     async def room_numbers(self, channel: SecureClient) -> list[int]:
@@ -150,7 +151,7 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
             skip()
         count = r.u32()
         fields = parse(reply.body, "s s s u32 s u32" + f" {ROOM_INFO}" * count)
-        return fields[6 + 3::len(ROOM_INFO.split())]  # k66e of each _RoomInfo
+        return fields[6::len(ROOM_INFO.split())]  # k42e of each _RoomInfo
 
     async def test_directory_announces_the_bound_channel_port(self):
         tpack = await self.plain_request(self.ports.tpack, b"".join([
@@ -190,6 +191,12 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
         generic = len(m.get_member_info_to_c(MEMBER))
         self.assertEqual(reply.body[generic:generic + 12],
                          u32(Msg.LayerAlignment) * 2 + u32(Msg.Channel_GetMemberInfoToC))
+        # Rooms the player may create today (layer 3): allowed minus used must be > 0.
+        reply = await self.expect(channel, schema.message_id(
+            "Channel_OrderTypeDayCntInfoTetrisToC"), layer=3)
+        r = Reader(reply.body[4:])
+        day = schema.unpack("Channel_OrderTypeDayCntInfoTetrisToC", r)
+        self.assertGreater(day["allowed"] - day["used"], 0)
 
         await channel.send(u32(Msg.Channel_GetMemberListToS) + string(b"TET4") + string(b"") + string(b"1"))
         await self.expect(channel, Msg.Channel_GetMemberListToC)
@@ -210,12 +217,13 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
         await channel.send(CREATE_ROOM_CAPTURED)
         reply = await self.expect(channel, Msg.Channel_CreateRoomToC)
         fields = parse(reply.body, "s u32 s s u32 s s s u32 u32 s u32 s s s s s u32 s")
-        self.assertEqual((fields[6], fields[7], fields[9], fields[10]),
-                         (TITLE, b"N000S", 1, b"G"))  # option from AutoEnter
+        self.assertEqual((fields[4], fields[6], fields[7], fields[9], fields[10]),
+                         (1, TITLE, b"N000S", 1, b"G"))  # room 1, option from AutoEnter, 1 seat
         self.assertEqual((fields[16], fields[17]), (b"127.0.0.1", self.ports.game))
         reply = await self.expect(channel, Msg.Channel_RoomInfoToC)
-        self.assertEqual(parse(reply.body, ROOM_INFO)[3], 1)
-        self.assertEqual(await self.room_numbers(channel), [1])
+        self.assertEqual(parse(reply.body, ROOM_INFO)[0], 1)
+        # A Single Mode room is the player's own: it stays out of the room list.
+        self.assertEqual(await self.room_numbers(channel), [])
 
         game = await SecureClient.connect(self.ports.game)
         await game.send(b"".join([
@@ -254,7 +262,7 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
 
         await game.close()
         for _ in range(100):
-            if not self.services.lobby.rooms():
+            if not self.services.lobby.rooms:
                 break
             await asyncio.sleep(0.01)
         self.assertEqual(await self.room_numbers(channel), [])

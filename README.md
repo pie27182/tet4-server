@@ -132,6 +132,8 @@ python3 -m unittest discover -s tests -t .
 - [`docs/DEPLOY.md`](docs/DEPLOY.md): run a server on a VPS.
 - [`docs/RATINGS.md`](docs/RATINGS.md): historical evidence for 내공, Single/Multi Ranking,
   the provisional implementation and what remains to recover.
+- [`docs/ECONOMY.md`](docs/ECONOMY.md): TP, passes, clubs, item catalog, microtransactions,
+  rating interactions and the difference between the original service and this server.
 - [`docs/PROTOCOL.md`](docs/PROTOCOL.md): the game's protocol as a specification a
   server can be built from, with the evidence for every fact and what is known of
   the features not implemented yet.

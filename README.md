@@ -84,10 +84,14 @@ Tested with two real clients at once, button by button:
   and ranks among all players.
 - **Shop (상점) and My Items (내 아이템)**: buying with TP. Players start with 10,000
   TP and earn 30, 20 or 10 TP per multiplayer game by rank.
+- **내공 and records**: 내공 by place in every multiplayer game, the 26 grades from
+  초보 to 절대신 with their medals, wins and losses, win streaks, the best combo and
+  speeds, TP for every new grade, all on the result board, in the member list and in
+  the profiles.
 
 Not yet:
 
-- ratings and records: 내공, grades, arenas by grade, wins and losses (shown as 0);
+- arenas by grade: the server has one arena for everyone;
 - friends, whispers and blocking, which went through Hangame's separate messenger;
 - visiting a player (게임 신청하기 in a player's menu): it does nothing, and the
   room list's 입장 buttons then stop working until the game is restarted;

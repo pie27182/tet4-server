@@ -21,7 +21,8 @@ STRUCTS = {
     "_KeyType": "u64 member:str u64 str game_id:str",
     "_AliasInfo": "code:str name:str mission:u32",
     "_AliasInventoryInfo": "items:[{_AliasInfo}] shown:str slots:u32",
-    "_BasicMemberInfo": "u32 u32 u32 u32 u32 str str u32 u32 u32 u32 str",
+    "_BasicMemberInfo": "best_grade:u32 wins:u32 losses:u32 rating:u32 grade:u32 "
+        "grade_name:str str age:u32 speed:u32 attack_speed:u32 max_combo:u32 str",
     "_BenefitInfo": "str str str str",
     "_Board": "code:str name:str groups:[str]",
     "_CauseProduct": "str u32",
@@ -40,19 +41,20 @@ STRUCTS = {
     "_ItemInfo": "code:str name:str kind:str start:str end:str str count:u32 u32",
     "_ItemState": "str str str str u32 u32 u32",
     "_MemberInfo": "member:str=k3e k7e:str k8e:str k11e:str k10e:u32 k12e:str k13e:u64 "
-        "k26e:u32 k27e:u32 k28e:u32 k29e:u32 k30e:u32 k31e:u32 k32e:str k33e:u32 k102e:str "
-        "k34e:u64 k37e:str k38e:str k35e:u32 room:u32=k151e k201e:str k153e:[u32]",
+        "plays:u32=k26e wins:u32=k27e losses:u32=k28e k29e:u32 k30e:u32 rating:u32=k31e "
+        "grade_name:str=k32e grade:u32=k33e k102e:str k34e:u64 k37e:str k38e:str k35e:u32 "
+        "room:u32=k151e k201e:str k153e:[u32]",
     "_MemberInfoChannelSvcKor": "u64",
     "_MemberInfoRoom": "k57e:str seat:u32=k58e member:str=k3e k7e:str k8e:str k11e:str "
-        "k10e:u32 k12e:str k34e:u64 k13e:u64 k26e:u32 k27e:u32 k28e:u32 k29e:u32 k30e:u32 "
-        "k31e:u32 k32e:str k33e:u32 k102e:str k37e:str k38e:str k52e:str k53e:u32 k35e:u32 "
-        "k153e:[u32]",
+        "k10e:u32 k12e:str k34e:u64 k13e:u64 plays:u32=k26e wins:u32=k27e losses:u32=k28e "
+        "k29e:u32 k30e:u32 rating:u32=k31e grade_name:str=k32e grade:u32=k33e k102e:str "
+        "k37e:str k38e:str k52e:str k53e:u32 k35e:u32 k153e:[u32]",
     "_MemberInfoRoomSvcKor": "u8 u8 u8",
     "_MemberInfoShort": "member:str=k3e seat:u32=k43e",
     "_MemberInfoStartNewGame": "member:str=k3e k118e:u8 k119e:u8 u8",
     "_MemberScore": "member:str u32 u32 u32 u64 u32 [{_ExScore}] str",
-    "_MemberScoreReport": "member:str u32 u32 u32 u32 u32 u32 str u32 u32 str u64 u64 u32 "
-        "[u32]",
+    "_MemberScoreReport": "member:str plays:u32 wins:u32 losses:u32 k29e:u32 k30e:u32 "
+        "rating:u32 grade_name:str grade:u32 u32 str u64 u64 u32 [u32]",
     "_MemberScoreReportSvcKor": "u8 u8 u32",
     "_MemberShipInfo": "{_UserProductInfo} [{_UserProductInfo}] str u64",
     "_MemberTodayMatchInfo": "str u64 u32 u32 u32",
@@ -72,16 +74,18 @@ STRUCTS = {
         "watchers:[{_MemberInfoShort}]=k49e [{_MemberInfoShort}]",
     "_SingleModeInfo": "mode:u32 u32 rank:u32 ranked:u32 values:[u32] dates:[str] "
         "result:u32 plays:u32",
-    "_TetrisGameReport": "member:str rank:u32 team:u32 title:str level:u32 level_after:u32 "
-        "u32 u32 f32 u32 u32 u32 u32 u32 u32 u32 u32 f32 u32 u32 u32 u8 u32 str u8 u32 u32 "
-        "u32 [str] u32 u8 f32",
-    "_TetrisMemberGameReport": "member:str u32 u32 u32 u32 u32 u8 u8 u8 u8 u8 u32 u32 u32 "
+    "_TetrisGameReport": "member:str rank:u32 team:u32 title:str grade:u32 grade_after:u32 "
+        "rating:u32 rating_after:u32 speed:f32 attack_lines:u32 u32 u32 u32 max_combo:u32 "
+        "u32 u32 u32 f32 u32 u32 tp:u32 u8 u32 str no_rating:u8 bonus1:u32 bonus2:u32 "
+        "bonus:u32 rewards:[str] reward_tp:u32 u8 attack_speed:f32",
+    "_TetrisMemberGameReport": "member:str u32 u32 today_tp:u32 u32 u32 u8 u8 u8 u8 u8 u32 u32 u32 "
         "u32 u32 f32 u32 u32 f32 u32 u32 u32 u8 {_TetrisSchoolInfo} u32 u32 u32 u32",
-    "_TetrisMemberInfo": "member:str school:{_TetrisSchoolInfo} u32 u32 str u32 u32 u32 "
+    "_TetrisMemberInfo": "member:str school:{_TetrisSchoolInfo} best_grade:u32 grade:u32 "
+        "best_grade_name:str best_streak:u32 u32 u32 "
         "emblem:str title:str u64 single_modes:[{_SingleModeInfo}]",
     "_TetrisMissionMastInfo": "u32 str str u32 {_BenefitInfo} u32",
     "_TetrisMissionUserInfo": "u32 str u32 str",
-    "_TetrisSchoolInfo": "u8 str u32 u16",
+    "_TetrisSchoolInfo": "u8 name:str rank:u32 u16",
     "_UseAbleItem": "member:str hold:u8 next:u8 u8 u8",
     "_UserProductInfo": "u64 str str str u64 u64 u8 u32 str u32 str",
 }
@@ -97,8 +101,9 @@ MESSAGES = {
     "Channel_AddMemberSvcKorToC": (0x01E0041A, 1, "u64"),
     "Channel_AddMemberToC": (0x0AB84D0A, 0,
         "game_id:str=k22e sub_id:str=k23e channel_id:str=k24e member:str=k3e k7e:str "
-        "k8e:str k11e:str k10e:u32 k12e:str k26e:u32 k27e:u32 k28e:u32 k29e:u32 k30e:u32 "
-        "k31e:u32 k13e:u64 k34e:u64 k32e:str k33e:u32 k102e:str k37e:str k38e:str k35e:u32 "
+        "k8e:str k11e:str k10e:u32 k12e:str plays:u32=k26e wins:u32=k27e losses:u32=k28e "
+        "k29e:u32 k30e:u32 rating:u32=k31e k13e:u64 k34e:u64 grade_name:str=k32e "
+        "grade:u32=k33e k102e:str k37e:str k38e:str k35e:u32 "
         "room:u32=k151e k201e:str k153e:[u32] result:str=k1e"),
     "Channel_AutoEnterRoomToC": (0x09C4D0BA, 0, "result:str=k1e u32 error:str=k2e"),
     "Channel_AutoEnterRoomToS": (0x00233D9A, 0,
@@ -215,8 +220,9 @@ MESSAGES = {
         "profiles:[{_TetrisMemberInfo}]"),
     "Channel_OrderTypeImsiCharacterIdTetrisToC": (0x085113EA, 3, "str"),
     "Channel_OrderTypeMissionCompleteTetrisToC": (0x0AA3643A, 3, "u32 str"),
-    "Channel_OrderTypeRefreshMemberToC": (0x0BB5D81A, 3, "str u32 u32 u32 u32 str u32 u32"),
-    "Channel_OrderTypeRefreshMemberToS": (0x05F1155A, 3, "str"),
+    "Channel_OrderTypeRefreshMemberToC": (0x0BB5D81A, 3,
+        "member:str plays:u32 wins:u32 losses:u32 rating:u32 grade_name:str grade:u32 u32"),
+    "Channel_OrderTypeRefreshMemberToS": (0x05F1155A, 3, "member:str"),
     "Channel_OrderTypeSingleModeResultMemberTetrisToC": (0x0928E8BA, 3,
         "str [{_SingleModeInfo}]"),
     "Channel_RequestDeleteAliasToS": (0x0B600E5A, 3, "code:str"),
@@ -257,9 +263,9 @@ MESSAGES = {
     "Room_AddMemberSvcKorToC": (0x02ED64DA, 1, "u8 u8 u8"),
     "Room_AddMemberToC": (0x0619233A, 0,
         "host:str=k50e k57e:str seat:u32=k58e member:str=k3e k7e:str k8e:str k11e:str "
-        "k10e:u32 k12e:str k34e:u64 k13e:u64 k26e:u32 k27e:u32 k28e:u32 k29e:u32 k30e:u32 "
-        "k31e:u32 k32e:str k33e:u32 k102e:str k37e:str k38e:str k52e:str k53e:u32 k35e:u32 "
-        "k153e:[u32]"),
+        "k10e:u32 k12e:str k34e:u64 k13e:u64 plays:u32=k26e wins:u32=k27e losses:u32=k28e "
+        "k29e:u32 k30e:u32 rating:u32=k31e grade_name:str=k32e grade:u32=k33e k102e:str "
+        "k37e:str k38e:str k52e:str k53e:u32 k35e:u32 k153e:[u32]"),
     "Room_AlterRoomToS": (0x0D31FDDA, 0,
         "room:u32=k42e title:str=k45e password:str=k67e options:str=k46e str"),
     "Room_AvatarChangeSvcKorToC": (0x0E423E5A, 1, "str str"),

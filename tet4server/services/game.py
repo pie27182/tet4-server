@@ -5,13 +5,17 @@ names this socket. In a game the clients run everything themselves: the server p
 their in-game messages on to the others in the room, and keeps the score of who is out.
 """
 import logging
+import time
+from functools import partial
 
-from ..config import (FAILED, GAME_POINTS, MAP_PLACES, MIN_GAME_SECONDS, NEXT_PIECES,
-                      NO_SUCH_ROOM, UNLIMITED_HOLD)
+from ..config import (FAILED, GAME_POINTS, GRADE_REWARD, HOST_POINTS, MAP_PLACES,
+                      MIN_GAME_SECONDS, NEXT_PIECES, NO_SUCH_ROOM, PLUS_HOST, PLUS_HOST_BONUS,
+                      RATING_TIME, SUPER_HOST, SUPER_HOST_BONUS, UNLIMITED_HOLD)
 from ..domain.lobby import Lobby
+from ..domain.rating import Result, finish
 from ..domain.records import GameReport
-from ..domain.room import Member, Room
-from ..protocol.codec import Message, pack, unpack
+from ..domain.room import Member, Play, Room
+from ..protocol.codec import Message, message_id, pack, unpack
 from ..protocol.dispatch import Connection, on
 from ..protocol.session import Session
 from . import views
@@ -24,8 +28,7 @@ RELAYED = (
     "Room_OrderTypeAbnormalEndTetris", "Room_OrderTypeAdjustStableTetris",
     "Room_OrderTypeBasicDataTetris", "Room_OrderTypeChangeTeamTetris",
     "Room_OrderTypeCheckBombTetris", "Room_OrderTypeCheckCollapseTetris",
-    "Room_OrderTypeComboTetris", "Room_OrderTypeGameEndOkTetris",
-    "Room_OrderTypeGameStartOkTetris", "Room_OrderTypeGarbageSendTetris",
+    "Room_OrderTypeGameEndOkTetris", "Room_OrderTypeGameStartOkTetris",
     "Room_OrderTypeGageInfoTetris", "Room_OrderTypeIAmClearTetris",
     "Room_OrderTypeIMSITetris", "Room_OrderTypeItemApplyTetris",
     "Room_OrderTypeItemGetTetris", "Room_OrderTypeItemReflectTetris",
@@ -33,8 +36,7 @@ RELAYED = (
     "Room_OrderTypeItemStealTetris", "Room_OrderTypeItemStoleTetris",
     "Room_OrderTypeItemStolenTetris", "Room_OrderTypeItemUseTetris",
     "Room_OrderTypeLineUpTetris", "Room_OrderTypeMapSetSyncTetris",
-    "Room_OrderTypeMapUpdateTetris",
-    "Room_OrderTypePolyMinoPutPieceTetris", "Room_OrderTypePolyMinoPutTetris",
+    "Room_OrderTypeMapUpdateTetris", "Room_OrderTypePolyMinoPutPieceTetris",
     "Room_OrderTypeRankOfMeTetris", "Room_OrderTypeRequestBanishMemberTetris",
     "Room_OrderTypeResponseBanishMemberTetris", "Room_OrderTypeRoomInfoTetris",
     "Room_OrderTypeRoomOptionRelay", "Room_OrderTypeSetSpeedLevelTetris",
@@ -43,13 +45,20 @@ RELAYED = (
     "Room_OrderTypeTriTetTetris", "RoomOrderTypeSetSkipCountTetris",
     "RoomOrderTypeShadowEndTetris", "RoomOrderTypeShadowTimeoverTetris",
 )
+# In-game messages passed on the same way, which the server also counts for the result
+# board: a piece placed; garbage lines sent (seat, lines, hole, target); a combo
+# (seat, u16 combo, lines).
+PIECE, GARBAGE, COMBO = (message_id(name) for name in (
+    "Room_OrderTypePolyMinoPutTetris", "Room_OrderTypeGarbageSendTetris",
+    "Room_OrderTypeComboTetris"))
 
 
-def seated(room: Room, member: Member) -> Message:
-    """A member in its seat, for a member's game: the client seats the player and, for
-    its own player, keeps the counts it reads on leaving the room."""
-    return pack("Room_AddMemberToC", host=room.host, seat=member.seat, member=member.member_id,
-                k7e=member.member_id, k11e=b"M")
+def seated(lobby: Lobby, room: Room, member: Member) -> Message:
+    """A member in its seat, for a member's game: the client seats the player with its
+    record and, for its own player, keeps the counts it reads on leaving the room."""
+    record = lobby.shop.wallet(member.member_id).record
+    return pack("Room_AddMemberToC", views.record_fields(record), host=room.host,
+                seat=member.seat, member=member.member_id, k7e=member.member_id, k11e=b"M")
 
 
 def gone(room: Room, member: Member) -> Message:
@@ -101,8 +110,8 @@ class GameConnection(Connection):
         # Everyone in the room, the newcomer included, seated in the newcomer's game; the
         # others seat the newcomer.
         for other in room.members:
-            self.session.post(seated(room, other))
-        room.post(seated(room, member), exclude=self)
+            self.session.post(seated(self.lobby, room, other))
+        room.post(seated(self.lobby, room, member), exclude=self)
         self._show(room)
 
     @on("Room_ExitRoomToS")
@@ -215,6 +224,24 @@ class GameConnection(Connection):
         if self.room is not None:
             self.room.post(message, exclude=self)
 
+    @on("Room_OrderTypePolyMinoPutTetris", "Room_OrderTypeGarbageSendTetris",
+        "Room_OrderTypeComboTetris", raw=True)
+    async def counted(self, message: Message) -> None:
+        """Pass on a piece, garbage or a combo, counting it for the player's statistics."""
+        room = self.room
+        if room is None:
+            return
+        play = room.plays.get(self.member_id)
+        if play is not None:
+            body = message.body
+            if message.id == PIECE:
+                play.pieces += 1
+            elif message.id == GARBAGE:
+                play.attack += body[5]
+            elif message.id == COMBO:
+                play.combo = max(play.combo, int.from_bytes(body[5:7], "big"))
+        room.post(message, exclude=self)
+
     # --- games ---------------------------------------------------------------------------
 
     @on("Room_StartNewGameToS")
@@ -225,12 +252,17 @@ class GameConnection(Connection):
         if room is None or (room.host != self.member_id and not room.single):
             return
         room.playing = True
+        room.post(*self._items(room))
+        self._show(room)
+
+    def _items(self, room: Room) -> tuple[Message, Message]:
+        """StartNewGameToC with each member's items for the game: unlimited hold lifts
+        the hold limit, and next shows more of the coming pieces."""
         owns = self.lobby.shop.owns
-        room.post(pack("Room_StartNewGameToC"), pack(
+        return pack("Room_StartNewGameToC"), pack(
             "Room_OrderTypeStartNewGameTetrisToC",
             items=[dict(member=m.member_id, hold=owns(m.member_id, UNLIMITED_HOLD),
-                        next=owns(m.member_id, NEXT_PIECES)) for m in room.members]))
-        self._show(room)
+                        next=owns(m.member_id, NEXT_PIECES)) for m in room.members])
 
     @on("Room_OrderTypeLetsGameStartTetris")
     async def lets_game_start(self, request: dict) -> None:
@@ -244,6 +276,7 @@ class GameConnection(Connection):
         if request["map"] and request["place"] < MAP_PLACES:
             self.lobby.map_names[(room.mode, request["place"])] = request["map"][:64]
         room.start_game([player for player in request["players"] if player])
+        room.post(*self._items(room))
         room.post(pack("Room_OrderTypeLetsGameStartOkTetris", request))
         self._show(room)
 
@@ -258,30 +291,61 @@ class GameConnection(Connection):
             self.end_game(self.room)
 
     def end_game(self, room: Room) -> None:
-        """The result board: one report per player, winner first, with rank and levels.
-        Then the game report, which resets the seats and closes the board five seconds
-        later, and TP for the players."""
+        """The result board: one line per player, winner first, with the place, 내공,
+        grades and TP. Then the game report, which updates the seats with the new
+        records and closes the board five seconds later. A game counts (TP, 내공, wins
+        and losses) with two players or more and MIN_GAME_SECONDS played."""
         ranking = room.ranking()
         log.info("room %d: game over, %s", room.number,
                  ", ".join(f"{i}. {m!r}" for i, m in enumerate(ranking, 1)))
-        room.post(pack("Room_OrderTypeLetsGameEndTetrisToC", reports=[
-            dict(member=member_id, rank=rank, level=1, level_after=1)
-            for rank, member_id in enumerate(ranking, 1)]))
-        players = [dict(member=member_id) for member_id in ranking]
-        room.post(pack("Room_GameReportToC", members=players),
-                  pack("Room_OrderTypeGameReportTetrisToC", room=room.number, reports=players))
-        self._show(room)
-        if room.played_for() >= MIN_GAME_SECONDS:
-            self.lobby.spawn(self.reward(ranking))
-
-    async def reward(self, ranking: list[bytes]) -> None:
-        """TP for a finished game by rank; each player's lobby shows the new balance."""
+        counts = len(ranking) > 1 and room.played_for() >= MIN_GAME_SECONDS
+        today = time.strftime("%Y-%m-%d")
+        settle = {}               # member -> (finish on its record, TP)
+        host_bonus = self._host_bonus(room)
         for rank, member_id in enumerate(ranking, 1):
-            points = GAME_POINTS[min(rank, len(GAME_POINTS)) - 1]
-            before, after = await self.lobby.shop.earn(member_id, points)
+            tp = GAME_POINTS[min(rank, len(GAME_POINTS)) - 1] if counts else 0
+            if counts and member_id == room.host and host_bonus:
+                tp += HOST_POINTS
+            play = room.plays.get(member_id) or Play()
+            settle[member_id] = (partial(finish, players=len(ranking), rank=rank,
+                                         bonus_percent=self._bonus(room, member_id,
+                                                                   host_bonus), tp=tp,
+                                         grade_reward=GRADE_REWARD, today=today, play=play)
+                                 if counts else _unchanged, tp)
+        shown = {m: f(self.lobby.shop.wallet(m).record) for m, (f, _) in settle.items()}
+        room.post(pack("Room_OrderTypeLetsGameEndTetrisToC", reports=[
+            views.game_report(m, rank, shown[m], settle[m][1], room.plays.get(m) or Play())
+            for rank, m in enumerate(ranking, 1)]))
+        room.post(pack("Room_GameReportToC", members=[
+                      views.score_report(m, shown[m].after) for m in ranking]),
+                  pack("Room_OrderTypeGameReportTetrisToC", room=room.number, reports=[
+                      dict(member=m, today_tp=shown[m].after.today_tp) for m in ranking]))
+        self._show(room)
+        if counts:
+            self.lobby.spawn(self.keep_results(settle))
+
+    def _host_bonus(self, room: Room) -> int:
+        """The % more 내공 the host wins with super or plus room host (0 without)."""
+        owns = self.lobby.shop.owns
+        return (SUPER_HOST_BONUS if owns(room.host, SUPER_HOST)
+                else PLUS_HOST_BONUS if owns(room.host, PLUS_HOST) else 0)
+
+    def _bonus(self, room: Room, member_id: bytes, host_bonus: int) -> int:
+        """The % more 내공 a player wins: the host's room-host bonus, and twice all of it
+        with 내공 time."""
+        percent = host_bonus if member_id == room.host else 0
+        owns = self.lobby.shop.owns
+        return 2 * percent + 100 if any(owns(member_id, i) for i in RATING_TIME) else percent
+
+    async def keep_results(self, settle: dict) -> None:
+        """Keep each player's result, on its record as kept (a player who left the channel
+        may not be here). The players' TP balance and everyone's member list update."""
+        for member_id, (finish_on, tp) in settle.items():
+            result, before, after = await self.lobby.shop.finish_game(member_id, finish_on, tp)
             player = self.lobby.players.get(member_id)
             if player:
                 player.session.post(views.points_changed(before, after))
+            self.lobby.post(views.refresh(member_id, result.after))
 
     @on("Room_OrderTypeSingleModeGameReportTetrisToS")
     async def single_mode_report(self, request: dict) -> None:
@@ -298,3 +362,8 @@ class GameConnection(Connection):
             "Room_OrderTypeSingleModeGameReportTetrisToC", member=self.member_id,
             report=dict(member=self.member_id),
             standing=views.single_mode(report.mode, standing, result)))
+
+
+def _unchanged(record) -> Result:
+    """A game that does not count leaves a record as it was."""
+    return Result(record, record, 0, 0)

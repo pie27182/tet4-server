@@ -16,6 +16,26 @@ class Settings:
     echo: dict = field(default_factory=dict)
 
 
+@dataclass
+class Play:
+    """A player's statistics in the running game, which the server counts from the
+    messages it passes on."""
+    pieces: int = 0           # pieces placed
+    attack: int = 0           # garbage lines sent
+    combo: int = 0            # the best combo
+    seconds: float = 0.0      # played, until out
+
+    @property
+    def speed(self) -> float:
+        """Pieces placed a second (평속)."""
+        return self.pieces / self.seconds if self.seconds else 0.0
+
+    @property
+    def attack_speed(self) -> float:
+        """Garbage lines sent a second (공속)."""
+        return self.attack / self.seconds if self.seconds else 0.0
+
+
 @dataclass(eq=False)
 class Member:
     """A player in a room: its seat and its game connection (anything with a session)."""
@@ -35,6 +55,7 @@ class Room:
         self.playing = False
         self.alive: list[bytes] = []      # players of the running game still in it
         self.out: list[bytes] = []        # players out of it, first out first
+        self.plays: dict[bytes, Play] = {}  # the players' statistics in it
         self.started = 0.0                # when the last game started (monotonic)
         self.banished: set[bytes] = set()  # members the host sent away, kept out
 
@@ -92,6 +113,7 @@ class Room:
         self.playing = True
         self.alive = [p for p in players or members if p in members] or members
         self.out = []
+        self.plays = {p: Play() for p in self.alive}
         self.started = time.monotonic()
 
     def played_for(self) -> float:
@@ -104,6 +126,7 @@ class Room:
         if member_id in self.alive:
             self.alive.remove(member_id)
             self.out.append(member_id)
+            self.plays[member_id].seconds = self.played_for()
         if self.playing and not self.alive:
             self.playing = False
             return True

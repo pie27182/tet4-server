@@ -1,7 +1,9 @@
 """The shop: the catalog, buying with TP, the inventory, and wallets in the database."""
+import asyncio
 import tempfile
 import time
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 from tet4server.config import START_POINTS
@@ -41,6 +43,52 @@ class WalletTest(unittest.TestCase):
         self.assertEqual(wallet.points, START_POINTS + 1500)
         wallet.expire(now + 31 * 86400)
         self.assertEqual(sorted(wallet.items), ["T10003", "T10020", "T20062"])
+
+    def test_items_that_act_when_bought(self):
+        store = shop.Shop()
+
+        async def buy(code: str) -> str | None:
+            return await store.buy(b"alice", code, 1)
+
+        async def run():
+            self.assertIsNone(await buy("PF0HT10018C001"))           # 내공 +2000
+            self.assertIsNone(await buy("PF0HT10017C001"))           # 내공 +1000
+            record = store.wallet(b"alice").record
+            self.assertEqual((record.rating, record.best_grade), (4000, 1))
+            self.assertNotIn("T10017", store.wallet(b"alice").items)
+            store.wallet(b"alice").record = replace(record, rating=74000, wins=3, losses=2)
+            store.wallet(b"alice").points = 100_000
+            self.assertEqual(await buy("PF0HT10017C001"), "마왕 이하 등급에서만 구매 가능합니다.")
+            self.assertEqual(await buy("PF0HT10021H003"), "초인 등급 미만만 구매하실 수 있습니다.")
+            self.assertIsNone(await buy("PF0HT10019C001"))           # 내공 back to the start
+            self.assertIsNone(await buy("PF0HT10016C001"))           # the record cleared
+            record = store.wallet(b"alice").record
+            self.assertEqual((record.rating, record.plays, record.best_grade), (1000, 0, 1))
+
+        asyncio.run(run())
+
+    def test_bulk_rating_boost_cannot_cross_the_mawang_purchase_limit(self):
+        store = shop.Shop()
+
+        async def run():
+            await store.earn(b"alice", 0)  # create and cache the in-memory wallet
+            wallet = store.wallet(b"alice")
+            wallet.points = 100_000
+            wallet.record = replace(wallet.record, rating=72_000)  # 제왕, below the limit
+            # One +2,000 purchase is allowed from 제왕, even though it raises the
+            # player's resulting grade above 마왕.
+            self.assertIsNone(await store.buy(b"alice", "PF0HT10018C001", 1))
+            self.assertEqual(wallet.record.rating, 74_000)
+
+            # A second unit in the same request would be bought from 초급신, so the
+            # entire bulk request is refused without charging or applying either unit.
+            before = wallet.points
+            self.assertEqual(
+                await store.buy(b"alice", "PF0HT10018C001", 2),
+                "마왕 이하 등급에서만 구매 가능합니다.")
+            self.assertEqual((wallet.record.rating, wallet.points), (74_000, before))
+
+        asyncio.run(run())
 
     def test_inventory_shelves(self):
         wallet = shop.Wallet()

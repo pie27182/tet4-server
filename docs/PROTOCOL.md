@@ -621,6 +621,60 @@ the result screen (0x0045CB30). **live**
   multiplayer games (MyData +0x130, +0x134, +0x138); Ultra opens at 500, or with
   item T10006.
 
+### 10.4 내공, grades and records
+
+The client draws grades from its own table (Tet4.exe 0x005DC870, 26 entries of name
+and 내공 band): 초보 from 1000, 평민(하) 3500, (중) 6000, (상) 8700, 중수 11600 /
+14800 / 18300, 고수 22000 / 26000 / 30000, 영웅 32000 / 35400 / 39000, 지존 42800 /
+47200 / 52200, 초인 57600 / 63500 / 70000, 패왕 71000, 제왕 72000, 마왕 73000, 초급신
+74000, 중급신 76000, 상급신 80000 to 300000, and 절대신 above. Messages carry the
+grade as its index 0-25 and the name as text; the client picks medals and icons by
+index. **code**
+
+Where the record goes (each field placed by a probe of distinct values, **live**):
+
+- Member rows (`_MemberInfo`, `Channel_AddMemberToC`) and seats (`Room_AddMemberToC`):
+  `plays` k26e, `wins` k27e, `losses` k28e, 내공 `rating` k31e (the lobby's own panel,
+  the member list, the seat card and the invitation dialog), the grade name k32e (the
+  list's 등급 column, the panel and the seat card) and its index k33e (the medals).
+  The exit dialog's totals for the session are a later score report's values less the
+  row's at login; its 내공 line compares the report's k30e, so k30e carries 내공 too.
+- The member info dialog (`GetDisplayMemberInfoTetrisToC`): `basic`
+  (`_BasicMemberInfo`) gives 내공 with the grade name ("1100(초보)"), wins and losses
+  (the dialog shows their sum and the rate), the age, 평속 and 공속 in thousandths and
+  the best combo; the Tetris profile gives the best grade's name, the best win streak
+  (최다연승) and the school. The current grade's medal is drawn from `basic.grade` or
+  the profile's `grade`, the best grade's from `basic.best_grade` or the profile's
+  `best_grade` (not told apart): the server sets each pair alike.
+- The result board (`_TetrisGameReport`): `grade`/`grade_after` (a level-up mark and
+  message when the grade rose), `rating`/`rating_after` (shown as 내공 and the
+  change), `bonus` with `bonus1`/`bonus2` (shown as "+n", `bonus1` with a speed-bonus
+  badge), `speed` 평속, `attack_lines` 공격라인수, `attack_speed` 공속, `max_combo`,
+  `tp`, `reward_tp` and `rewards` (a congratulations line for a grade-up's TP and
+  items), and `no_rating` (1: a message that the grade does not fit the arena, so no
+  내공). Two more bytes mark a "슈퍼+" player.
+- `Room_GameReportToC` (`_MemberScoreReport`): the records after the game, in the
+  order of the member row's keys, which the seats show. `GameReportTetrisToC`'s
+  `today_tp` is the room's TP panel "Today" figure.
+- **Channel_OrderTypeRefreshMemberToC** (`member`, `plays`, `wins`, `losses`,
+  `rating`, `grade_name`, `grade`, a number; converter 0x00446CE0) updates a member's
+  row, and the player's own panel for its own record; **RefreshMemberToS** (`member`)
+  asks for one.
+
+The client sends no statistics in these modes (IWillDieTetris carries zeros there):
+the server counts them from the messages it passes on, a piece for every
+**PolyMinoPutTetris**, the lines of every **GarbageSendTetris** (`seat`, lines, the
+hole's column, the target) and the best combo of **ComboTetris** (`seat`, the combo
+as u16, lines); 평속 and 공속 are pieces and garbage lines a second. **code**
+
+This server's rules (config.py): a player starts at 1000 내공 and gains 100 for every
+player finished ahead of and loses 50 for every one finished behind, never below
+1000. As the shop's descriptions have it, a host holding super room host (T10006, the
+Super Pack's) or plus room host (T10003) gains 50% or 20% more and 10 more TP a game
+(방장추가 내공지급, 판당 방장추가 TP), and 내공 time (T10021, T10022) doubles a
+player's gain. A grade reached for the first time pays 500 TP. Games count with two
+players or more and 30 seconds played. The record is kept with the wallet.
+
 ## 11. The shop, items and profiles
 
 All at layer 3 of the channel socket; Tet4.exe registers the shop's converters at
@@ -664,11 +718,22 @@ parsed by 0x0052A710) or C with a `count` of uses. `Shop_GetPointInfoToS` (`kind
 ### 11.4 Items
 
 The client checks items by code itself: room creation by T10003, T10014, T10006 or a
-club (FUN_00491830), Ultra by T10006. The server acts on two, in StartNewGameToC's
-item list: T10004 unlimited hold and T10005 more preview pieces. Clubs and packs put
-several items in the inventory and give TP back. Items with uses (nickname change,
-rating changes, the record eraser, the Happy Cube hammer) can be bought but have no
-effect yet.
+club (FUN_00491830), Ultra by T10006. A game's items come in StartNewGameToC's
+Tetris list (`_UseAbleItem`: `member`, `hold` for T10004 unlimited hold, `next` for
+T10005 more preview pieces): Single Mode asks for it with StartNewGameToS, and the
+server sends it to every member before LetsGameStartOk too, or a multiplayer game
+starts with the hold limit of 5 whatever the player holds. **live** The server also
+acts on the room-host and 내공 time items in games (section 10.4). Clubs and packs put several items in the
+inventory and give TP back.
+
+The client's own product descriptions (Tet4/Shop/Data/ShopDataList.xml) say which
+items act when bought; the server applies them then and keeps nothing in the
+inventory: 내공1000플러스 (T10017) and 내공2000플러스 (T10018) add 1000 and 2000 내공,
+for players up to 마왕; 내공초기화 (T10019) puts 내공 back to the start and
+전적지우개 (T10016) clears the record (wins, losses, streaks, combo, speeds), both
+keeping the best grade. 내공 time (T10021, T10022) is for players below 초인. A
+refused purchase answers ResBuyProductToC with the reason in `error`, which the buy
+window shows; a changed record refreshes the player's row everywhere.
 
 ### 11.5 Profiles, emblems and titles
 
@@ -730,11 +795,16 @@ MESSAGES.md has every layout.
   added, and a whisper is shown only to its sender. In the game protocol,
   `Channel_OrderTypeFriendMemberInfoTetrisToS` (`str · str`) → `...ToC` is a
   friend's profile. **live**
-- **Visiting a player** (게임 신청하기 in a player's menu or profile). Msg_VisitFriend
-  (HgModel3 0x6090F270) looks the target's `k140e` up in the arena list and, without
-  a `k137e` (the member list's path sends none), takes a path that sends nothing
-  and leaves the lobby waiting: until the client restarts, the room list's 입장
-  buttons do nothing (quick join still works). **live**
+- **Visiting a player** (게임 신청하기 in a player's menu or profile). Tet4.exe sends
+  the client's own sub id as `k140e`, its channel as `k24e` and the target's room as
+  `k42e` to Msg_VisitFriend (HgModel3 0x6090F270), which looks `k140e` up in the arena
+  groups the directory listed. Not found (this server's sub id is empty), it clears
+  the channel list: until the client restarts, the room list's 입장 buttons do
+  nothing (quick join still works). Found, it would reconnect to the directory and
+  join the room from Msg_ProcessVisitFriend; a sub id of `01D0A` makes it found but
+  the client then calls the arena the practice arena (연습경기장, "not reflected in
+  records") and still asks the directory nothing, so the server keeps it empty.
+  **live**
 - **Gifts and coupons.** `Shop_ReqBuyProductToS` already carries `gift`, `receiver`
   and `message`; `Shop_RequestUseGiftToS` (`u64 · str · str`) →
   `ResponseUseGiftToC` takes one from the gift box (the inventory's `gifts`);
@@ -754,13 +824,9 @@ MESSAGES.md has every layout.
   with their replies were for clubs paid monthly. **code**
 - **Arenas** (경기장). 경기장 변경 lists the arenas, and choosing one makes the client
   close and relaunch through the Hangame web site (Msg_Destroy → reloadHanGame →
-  ReloadLogonHangameWeb): here it simply closes. Arenas by grade (초보, 고수, ...)
-  need the ratings below. **live**
-- **Ratings and records** (내공, 등급, 전적). The profile, the member list and the exit
-  dialog show 내공 (rating points), a grade from it (24 grades from 초보 to 절대신,
-  table at Tet4.exe 0x005DC870), wins, losses, win rate, best combo and streak, the
-  best grade and today's TP; the server sends them all as 0: games are ranked and
-  paid in TP, but no record is kept of them. **live**
+  ReloadLogonHangameWeb): here it simply closes. The arenas by grade (초보, 고수, ...)
+  would refuse 내공 to players whose grade does not fit (the result board's
+  `no_rating`); this server has one arena for every grade. **live**
 - **Missions and levels.** `_TetrisMissionMastInfo`/`_TetrisMissionUserInfo` in the
   profiles (sent empty), `Channel_OrderTypeMissionCompleteTetrisToC`,
   `Room_OrderTypeMissionCompleteTetrisToC`, `Room_OrderTypeSetEmblemTetrisToC` (an

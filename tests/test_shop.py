@@ -67,6 +67,28 @@ class WalletTest(unittest.TestCase):
 
         asyncio.run(run())
 
+    def test_bulk_rating_boost_cannot_cross_the_mawang_purchase_limit(self):
+        store = shop.Shop()
+        wallet = store.wallet(b"alice")
+        wallet.points = 100_000
+        wallet.record = replace(wallet.record, rating=72_000)  # 제왕, below the limit
+
+        async def run():
+            # One +2,000 purchase is allowed from 제왕, even though it raises the
+            # player's resulting grade above 마왕.
+            self.assertIsNone(await store.buy(b"alice", "PF0HT10018C001", 1))
+            self.assertEqual(wallet.record.rating, 74_000)
+
+            # A second unit in the same request would be bought from 초급신, so the
+            # entire bulk request is refused without charging or applying either unit.
+            before = wallet.points
+            self.assertEqual(
+                await store.buy(b"alice", "PF0HT10018C001", 2),
+                "마왕 이하 등급에서만 구매 가능합니다.")
+            self.assertEqual((wallet.record.rating, wallet.points), (74_000, before))
+
+        asyncio.run(run())
+
     def test_inventory_shelves(self):
         wallet = shop.Wallet()
         for code in ("PF0HT10004D003", "PD0TT20062D000", "PD0TT30074D000", "PI0TT90002U000"):

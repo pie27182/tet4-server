@@ -14,10 +14,11 @@ log = logging.getLogger("tet4.room")
 
 SEATS = 6                 # CTetMainBody keeps six gamer slots
 
-# Room states as the lobby's room list reads them (CChannelLobbyController::
-# Evt_ChannelView_OnDblClickRoomList): 0 an empty slot (double-click creates a room
-# there), 1, 2 and 4 joinable, 5 watch only.
-EMPTY, WAITING, PLAYING = 0, 1, 5
+# Room states as the lobby reads them: 0 an empty slot (double-click creates a room
+# there), 1, 2 and 4 joinable, 5 watch only. Quick join (바로입장, HgModel3
+# CChannelLobbyModel::Msg_AutoEnterRoom) picks the fullest room in state 4 that is
+# neither private nor playing.
+EMPTY, WAITING, PLAYING = 0, 4, 5
 
 
 @dataclass(eq=False)

@@ -26,6 +26,7 @@ from .xdr import MAX_FRAME, ProtocolError, Reader, u32
 
 MAGIC = b"XLBP"
 LAYERS = 4
+MAX_BACKLOG = 1 << 20   # unsent bytes before a client counts as stuck
 
 log = logging.getLogger("tet4.xlbp")
 
@@ -120,6 +121,7 @@ class Session:
                  handshake_delay: float = 0.0):
         self.service = service
         host, port = writer.get_extra_info("peername")[:2]
+        self.host = host
         self.peer = f"{host}:{port}"
         self._reader = reader
         self._writer = writer
@@ -196,15 +198,33 @@ class Session:
         await self.send_layers({layer: body})
 
     async def send_layers(self, layers: dict[int, bytes]) -> None:
+        """Send one batch and wait until the socket has taken it (replies)."""
+        self.post_layers(layers)
+        await self._writer.drain()
+
+    def close(self) -> None:
+        self._writer.close()
+
+    def post(self, body: bytes, layer: int = 0) -> None:
+        self.post_layers({layer: body})
+
+    def post_layers(self, layers: dict[int, bytes]) -> None:
+        """Queue one batch without waiting (messages to other players): a client whose
+        unsent data passes MAX_BACKLOG is disconnected instead of holding others up."""
+        if self._writer.is_closing():
+            return
         batch = encode_batch(layers)
         if self._tracer:
             self._tracer.record(self, "out", batch)
         payload = MAGIC + batch
         self._writer.write(self._tx.encrypt(u32(len(payload)) + payload))
-        await self._writer.drain()
         first = layers[min(layers)]
         log.info("%s %s -> %s%s", self.service, self.peer,
                  describe(int.from_bytes(first[:4], "big")), _layer_note(*sorted(layers)))
+        if self._writer.transport.get_write_buffer_size() > MAX_BACKLOG:
+            log.warning("%s %s: %d bytes unsent, disconnecting", self.service, self.peer,
+                        self._writer.transport.get_write_buffer_size())
+            self._writer.transport.abort()
 
 
 Handler = Callable[[Reader], Awaitable[None]]

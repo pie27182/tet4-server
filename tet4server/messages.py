@@ -81,6 +81,15 @@ class EnterChannel:
     k24e: bytes
 
 
+def read_auth(r: Reader) -> tuple[bytes, bytes]:
+    """AuthToS: u32 id | i64 | str account | i64 | str | str game | str ticket (the
+    bootstrap's k300e) | str method. Returns the account and the ticket."""
+    r.u64()
+    account = r.string()
+    r.u64(), r.string(), r.string()
+    return account, r.string()
+
+
 def read_enter_channel(r: Reader) -> EnterChannel:
     """Channel_EnterChannelByUserIdToS (converter 0x60138E50):
     u64 k601e | str k3e | str k22e | str k23e | str k24e | str k149e | u32 k167e |
@@ -143,38 +152,16 @@ def read_enter_room(r: Reader) -> bytes:
     return r.string()
 
 
-# --- Rooms ------------------------------------------------------------------
-
-@dataclass(frozen=True)
-class Room:
-    number: int          # k66e, assigned by the server
-    owner: bytes         # member id of the creator
-    fields: RoomRequest  # what the creator asked for
-
-
-def room_info(room: Room) -> bytes:
-    """A nested _RoomInfo (Serialize 0x60126AC0, keys from converter 0x6013B850).
-    Nested, it carries no message ID of its own."""
-    f = room.fields
-    return b"".join([
-        u32(f.k42e), string(f.k45e), u32(f.k127e), u32(room.number),
-        u8(0),                                  # k68e
-        string(f.k46e), string(f.k200e),
-        u32(0), string(b""), string(b""),       # k47e, k116e, k50e
-        u32(0),                                 # k143e
-        u32(0), u32(0), u32(0),                 # three empty vectors
-    ])
-
-
 # --- Channel replies ---------------------------------------------------------
 
-def auth_to_c() -> bytes:
+def auth_to_c(result: int = 0) -> bytes:
     """AuthToC (Serialize 0x601356E0): u32 id | _KeyType (i64 | str | i64 | str | str)
-    | str | str | i32 k161e. k161e = 0 is success (converter 0x6013F8B0)."""
+    | str | str | i32 k161e. k161e = 0 is success (converter 0x6013F8B0); any other
+    value stops the client at a notice dialog."""
     return b"".join([
         u32(Msg.AuthToC),
         i64(0), string(b""), i64(0), string(b""), string(b""),
-        string(b""), string(b""), i32(0),
+        string(b""), string(b""), i32(result),
     ])
 
 
@@ -183,21 +170,6 @@ def get_user_id_to_c(member_id: bytes) -> bytes:
     u32 id | i64 | str k3e | str k2e | i32 k161e."""
     return b"".join([
         u32(Msg.Channel_GetUserIdToC), i64(0), string(member_id), string(b""), i32(0),
-    ])
-
-
-def enter_channel_to_c(k23e: bytes, k24e: bytes) -> bytes:
-    """Channel_EnterChannelToC (Serialize 0x6012E4A0): u32 id | str x5 | u32 x3 | u8 |
-    str | u32 x2 | str x2 | u32 x3 | str k1e. Converter 0x60139620 maps string 3 to
-    k23e and string 8 to k24e; k1e must be present and not "v2e"."""
-    return b"".join([
-        u32(Msg.Channel_EnterChannelToC),
-        string(b""), string(b""), string(k23e), string(b""), string(b""),
-        u32(0), u32(0), u32(0), u8(0),
-        string(b""), u32(0), u32(0),
-        string(b""), string(k24e),
-        u32(0), u32(0), u32(0),
-        string(b""),
     ])
 
 
@@ -245,40 +217,12 @@ def single_mode_info(mode: int, standing: SingleMode, result: int = 0) -> bytes:
                      u32(result), u32(standing.plays)])
 
 
-def get_member_info_tetris(member_id: bytes, standings: list[SingleMode]) -> bytes:
-    """Layer 3 of Channel_GetMemberInfoToC, Tet4.exe's
-    Cmd_Channel_OrderTypeGetMemberInfoTetrisToC (Deserialize 0x004598C0, converter
-    0x00459E20): u32 id | _TetrisMemberInfo | _EmblemInventoryInfo |
-    _AliasInventoryInfo | vector | vector. It stores the player's Tetris profile, whose
-    _SingleModeInfo records (one per mode) the Single Mode scene reads every frame."""
-    member = b"".join([
-        string(member_id),
-        u8(0) + string(b"") + u32(0) + u16(0),             # _TetrisSchoolInfo
-        u32(0), u32(0), string(b""), bytes(12), string(b""), string(b""), u64(0),
-        u32(len(standings)), *(single_mode_info(m, st) for m, st in enumerate(standings)),
-    ])
-    inventory = u32(0) + string(b"") + u32(0)              # vector | str | u32
-    return b"".join([u32(Msg.Channel_GetMemberInfoToC), member, inventory, inventory,
-                     u32(0), u32(0)])
-
-
 def get_member_list_to_c() -> bytes:
     """Channel_GetMemberListToC (Serialize 0x601301D0): u32 id | str x3 |
     vector<member> | str. Sent empty."""
     return b"".join([
         u32(Msg.Channel_GetMemberListToC),
         string(b""), string(b""), string(b""), u32(0), string(b""),
-    ])
-
-
-def get_room_list_to_c(rooms) -> bytes:
-    """Channel_GetRoomListToC (Serialize 0x60130630): u32 id | str x3 | u32 | str |
-    vector<_RoomInfo>."""
-    rooms = list(rooms)
-    return b"".join([
-        u32(Msg.Channel_GetRoomListToC),
-        string(b""), string(b""), string(b""), u32(0), string(b""),
-        u32(len(rooms)), *map(room_info, rooms),
     ])
 
 
@@ -305,63 +249,12 @@ def auto_enter_single_mode_to_c(request: RoomRequest, game: Endpoint) -> bytes:
     ])
 
 
-def create_room_to_c(room: Room, game: Endpoint) -> bytes:
-    """Channel_CreateRoomToC (Deserialize 0x0043F580, Tet4.exe converter 0x00441E90):
-    u32 id | str | u32 failcode | str k2e | str k3e | u32 k42e | str k67e | str k45e |
-    str k46e | u32 k127e | u32 k66e | str k200e | u32 k69e | str k22e | str k23e |
-    str k24e | str | str k52e | u32 k53e | str k82e. The host is the string right
-    before the port, as in the AutoEnter reply: with it one string earlier the
-    client reconnected to an empty host."""
-    f = room.fields
-    return b"".join([
-        u32(Msg.Channel_CreateRoomToC),
-        string(b""), u32(0), string(b""), string(b""),
-        u32(f.k42e), string(f.k67e), string(f.k45e), string(f.k46e),
-        u32(f.k127e), u32(room.number), string(f.k200e), u32(f.k69e),
-        string(f.k22e), string(f.k23e), string(f.k24e),
-        string(b""), string(game.host.encode("ascii")), u32(game.port), string(b""),
-    ])
-
-
-def room_info_to_c(room: Room) -> bytes:
-    """Channel_RoomInfoToC: u32 id | _RoomInfo. Its Deserialize (0x601309F0) sets the
-    embedded _RoomInfo's nested flag, so no second ID follows."""
-    return u32(Msg.Channel_RoomInfoToC) + room_info(room)
-
-
 # --- Game replies -------------------------------------------------------------
 
 def enter_room_to_c() -> bytes:
     """Room_EnterRoomToC (converter 0x6013C940): u32 id | str k1e | u32 failcode |
     str k2e. failcode 0 is success."""
     return b"".join([u32(Msg.Room_EnterRoomToC), string(b""), u32(0), string(b"")])
-
-
-def room_add_member_to_c(member_id: bytes) -> bytes:
-    """Room_AddMemberToC (Deserialize 0x6012FC50, converter 0x6013A060, header s4e/c5e):
-    u32 id | str k50e (host) | str k57e | u32 k58e (seat) | str k3e | str k7e | str k8e |
-    str k11e | u32 k10e | str k12e | u64 k34e | u64 k13e | u32 k26e-k31e | str k32e |
-    u32 k33e | str k102e | str k37e | str k38e | str k52e | u32 k53e | u32 k35e |
-    vector k153e. CGameLobbyModel::Msg_AddRoomMember seats the member in the game
-    (CTetMainBody::AddGamer) and, for the player, keeps its counts k26e-k31e, which
-    the client reads again when it leaves the room."""
-    return b"".join([
-        u32(Msg.Room_AddMemberToC), string(member_id),
-        string(b""), u32(0), string(member_id),
-        string(b""), string(b""), string(b""), u32(0), string(b""),
-        u64(0), u64(0), bytes(24),
-        string(b""), u32(0), string(b""), string(b""), string(b""),
-        string(b""), u32(0), u32(0), u32(0),
-    ])
-
-
-def room_delete_member_to_c(member_id: bytes) -> bytes:
-    """Room_DeleteMemberToC (Deserialize 0x60132A20, converter 0x6013CB60, header
-    s4e/c6e): u32 id | str k50e | str k57e | u32 k58e | str k3e | str k8e. When k3e is
-    the player, CGameLobbyModel::Msg_DeleteRoomMember disconnects the game socket and
-    moves the client back to the lobby; this is how the client leaves a room."""
-    return b"".join([u32(Msg.Room_DeleteMemberToC), string(b""), string(b""), u32(0),
-                     string(member_id), string(b"")])
 
 
 def single_mode_game_report_to_c(report: GameReport, standing: SingleMode) -> bytes:

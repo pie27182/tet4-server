@@ -73,6 +73,9 @@ class ChannelConnection:
             (3, schema.message_id("Shop_RequestCanPurchaseToS")): self.on_can_purchase,
             (3, Msg.Channel_OrderTypeGetDisplayMemberInfoTetrisToS): self.on_get_profile,
             (3, schema.message_id("Channel_OrderTypeChangeDisplayMemberInfoToS")): self.on_show,
+            (3, schema.message_id("Channel_RequestDeleteEmblemToS")): self.on_discard_emblem,
+            (3, schema.message_id("Channel_RequestDeleteAliasToS")): self.on_discard_title,
+            (0, schema.message_id("Channel_CouponCountToS")): self.on_coupon_count,
             (0, schema.message_id("Channel_InviteGameToMemberToS")): self.on_invite,
             (0, schema.message_id("Channel_ResponseInviteGameToS")): self.on_invite_answer,
         }
@@ -293,6 +296,33 @@ class ChannelConnection:
                                       request["emblem"].decode("latin-1")):
             self.lobby.post({3: profiles.change_display_member_info(
                 member, self.lobby.shop.wallet(member))})
+
+    async def on_discard_emblem(self, r: Reader) -> None:
+        await self._discard(schema.unpack("Channel_RequestDeleteEmblemToS", r)["code"], "2",
+                            "Channel_ResponseDeleteEmblemToC")
+
+    async def on_discard_title(self, r: Reader) -> None:
+        await self._discard(schema.unpack("Channel_RequestDeleteAliasToS", r)["code"], "3",
+                            "Channel_ResponseDeleteAliasToC")
+
+    async def _discard(self, code: bytes, kind: str, reply: str) -> None:
+        """The emblem and title lists' trash button: the item goes; the dialog drops it
+        when told it went (converters 0x004568F0, 0x00456630). If it was shown, no
+        emblem or title is, for everyone."""
+        if self.player is None:
+            return
+        member = self.player.member_id
+        done, shown = await self.lobby.shop.discard(member, code.decode("latin-1"), kind)
+        await self.session.send(schema.pack(reply, code=code, done=done), layer=3)
+        if shown:
+            self.lobby.post({3: profiles.change_display_member_info(
+                member, self.lobby.shop.wallet(member))})
+
+    async def on_coupon_count(self, r: Reader) -> None:
+        """The coupons a player holds: there are none."""
+        if self.player:
+            await self.session.send(schema.pack("Channel_CouponCountToC",
+                                                k3e=self.player.member_id))
 
     # --- invitations ------------------------------------------------------------
 

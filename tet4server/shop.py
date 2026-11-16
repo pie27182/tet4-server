@@ -257,6 +257,18 @@ class Shop:
             return True
         return await self._change(member_id, choose)
 
+    async def discard(self, member_id: bytes, code: str, kind: str) -> tuple[bool, bool]:
+        """Throw away an owned emblem (kind "2") or title ("3"): whether it was thrown
+        away, and whether it was the one shown (then none is)."""
+        def remove(wallet: Wallet) -> tuple[bool, bool]:
+            if code[1:2] != kind or code not in wallet.items:
+                return False, False
+            del wallet.items[code]
+            shown = code in (wallet.emblem, wallet.title)
+            wallet.expire(time.time())          # forgets the shown one
+            return True, shown
+        return await self._change(member_id, remove)
+
     async def earn(self, member_id: bytes, points: int) -> tuple[int, int]:
         """Add TP; the balance before and after."""
         def add(wallet: Wallet) -> tuple[int, int]:

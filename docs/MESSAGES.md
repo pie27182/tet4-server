@@ -5,7 +5,7 @@ by `python3 tools/messages.py` from the server's handler tables; do not edit by
 hand. Every layout is in `tet4server/catalog.py`, and the server reads and
 writes all of them; [`PROTOCOL.md`](PROTOCOL.md) describes the ones in use.
 
-76 not sent | 44 sent | 42 passed to the room | 31 answered | 19 not implemented | 11 Hangame Korea's own services (avatar, reports, Gaea, events), not this game | 8 needs no reply | 2 other launchers' entry; this client enters by user id.
+73 not sent | 47 sent | 42 passed to the room | 34 answered | 16 not implemented | 11 Hangame Korea's own services (avatar, reports, Gaea, events), not this game | 8 needs no reply | 2 other launchers' entry; this client enters by user id.
 
 | ID | Message | Direction | Server |
 |---|---|---|---|
@@ -28,8 +28,8 @@ writes all of them; [`PROTOCOL.md`](PROTOCOL.md) describes the ones in use.
 | `0x0C8C6FDA` | Channel_ComplaintAgreeSvcKorToC | server → client | not sent |
 | `0x0C8C3FDA` | Channel_ComplaintAgreeSvcKorToS | client → server | Hangame Korea's own services (avatar, reports, Gaea, events), not this game |
 | `0x0A57CA8A` | Channel_ComplaintSvcKorToS | client → server | Hangame Korea's own services (avatar, reports, Gaea, events), not this game |
-| `0x0B1B980A` | Channel_CouponCountToC | server → client | not sent |
-| `0x0089556A` | Channel_CouponCountToS | client → server | not implemented: coupons |
+| `0x0B1B980A` | Channel_CouponCountToC | server → client | sent |
+| `0x0089556A` | Channel_CouponCountToS | client → server | answered |
 | `0x0A80143A` | Channel_CreateRoomToC | server → client | sent |
 | `0x0CA9895A` | Channel_CreateRoomToS | client → server | answered |
 | `0x0324A0DA` | Channel_DeleteMemberToC | server → client | sent |
@@ -83,11 +83,11 @@ writes all of them; [`PROTOCOL.md`](PROTOCOL.md) describes the ones in use.
 | `0x0BB5D81A` | Channel_OrderTypeRefreshMemberToC | server → client | not sent |
 | `0x05F1155A` | Channel_OrderTypeRefreshMemberToS | client → server | not implemented |
 | `0x0928E8BA` | Channel_OrderTypeSingleModeResultMemberTetrisToC | server → client | not sent |
-| `0x0B600E5A` | Channel_RequestDeleteAliasToS | client → server | not implemented: throwing a title away |
-| `0x01DF37EA` | Channel_RequestDeleteEmblemToS | client → server | not implemented: throwing an emblem away |
+| `0x0B600E5A` | Channel_RequestDeleteAliasToS | client → server | answered |
+| `0x01DF37EA` | Channel_RequestDeleteEmblemToS | client → server | answered |
 | `0x0478479A` | Channel_ReserveBanishToC | server → client | not sent |
-| `0x09E9027A` | Channel_ResponseDeleteAliasToC | server → client | not sent |
-| `0x0DFFF7CA` | Channel_ResponseDeleteEmblemToC | server → client | not sent |
+| `0x09E9027A` | Channel_ResponseDeleteAliasToC | server → client | sent |
+| `0x0DFFF7CA` | Channel_ResponseDeleteEmblemToC | server → client | sent |
 | `0x02593F5A` | Channel_ResponseInviteGameToC | server → client | sent |
 | `0x02163F5A` | Channel_ResponseInviteGameToS | client → server | answered |
 | `0x0A680DDA` | Channel_RoomInfoToC | server → client | sent |

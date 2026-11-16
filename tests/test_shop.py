@@ -163,4 +163,20 @@ class ProfileTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((wallet.emblem, wallet.title), ("T20062", "T30077"))
         # one she does not own is refused
         self.assertFalse(await store.show(b"alice", "T30001", ""))
-        self.assertEqual(wallet.title, "T30077")
+        self.assertEqual(store.wallet(b"alice").title, "T30077")
+
+        # The trash button: the shown emblem goes, so she shows none, for everyone.
+        await alice.channel.send(schema.pack("Channel_RequestDeleteEmblemToS", code=b"T20062"),
+                                 layer=3)
+        gone = fields(await alice.until(alice.channel, ID("Channel_ResponseDeleteEmblemToC"), 3),
+                      "Channel_ResponseDeleteEmblemToC")
+        self.assertEqual((gone["code"], gone["done"]), (b"T20062", 1))
+        change = fields(await bob.until(
+            bob.channel, ID("Channel_OrderTypeChangeDisplayMemberInfoToC"), 3),
+            "Channel_OrderTypeChangeDisplayMemberInfoToC")
+        self.assertEqual((change["emblem"], change["title"]), (b"", b"T30077"))
+        await alice.channel.send(schema.pack("Channel_RequestDeleteAliasToS", code=b"T30001"),
+                                 layer=3)
+        kept = fields(await alice.until(alice.channel, ID("Channel_ResponseDeleteAliasToC"), 3),
+                      "Channel_ResponseDeleteAliasToC")
+        self.assertEqual(kept["done"], 0)                     # not hers

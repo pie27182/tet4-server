@@ -54,6 +54,16 @@ GAME_POINTS = (30, 20, 10)  # TP for a multiplayer game by rank; later ranks get
 MIN_GAME_SECONDS = 30       # shorter games earn nothing, so quick games are no TP farm
 MAX_QUANTITY = 99           # products bought at once
 
+# --- 내공, the multiplayer rating (domain/rating.py) -----------------------------------
+
+START_RATING = 1000         # a new player's 내공: the lowest of the lowest grade, 초보
+MIN_RATING = 1000           # 내공 never falls below it
+WIN_RATING = 100            # 내공 won for each player finished ahead of
+LOSS_RATING = 50            # 내공 lost for each player finished behind
+SUPER_PACK_BONUS = 50       # % more 내공 won by a holder of the Super Pack (SUPER_PACK)
+PLUS_HOST_BONUS = 20        # % more 내공 won in a room whose host has PLUS_HOST
+GRADE_REWARD = 500          # TP for each grade reached for the first time
+
 # --- Reports (신고) -------------------------------------------------------------------
 
 REPORT_INTERVAL = 10.0      # seconds between two reports kept from the same player
@@ -109,6 +119,9 @@ NO_SUCH_ROOM, WRONG_PASSWORD, ROOM_FULL = 1, 2, 3   # joining; full also while p
 # Item codes, T and five digits: the server acts on these.
 UNLIMITED_HOLD = "T10004"   # no limit on holding pieces
 NEXT_PIECES = "T10005"      # shows more of the coming pieces
+PLUS_HOST = "T10003"        # plus room host: more 내공 for everyone in the holder's rooms
+SUPER_PACK = "T10006"       # more 내공 for its holder
+RATING_TIME = ("T10021", "T10022")  # 지금부터내공타임: twice the 내공 won while held
 EMBLEM, TITLE = "2", "3"    # the digit after T: T2xxxx emblems, T3xxxx titles
 EXTRA_SLOTS = {EMBLEM: "T90002", TITLE: "T90003"}   # each adds four slots
 DECORATION_SLOTS = 4        # emblem and title slots without the items

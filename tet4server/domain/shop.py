@@ -16,6 +16,7 @@ from dataclasses import asdict, dataclass, field
 
 from ..config import EMBLEM, MAX_QUANTITY, START_POINTS, TITLE
 from ..storage import Database
+from .rating import Record, Result
 
 log = logging.getLogger("tet4.shop")
 
@@ -154,6 +155,7 @@ class Wallet:
     items: dict[str, Item] = field(default_factory=dict)
     title: str = ""            # the title (T3xxxx) and emblem (T2xxxx) the player shows
     emblem: str = ""
+    record: Record = Record()  # the multiplayer record
 
     def add(self, product: Product, quantity: int, now: float) -> None:
         for code in product.items:
@@ -218,7 +220,8 @@ class Shop:
             wallet.expire(time.time())
             result = change(wallet)
             self._db.save_wallet(name, wallet.points, json.dumps(
-                [asdict(i) for i in wallet.items.values()]), wallet.title, wallet.emblem)
+                [asdict(i) for i in wallet.items.values()]), wallet.title, wallet.emblem,
+                json.dumps(asdict(wallet.record)))
             return result, wallet
 
         result, self._wallets[member_id] = await self._db.write(
@@ -273,10 +276,24 @@ class Shop:
             return wallet.points - points, wallet.points
         return await self._change(member_id, add)
 
+    async def finish_game(self, member_id: bytes, finish, tp: int
+                          ) -> tuple[Result, int, int]:
+        """A finished game for a player: `finish(record)` gives its Result on the record
+        as kept, which is kept with the TP earned (`tp` and the grade reward). The
+        result, and the TP balance before and after."""
+        def settle(wallet: Wallet) -> tuple[Result, int, int]:
+            result = finish(wallet.record)
+            before = wallet.points
+            wallet.record = result.after
+            wallet.points += tp + result.reward
+            return result, before, wallet.points
+        return await self._change(member_id, settle)
+
 
 def _wallet(row: tuple | None) -> Wallet:
     """A wallet from its database row; none is a new player's."""
     if row is None:
         return Wallet()
-    points, items, title, emblem = row
-    return Wallet(points, {i["code"]: Item(**i) for i in json.loads(items)}, title, emblem)
+    points, items, title, emblem, record = row
+    return Wallet(points, {i["code"]: Item(**i) for i in json.loads(items)}, title, emblem,
+                  Record(**json.loads(record)))

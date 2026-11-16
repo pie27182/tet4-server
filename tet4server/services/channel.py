@@ -115,7 +115,7 @@ class ChannelConnection(Connection):
         players = list(self.lobby.players.values())
         await self.session.send(
             pack("Channel_GetMemberListToC", CHANNEL,
-                 members=[views.member_row(p) for p in players]),
+                 members=[views.member_row(self.lobby, p) for p in players]),
             pack("Channel_OrderTypeGetMemberListTetrisToC",
                  profiles=[views.profile(self.lobby, p.member_id) for p in players]))
 
@@ -257,6 +257,12 @@ class ChannelConnection(Connection):
         title lists (the lobby's 엠블럼 and 호칭 buttons)."""
         await self.session.send(views.display_profile(self.lobby, request["member"],
                                                       request["kind"]))
+
+    @on("Channel_OrderTypeRefreshMemberToS")
+    async def refresh(self, request: dict) -> None:
+        """A member's row brought up to date: its record."""
+        member_id = request["member"]
+        await self.session.send(views.refresh(member_id, self.lobby.shop.wallet(member_id).record))
 
     @on("Channel_OrderTypeChangeDisplayMemberInfoToS")
     async def show(self, request: dict) -> None:

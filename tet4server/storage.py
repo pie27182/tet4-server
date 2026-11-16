@@ -35,9 +35,10 @@ CREATE TABLE IF NOT EXISTS single_mode (
 -- Who is logged in where: a player's channel and login id ("session").
 CREATE TABLE IF NOT EXISTS presence (
     name TEXT PRIMARY KEY, channel INTEGER NOT NULL, session TEXT NOT NULL);
+-- A player's TP, items, shown title and emblem, and multiplayer record (JSON).
 CREATE TABLE IF NOT EXISTS wallets (
     name TEXT PRIMARY KEY, points INTEGER NOT NULL, items TEXT NOT NULL,
-    title TEXT NOT NULL, emblem TEXT NOT NULL);
+    title TEXT NOT NULL, emblem TEXT NOT NULL, record TEXT NOT NULL DEFAULT '{}');
 -- Players' reports of each other (신고), for the operators; chat is a JSON list of
 -- [time, member, text], the lines the reporter's client sent with the report.
 CREATE TABLE IF NOT EXISTS reports (
@@ -71,6 +72,8 @@ class Database:
         self._db.execute("PRAGMA journal_mode=WAL")
         self._db.execute("PRAGMA busy_timeout=10000")     # other processes' writes
         self._db.executescript(SCHEMA)
+        if "record" not in {row[1] for row in self._db.execute("PRAGMA table_info(wallets)")}:
+            self._db.execute("ALTER TABLE wallets ADD COLUMN record TEXT NOT NULL DEFAULT '{}'")
         self._lock = threading.RLock()                    # a transaction's own reads take it again
         self._writer = ThreadPoolExecutor(1, thread_name_prefix="db-write")
 
@@ -169,14 +172,15 @@ class Database:
         """Forget a channel's players (it starts, so none of them is still there)."""
         self._run("DELETE FROM presence WHERE channel = ?", (channel,))
 
-    def load_wallet(self, name: str) -> tuple[int, str, str, str] | None:
-        rows = self._run("SELECT points, items, title, emblem FROM wallets WHERE name = ?",
-                         (name,))
+    def load_wallet(self, name: str) -> tuple[int, str, str, str, str] | None:
+        rows = self._run("SELECT points, items, title, emblem, record FROM wallets "
+                         "WHERE name = ?", (name,))
         return rows[0] if rows else None
 
-    def save_wallet(self, name: str, points: int, items: str, title: str, emblem: str) -> None:
-        self._run("INSERT OR REPLACE INTO wallets VALUES (?, ?, ?, ?, ?)",
-                  (name, points, items, title, emblem))
+    def save_wallet(self, name: str, points: int, items: str, title: str, emblem: str,
+                    record: str) -> None:
+        self._run("INSERT OR REPLACE INTO wallets VALUES (?, ?, ?, ?, ?, ?)",
+                  (name, points, items, title, emblem, record))
 
     def add_report(self, report: tuple[float, int, str, str, str, str]) -> None:
         """Keep a report: time, channel, reporter, reported, reason and the chat (JSON)."""

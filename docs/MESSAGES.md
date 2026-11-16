@@ -16,10 +16,10 @@ written as `f0`, `f1`, ... by position. Types: `u8` `u16` `u32` `u64` `i32` `i64
 
 | What the server does | Messages |
 |---|---|
-| not implemented | 71 |
-| sent | 49 |
-| passed on to the room | 41 |
-| handled | 39 |
+| not implemented | 69 |
+| sent | 50 |
+| handled | 43 |
+| passed on to the room | 38 |
 | not sent | 30 |
 | no reply needed | 8 |
 | not a message | 1 |
@@ -42,7 +42,7 @@ u64
 
 `0x0AB84D0A` · server → client · layer 0 · **sent by `views.arrival`**
 
-`game_id` str (k22e) · `sub_id` str (k23e) · `channel_id` str (k24e) · `member` str (k3e) · `k7e` str · `k8e` str · `k11e` str · `k10e` u32 · `k12e` str · `k26e` u32 · `k27e` u32 · `k28e` u32 · `k29e` u32 · `k30e` u32 · `k31e` u32 · `k13e` u64 · `k34e` u64 · `k32e` str · `k33e` u32 · `k102e` str · `k37e` str · `k38e` str · `k35e` u32 · `room` u32 (k151e) · `k201e` str · `k153e` [u32] · `result` str (k1e)
+`game_id` str (k22e) · `sub_id` str (k23e) · `channel_id` str (k24e) · `member` str (k3e) · `k7e` str · `k8e` str · `k11e` str · `k10e` u32 · `k12e` str · `plays` u32 (k26e) · `wins` u32 (k27e) · `losses` u32 (k28e) · `k29e` u32 · `k30e` u32 · `rating` u32 (k31e) · `k13e` u64 · `k34e` u64 · `grade_name` str (k32e) · `grade` u32 (k33e) · `k102e` str · `k37e` str · `k38e` str · `k35e` u32 · `room` u32 (k151e) · `k201e` str · `k153e` [u32] · `result` str (k1e)
 
 ### Channel_AutoEnterRoomToC
 
@@ -442,15 +442,15 @@ u32 · str
 
 ### Channel_OrderTypeRefreshMemberToC
 
-`0x0BB5D81A` · server → client · layer 3 · **not implemented: refreshing a member's row**
+`0x0BB5D81A` · server → client · layer 3 · **sent by `views.refresh`**
 
-str · u32 · u32 · u32 · u32 · str · u32 · u32
+`member` str · `plays` u32 · `wins` u32 · `losses` u32 · `rating` u32 · `grade_name` str · `grade` u32 · u32
 
 ### Channel_OrderTypeRefreshMemberToS
 
-`0x05F1155A` · client → server · layer 3 · **not implemented: refreshing a member's row**
+`0x05F1155A` · client → server · layer 3 · **handled by `ChannelConnection.refresh`**
 
-str
+`member` str
 
 ### Channel_OrderTypeSingleModeResultMemberTetrisToC
 
@@ -776,7 +776,7 @@ u8 · u8 · u8
 
 `0x0619233A` · server → client · layer 0 · **sent by `game.seated`**
 
-`host` str (k50e) · `k57e` str · `seat` u32 (k58e) · `member` str (k3e) · `k7e` str · `k8e` str · `k11e` str · `k10e` u32 · `k12e` str · `k34e` u64 · `k13e` u64 · `k26e` u32 · `k27e` u32 · `k28e` u32 · `k29e` u32 · `k30e` u32 · `k31e` u32 · `k32e` str · `k33e` u32 · `k102e` str · `k37e` str · `k38e` str · `k52e` str · `k53e` u32 · `k35e` u32 · `k153e` [u32]
+`host` str (k50e) · `k57e` str · `seat` u32 (k58e) · `member` str (k3e) · `k7e` str · `k8e` str · `k11e` str · `k10e` u32 · `k12e` str · `k34e` u64 · `k13e` u64 · `plays` u32 (k26e) · `wins` u32 (k27e) · `losses` u32 (k28e) · `k29e` u32 · `k30e` u32 · `rating` u32 (k31e) · `grade_name` str (k32e) · `grade` u32 (k33e) · `k102e` str · `k37e` str · `k38e` str · `k52e` str · `k53e` u32 · `k35e` u32 · `k153e` [u32]
 
 ### Room_AlterRoomToS
 
@@ -1032,7 +1032,7 @@ u8 · u8 · u8
 
 ### Room_OrderTypeComboTetris
 
-`0x06F767AA` · client → server → the room · layer 3 · **passed on to the room by `GameConnection.relay`**
+`0x06F767AA` · client → server → the room · layer 3 · **handled by `GameConnection.counted`**
 
 u8 · u16 · u8
 
@@ -1080,7 +1080,7 @@ u8
 
 ### Room_OrderTypeGarbageSendTetris
 
-`0x09F740FA` · client → server → the room · layer 3 · **passed on to the room by `GameConnection.relay`**
+`0x09F740FA` · client → server → the room · layer 3 · **handled by `GameConnection.counted`**
 
 u8 · u8 · u8 · u8
 
@@ -1230,7 +1230,7 @@ u8 · u32 · [u8] · u32 · u32
 
 ### Room_OrderTypePolyMinoPutTetris
 
-`0x07455B2A` · client → server → the room · layer 3 · **passed on to the room by `GameConnection.relay`**
+`0x07455B2A` · client → server → the room · layer 3 · **handled by `GameConnection.counted`**
 
 u8 · u32 · [u8] · u32 · u32
 
@@ -1488,7 +1488,7 @@ Nested in the messages above, without a message ID of their own.
 
 ### _BasicMemberInfo
 
-u32 · u32 · u32 · u32 · u32 · str · str · u32 · u32 · u32 · u32 · str
+`best_grade` u32 · `wins` u32 · `losses` u32 · `rating` u32 · `grade` u32 · `grade_name` str · str · `age` u32 · `speed` u32 · `attack_speed` u32 · `max_combo` u32 · str
 
 ### _BenefitInfo
 
@@ -1564,7 +1564,7 @@ u64 · `member` str · u64 · str · `game_id` str
 
 ### _MemberInfo
 
-`member` str (k3e) · `k7e` str · `k8e` str · `k11e` str · `k10e` u32 · `k12e` str · `k13e` u64 · `k26e` u32 · `k27e` u32 · `k28e` u32 · `k29e` u32 · `k30e` u32 · `k31e` u32 · `k32e` str · `k33e` u32 · `k102e` str · `k34e` u64 · `k37e` str · `k38e` str · `k35e` u32 · `room` u32 (k151e) · `k201e` str · `k153e` [u32]
+`member` str (k3e) · `k7e` str · `k8e` str · `k11e` str · `k10e` u32 · `k12e` str · `k13e` u64 · `plays` u32 (k26e) · `wins` u32 (k27e) · `losses` u32 (k28e) · `k29e` u32 · `k30e` u32 · `rating` u32 (k31e) · `grade_name` str (k32e) · `grade` u32 (k33e) · `k102e` str · `k34e` u64 · `k37e` str · `k38e` str · `k35e` u32 · `room` u32 (k151e) · `k201e` str · `k153e` [u32]
 
 ### _MemberInfoChannelSvcKor
 
@@ -1572,7 +1572,7 @@ u64
 
 ### _MemberInfoRoom
 
-`k57e` str · `seat` u32 (k58e) · `member` str (k3e) · `k7e` str · `k8e` str · `k11e` str · `k10e` u32 · `k12e` str · `k34e` u64 · `k13e` u64 · `k26e` u32 · `k27e` u32 · `k28e` u32 · `k29e` u32 · `k30e` u32 · `k31e` u32 · `k32e` str · `k33e` u32 · `k102e` str · `k37e` str · `k38e` str · `k52e` str · `k53e` u32 · `k35e` u32 · `k153e` [u32]
+`k57e` str · `seat` u32 (k58e) · `member` str (k3e) · `k7e` str · `k8e` str · `k11e` str · `k10e` u32 · `k12e` str · `k34e` u64 · `k13e` u64 · `plays` u32 (k26e) · `wins` u32 (k27e) · `losses` u32 (k28e) · `k29e` u32 · `k30e` u32 · `rating` u32 (k31e) · `grade_name` str (k32e) · `grade` u32 (k33e) · `k102e` str · `k37e` str · `k38e` str · `k52e` str · `k53e` u32 · `k35e` u32 · `k153e` [u32]
 
 ### _MemberInfoRoomSvcKor
 
@@ -1592,7 +1592,7 @@ u8 · u8 · u8
 
 ### _MemberScoreReport
 
-`member` str · u32 · u32 · u32 · u32 · u32 · u32 · str · u32 · u32 · str · u64 · u64 · u32 · [u32]
+`member` str · `plays` u32 · `wins` u32 · `losses` u32 · `k29e` u32 · `k30e` u32 · `rating` u32 · `grade_name` str · `grade` u32 · u32 · str · u64 · u64 · u32 · [u32]
 
 ### _MemberScoreReportSvcKor
 
@@ -1652,15 +1652,15 @@ str · str · u64
 
 ### _TetrisGameReport
 
-`member` str · `rank` u32 · `team` u32 · `title` str · `level` u32 · `level_after` u32 · u32 · u32 · f32 · u32 · u32 · u32 · u32 · u32 · u32 · u32 · u32 · f32 · u32 · u32 · u32 · u8 · u32 · str · u8 · u32 · u32 · u32 · [str] · u32 · u8 · f32
+`member` str · `rank` u32 · `team` u32 · `title` str · `grade` u32 · `grade_after` u32 · `rating` u32 · `rating_after` u32 · `speed` f32 · `attack_lines` u32 · u32 · u32 · u32 · `max_combo` u32 · u32 · u32 · u32 · f32 · u32 · u32 · `tp` u32 · u8 · u32 · str · `no_rating` u8 · `bonus1` u32 · `bonus2` u32 · `bonus` u32 · `rewards` [str] · `reward_tp` u32 · u8 · `attack_speed` f32
 
 ### _TetrisMemberGameReport
 
-`member` str · u32 · u32 · u32 · u32 · u32 · u8 · u8 · u8 · u8 · u8 · u32 · u32 · u32 · u32 · u32 · f32 · u32 · u32 · f32 · u32 · u32 · u32 · u8 · _TetrisSchoolInfo · u32 · u32 · u32 · u32
+`member` str · u32 · u32 · `today_tp` u32 · u32 · u32 · u8 · u8 · u8 · u8 · u8 · u32 · u32 · u32 · u32 · u32 · f32 · u32 · u32 · f32 · u32 · u32 · u32 · u8 · _TetrisSchoolInfo · u32 · u32 · u32 · u32
 
 ### _TetrisMemberInfo
 
-`member` str · `school` _TetrisSchoolInfo · u32 · u32 · str · u32 · u32 · u32 · `emblem` str · `title` str · u64 · `single_modes` [_SingleModeInfo]
+`member` str · `school` _TetrisSchoolInfo · `best_grade` u32 · `grade` u32 · `best_grade_name` str · `best_streak` u32 · u32 · u32 · `emblem` str · `title` str · u64 · `single_modes` [_SingleModeInfo]
 
 ### _TetrisMissionMastInfo
 
@@ -1672,7 +1672,7 @@ u32 · str · u32 · str
 
 ### _TetrisSchoolInfo
 
-u8 · str · u32 · u16
+u8 · `name` str · `rank` u32 · u16
 
 ### _UseAbleItem
 
@@ -1702,14 +1702,14 @@ each; a key named after itself is one whose meaning is not known.
 | k23e | `sub_id` | Channel_AddMemberToC, Channel_AutoEnterRoomToS, Channel_CreateRoomToC and 12 more |
 | k24e | `channel_id` | Channel_AddMemberToC, Channel_AutoEnterRoomToS, Channel_CreateRoomToC and 12 more |
 | k25e | — | Room_GetMemberListToC |
-| k26e | — | Channel_AddMemberToC, Room_AddMemberToC, _MemberInfo and 1 more |
-| k27e | — | Channel_AddMemberToC, Room_AddMemberToC, _MemberInfo and 1 more |
-| k28e | — | Channel_AddMemberToC, Room_AddMemberToC, _MemberInfo and 1 more |
-| k29e | — | Channel_AddMemberToC, Room_AddMemberToC, _MemberInfo and 1 more |
-| k30e | — | Channel_AddMemberToC, Room_AddMemberToC, _MemberInfo and 1 more |
-| k31e | — | Channel_AddMemberToC, Room_AddMemberToC, _MemberInfo and 1 more |
-| k32e | — | Channel_AddMemberToC, Room_AddMemberToC, _MemberInfo and 1 more |
-| k33e | — | Channel_AddMemberToC, Room_AddMemberToC, _MemberInfo and 1 more |
+| k26e | `plays` | Channel_AddMemberToC, Room_AddMemberToC, _MemberInfo and 1 more |
+| k27e | `wins` | Channel_AddMemberToC, Room_AddMemberToC, _MemberInfo and 1 more |
+| k28e | `losses` | Channel_AddMemberToC, Room_AddMemberToC, _MemberInfo and 1 more |
+| k29e | — | Channel_AddMemberToC, Room_AddMemberToC, _MemberInfo and 2 more |
+| k30e | — | Channel_AddMemberToC, Room_AddMemberToC, _MemberInfo and 2 more |
+| k31e | `rating` | Channel_AddMemberToC, Room_AddMemberToC, _MemberInfo and 1 more |
+| k32e | `grade_name` | Channel_AddMemberToC, Room_AddMemberToC, _MemberInfo and 1 more |
+| k33e | `grade` | Channel_AddMemberToC, Room_AddMemberToC, _MemberInfo and 1 more |
 | k34e | — | Channel_AddMemberToC, Room_AddMemberToC, _MemberInfo and 1 more |
 | k35e | — | Channel_AddMemberToC, Channel_EnterChannelToC, Room_AddMemberToC and 2 more |
 | k37e | — | Channel_AddMemberToC, Room_AddMemberToC, _MemberInfo and 1 more |

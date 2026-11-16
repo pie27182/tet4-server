@@ -11,6 +11,7 @@ from functools import cache
 from ..config import (CHANNEL_ID, DECORATION_SLOTS, EMBLEM, EXTRA_SLOTS, GAME_ID, NO_MISSION,
                       RECORDS_SHOWN, ROOM_EMPTY, ROOM_SLOTS, SINGLE_MODES, SUB_ID, TITLE)
 from ..domain.lobby import Lobby, Player
+from ..domain.rating import NAMES, Record, Result
 from ..domain.records import Standing
 from ..domain.room import Room, Settings
 from ..domain.shop import DECORATION_NAMES, GROUPS, PRODUCTS, Wallet
@@ -22,22 +23,72 @@ CHANNEL = dict(game_id=GAME_ID, sub_id=SUB_ID, channel_id=CHANNEL_ID)
 
 # --- players -------------------------------------------------------------------------
 
-def member_row(player: Player) -> dict:
-    """A row of the lobby's member list (_MemberInfo): the member and the room it is in,
-    0 in the lobby, which the list shows and an accepted invitation looks the room up
-    by. The client accepted rows with k7e the member id again and k11e "M"."""
+def record_fields(record: Record) -> dict:
+    """A member's record as member rows and seats carry it: the client shows the grade's
+    medal and name, the 내공 and the games, and keeps them to compare after a game
+    (the exit dialog's totals compare k30e)."""
+    return dict(plays=record.plays, wins=record.wins, losses=record.losses,
+                k30e=record.rating, rating=record.rating, grade_name=NAMES[record.grade],
+                grade=record.grade)
+
+
+def member_row(lobby: Lobby, player: Player) -> dict:
+    """A row of the lobby's member list (_MemberInfo): the member, its record and the
+    room it is in, 0 in the lobby, which the list shows and an accepted invitation looks
+    the room up by. The client accepted rows with k7e the member id again and k11e "M"."""
     room = player.room
-    return dict(member=player.member_id, k7e=player.member_id, k11e=b"M",
+    return dict(record_fields(lobby.shop.wallet(player.member_id).record),
+                member=player.member_id, k7e=player.member_id, k11e=b"M",
                 room=room.number if room and not room.single else 0)
 
 
 def profile(lobby: Lobby, member_id: bytes) -> dict:
-    """A member's Tetris profile (_TetrisMemberInfo): the emblem and title shown and the
-    Single Mode records."""
+    """A member's Tetris profile (_TetrisMemberInfo): the grades, the best win streak,
+    the emblem and title shown and the Single Mode records. Which of the grade fields
+    draws which medal is not known, so each medal's candidates carry its grade."""
     wallet = lobby.shop.wallet(member_id)
-    return dict(member=member_id, emblem=wallet.emblem.encode(), title=wallet.title.encode(),
+    record = wallet.record
+    return dict(member=member_id, best_grade=record.best_grade, grade=record.grade,
+                best_grade_name=NAMES[record.best_grade], best_streak=record.best_streak,
+                emblem=wallet.emblem.encode(), title=wallet.title.encode(),
                 single_modes=[single_mode(mode, lobby.records.standing(member_id, mode))
                               for mode in range(SINGLE_MODES)])
+
+
+def basic_info(record: Record) -> dict:
+    """The member info dialog's record (_BasicMemberInfo): 내공 and grade, wins and
+    losses (the dialog adds them up and works out the rate), the speeds in thousandths
+    and the best combo."""
+    return dict(best_grade=record.best_grade, wins=record.wins, losses=record.losses,
+                rating=record.rating, grade=record.grade, grade_name=NAMES[record.grade],
+                speed=round(record.speed * 1000), attack_speed=round(record.attack_speed * 1000),
+                max_combo=record.max_combo)
+
+
+def refresh(member_id: bytes, record: Record) -> Message:
+    """A member's new record for everyone's member list; a player's own updates its
+    profile panel."""
+    return pack("Channel_OrderTypeRefreshMemberToC", member=member_id, plays=record.plays,
+                wins=record.wins, losses=record.losses, rating=record.rating,
+                grade_name=NAMES[record.grade], grade=record.grade)
+
+
+def game_report(member_id: bytes, rank: int, result: Result, tp: int, play) -> dict:
+    """A player's line on the result board (_TetrisGameReport): the place, the grades
+    and 내공 before and after (the board shows the change and plays the level-up when
+    the grade rose), the part bonuses added, the game's statistics (`play`, a room.Play)
+    and the TP earned with the reward for a new grade."""
+    before, after = result.before, result.after
+    return dict(member=member_id, rank=rank, grade=before.grade, grade_after=after.grade,
+                rating=before.rating, rating_after=after.rating, bonus=result.bonus,
+                speed=play.speed, attack_lines=play.attack, attack_speed=play.attack_speed,
+                max_combo=play.combo, tp=tp + result.reward, reward_tp=result.reward)
+
+
+def score_report(member_id: bytes, record: Record) -> dict:
+    """A player's record after a game (_MemberScoreReport), for the seats and the exit
+    dialog's totals."""
+    return dict(record_fields(record), member=member_id)
 
 
 def single_mode(mode: int, standing: Standing, result: int = 0) -> dict:
@@ -61,7 +112,7 @@ def decorations(wallet: Wallet, kind: str) -> dict:
 
 def arrival(lobby: Lobby, player: Player) -> tuple[Message, Message]:
     """A member entering the channel, for the others: its row and its Tetris profile."""
-    return (pack("Channel_AddMemberToC", {**CHANNEL, **member_row(player)}),
+    return (pack("Channel_AddMemberToC", {**CHANNEL, **member_row(lobby, player)}),
             pack("Channel_OrderTypeAddMemberTetrisToC", profile=profile(lobby, player.member_id)))
 
 
@@ -83,8 +134,8 @@ def display_profile(lobby: Lobby, member_id: bytes, kind: int) -> Message:
     title lists."""
     wallet = lobby.shop.wallet(member_id)
     return pack("Channel_OrderTypeGetDisplayMemberInfoTetrisToC", member=member_id, kind=kind,
-                profile=profile(lobby, member_id), emblems=decorations(wallet, EMBLEM),
-                titles=decorations(wallet, TITLE))
+                basic=basic_info(wallet.record), profile=profile(lobby, member_id),
+                emblems=decorations(wallet, EMBLEM), titles=decorations(wallet, TITLE))
 
 
 def shown_decorations(member_id: bytes, wallet: Wallet) -> Message:

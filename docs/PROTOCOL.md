@@ -771,7 +771,9 @@ MESSAGES.md has every layout.
   1600 and says the amount changes with the opponent's rating. The server now stores
   global multiplayer points, games, wins, losses, win rate and current/best streaks
   in `multiplayer_ratings`; each completed multiplayer room updates them atomically.
-  The member row's `k31e` and `_TetrisSchoolInfo`'s third field carry the points.
+  The implementation provisionally puts points in member-row `k31e` (which the
+  bootstrap also seeds with 1360) and in `_TetrisSchoolInfo`'s third field; their
+  exact UI semantics still need confirmation from the client. 
   The score update is a provisional zero-sum, placement-based Elo reconstruction
   (initial 1600, K=32), **not a recovered copy of Hangame's exact formula**.
   NHN's 2010 patent describes score rules that differ by grade (beginner, middle,

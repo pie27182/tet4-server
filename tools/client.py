@@ -20,6 +20,7 @@ import socket
 import ssl
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -60,6 +61,7 @@ def print_banner() -> None:
     print("Tet4 Launcher")
     print("This launcher helps you choose the game folder, patch it, and start the game.")
     print("The game files themselves are not included in this repository.")
+    print("Press Enter to accept the value shown in brackets.")
     print()
 
 
@@ -122,14 +124,46 @@ def start(directory: Path, boot: str) -> int:
     exe = directory / "Tet4.exe"
     if not exe.is_file():
         sys.exit(f"no Tet4.exe in {directory}")
-    if os.name == "nt":
-        env = os.environ.copy()
-        env.setdefault("LANG", "ko_KR.UTF-8")
-        env.setdefault("LC_ALL", "ko_KR.UTF-8")
-        return subprocess.call([str(exe), boot], cwd=directory, env=env)
+
     env = {**os.environ, "LANG": "ko_KR.UTF-8", "LC_ALL": "ko_KR.UTF-8"}
-    env.setdefault("WINEDEBUG", "-all")
-    return subprocess.call(["wine", "Tet4.exe", boot], cwd=directory, env=env)
+    log_path = directory / "tet4-launcher.log"
+    try:
+        log = open(log_path, "ab", buffering=0)
+    except OSError:
+        log = subprocess.DEVNULL
+
+    try:
+        if os.name == "nt":
+            # A GUI game must outlive the console that started it.  Detach it,
+            # then this process (and the .bat window) can exit immediately.
+            flags = getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
+            proc = subprocess.Popen(
+                [str(exe), boot], cwd=directory, env=env,
+                stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+                creationflags=flags, close_fds=True,
+            )
+        else:
+            env.setdefault("WINEDEBUG", "-all")
+            proc = subprocess.Popen(
+                ["wine", "Tet4.exe", boot], cwd=directory, env=env,
+                stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+                start_new_session=True, close_fds=True,
+            )
+    except OSError as exc:
+        print(f"Could not start the game: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        if log is not subprocess.DEVNULL:
+            log.close()
+
+    time.sleep(1)
+    if proc.poll() not in (None, 0):
+        print(f"The game exited immediately (code {proc.returncode}).\n"
+              f"See {log_path} for details.", file=sys.stderr)
+        return 1
+
+    print(f"The game is starting. This window will close.\nLog: {log_path}")
+    return 0
 
 
 def make_bootstrap(sample: str, server: str, name: str, ticket: str) -> str:

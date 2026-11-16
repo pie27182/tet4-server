@@ -35,10 +35,13 @@ def profile(lobby: Lobby, member_id: bytes) -> dict:
     """A member's profile: decorations, Single Mode records and multiplayer rating."""
     wallet = lobby.shop.wallet(member_id)
     rating = lobby.ratings.standing(member_id)
-    # _TetrisSchoolInfo's field order is u8, str, u32, u16. The u32 is provisionally
-    # used for rating points; grade code/name are zero until the client's 24 thresholds
-    # and grade lookup have been recovered. The trailing best-grade field is also 0.
+    # _TetrisSchoolInfo is u8, str, u32, u16. The third value is the provisional
+    # 내공 score; grade code/name and the trailing grade field remain 0 until the
+    # client's 24-entry table and thresholds are extracted.
     school = dict(f0=0, f1=b"", f2=rating.points, f3=0)
+    # The profile's six fields after school are: wins, losses, win-rate text,
+    # best combo, current streak and best grade. Only the first three and streak
+    # are currently collected; best combo and best grade are deliberately zero.
     return dict(member=member_id, school=school,
                 f2=rating.wins, f3=rating.losses,
                 f4=f"{rating.win_rate * 100:.2f}", f5=0,

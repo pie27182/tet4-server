@@ -147,7 +147,7 @@ def main() -> int:
     p = commands.add_parser("play", help="log in and start the client")
     p.add_argument("dir", type=Path, nargs="?", default=ROOT / "client-patched")
     p.add_argument("--server", required=True, help="the server's address")
-    p.add_argument("--port", type=int, default=15010, help="account service port")
+    p.add_argument("--port", type=int, default=10455, help="account service port")
     p.add_argument("--name", help="account name (asked if left out)")
     p.add_argument("--register", action="store_true", help="create the account first")
     p.add_argument("--insecure", action="store_true",

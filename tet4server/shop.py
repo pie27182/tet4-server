@@ -8,6 +8,7 @@ hours, Cnnn uses; D000 and U000 never run out. The client shows every product wi
 the name, icon, description and price of its own catalog
 (Tet4/Shop/Data/ShopDataList.xml); the prices here are the ones it shows.
 """
+import asyncio
 import json
 import logging
 import time
@@ -178,70 +179,98 @@ class Wallet:
 
 
 class Shop:
+    """Players' wallets. With a database, the database holds them: every change reads
+    the wallet, changes it and writes it back in one transaction, so channels in other
+    processes never undo each other's changes, and the wallets of the players in this
+    channel are kept here to read. Without one, wallets last until the server stops."""
+
     def __init__(self, db: Database | None = None):
-        """With `db`, wallets are loaded from and written to the database."""
         self._db = db
         self._wallets: dict[bytes, Wallet] = {}
-        for name, points, items, title, emblem in db.load_wallets() if db else []:
-            self._wallets[name.encode("latin-1")] = Wallet(
-                points, {i["code"]: Item(**i) for i in json.loads(items)}, title, emblem)
+
+    async def load(self, member_id: bytes) -> None:
+        """Read a player's wallet, on entering the channel."""
+        if self._db:
+            row = await asyncio.to_thread(self._db.load_wallet, member_id.decode("latin-1"))
+            self._wallets[member_id] = _wallet(row)
+
+    def forget(self, member_id: bytes) -> None:
+        """A player left the channel: the database keeps the wallet."""
+        if self._db:
+            self._wallets.pop(member_id, None)
 
     def wallet(self, member_id: bytes) -> Wallet:
-        """A player's wallet to read; a player who never had one gets a new player's,
-        which is only kept once it changes (looking up any name stores nothing)."""
+        """A player's wallet to read; one never changed is a new player's."""
         wallet = self._wallets.get(member_id) or Wallet()
-        wallet.expire(time.time())
-        return wallet
-
-    def _own(self, member_id: bytes) -> Wallet:
-        """A player's wallet to change, kept from now on."""
-        wallet = self._wallets.setdefault(member_id, Wallet())
         wallet.expire(time.time())
         return wallet
 
     def owns(self, member_id: bytes, item: str) -> bool:
         return item in self.wallet(member_id).items
 
-    def buy(self, member_id: bytes, code: str, quantity: int) -> str | None:
+    async def _change(self, member_id: bytes, change):
+        """change(wallet) on the player's current wallet, kept; its result."""
+        if self._db is None:
+            wallet = self._wallets.setdefault(member_id, Wallet())
+            wallet.expire(time.time())
+            return change(wallet)
+        name = member_id.decode("latin-1")
+
+        def read_change_write():
+            wallet = _wallet(self._db.load_wallet(name))
+            wallet.expire(time.time())
+            result = change(wallet)
+            self._db.save_wallet(name, wallet.points, json.dumps(
+                [asdict(i) for i in wallet.items.values()]), wallet.title, wallet.emblem)
+            return result, wallet
+
+        result, self._wallets[member_id] = await self._db.write(
+            self._db.transaction, read_change_write)
+        return result
+
+    async def buy(self, member_id: bytes, code: str, quantity: int) -> str | None:
         """Buy `quantity` of a product with TP. None when bought, else why not, in the
         words the client shows."""
         product = PRODUCTS.get(code)
         if product is None or not 1 <= quantity <= 99:
             return "판매하지 않는 상품입니다."
-        wallet = self._own(member_id)
-        if wallet.points < product.price * quantity:
-            return "TP가 부족합니다."
-        wallet.points -= product.price * quantity
-        wallet.add(product, quantity, time.time())
-        log.info("%r bought %d x %s, %d TP left", member_id, quantity, code, wallet.points)
-        self._save(member_id)
-        return None
 
-    def show(self, member_id: bytes, title: str, emblem: str) -> bool:
+        def pay(wallet: Wallet) -> str | None:
+            if wallet.points < product.price * quantity:
+                return "TP가 부족합니다."
+            wallet.points -= product.price * quantity
+            wallet.add(product, quantity, time.time())
+            return None
+
+        error = await self._change(member_id, pay)
+        if error is None:
+            log.info("%r bought %d x %s", member_id, quantity, code)
+        return error
+
+    async def show(self, member_id: bytes, title: str, emblem: str) -> bool:
         """Show an owned title and emblem; an empty code shows none."""
-        wallet = self._own(member_id)
-        if any(code and (code not in wallet.items or code[1] != kind)
-               for code, kind in ((title, "3"), (emblem, "2"))):
-            return False
-        wallet.title, wallet.emblem = title, emblem
-        self._save(member_id)
-        return True
+        def choose(wallet: Wallet) -> bool:
+            if any(code and (code not in wallet.items or code[1] != kind)
+                   for code, kind in ((title, "3"), (emblem, "2"))):
+                return False
+            wallet.title, wallet.emblem = title, emblem
+            return True
+        return await self._change(member_id, choose)
 
-    def earn(self, member_id: bytes, points: int) -> tuple[int, int]:
+    async def earn(self, member_id: bytes, points: int) -> tuple[int, int]:
         """Add TP; the balance before and after."""
-        wallet = self._own(member_id)
-        before = wallet.points
-        wallet.points += points
-        self._save(member_id)
-        return before, wallet.points
+        def add(wallet: Wallet) -> tuple[int, int]:
+            wallet.points += points
+            return wallet.points - points, wallet.points
+        return await self._change(member_id, add)
 
-    def _save(self, member_id: bytes) -> None:
-        """Queue the wallet's write; writes reach the database in the order queued."""
-        if self._db:
-            wallet = self._wallets[member_id]
-            self._db.submit(self._db.save_wallet, member_id.decode("latin-1"), wallet.points,
-                            json.dumps([asdict(i) for i in wallet.items.values()]),
-                            wallet.title, wallet.emblem)
+
+def _wallet(row: tuple | None) -> Wallet:
+    """A wallet from its database row; none is a new player's."""
+    if row is None:
+        return Wallet()
+    points, items, title, emblem = row
+    return Wallet(points, {i["code"]: Item(**i) for i in json.loads(items)}, title, emblem)
 
 
 # Messages, all at layer 3 of the channel socket (Tet4.exe registers the shop's

@@ -3,10 +3,11 @@
 The channel and game services only touch it from the event loop, so it needs no
 locks. Messages to other players go out with Session.post, which never waits.
 """
+import asyncio
 import itertools
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Coroutine
 
 from .accounts import Database
 from .messages import RoomRequest
@@ -20,6 +21,8 @@ if TYPE_CHECKING:
 log = logging.getLogger("tet4.lobby")
 
 MAX_ROOMS = 100           # numbered room slots in the channel's room list (CDS MaxRoom)
+MAX_MEMBERS = 300         # players in one channel (CDS MaxMember): every lobby event goes
+                          # to all of them, so more players means more channels
 
 
 @dataclass(eq=False)
@@ -41,6 +44,22 @@ class Lobby:
         # Map names by mode letter and place in the client's map list, learnt from game
         # starts: the map choice the host sends carries only the place (MapSetTetrisToS).
         self.map_names: dict[tuple[bytes, int], bytes] = {}
+        self._tasks: set[asyncio.Task] = set()
+
+    def spawn(self, work: Coroutine) -> None:
+        """Run work in the background, logging its failure."""
+        task = asyncio.get_running_loop().create_task(work)
+        self._tasks.add(task)
+        task.add_done_callback(self._done)
+
+    def _done(self, task: asyncio.Task) -> None:
+        self._tasks.discard(task)
+        if not task.cancelled() and task.exception():
+            log.error("background work failed", exc_info=task.exception())
+
+    async def close(self) -> None:
+        """Let the background work finish (the server is stopping)."""
+        await asyncio.gather(*self._tasks, return_exceptions=True)
 
     @property
     def requires_login(self) -> bool:

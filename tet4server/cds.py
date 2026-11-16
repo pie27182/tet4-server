@@ -8,8 +8,9 @@ The client matches the reply to its request by tid. It reads the channel host fr
 column 3 and the port from column 4 by position, not by column name.
 """
 import logging
+from typing import Callable
 
-from .lobby import MAX_ROOMS
+from .lobby import MAX_MEMBERS, MAX_ROOMS
 from .messages import Endpoint
 from .xdr import Reader, i32, string, u32
 
@@ -21,13 +22,15 @@ COLUMNS = ("GameID", "SubID", "ChannelID", "ChannelIP", "ChannelPort",
 log = logging.getLogger("tet4.cds")
 
 
-def channel_row(channel: Endpoint) -> tuple[str, ...]:
-    return ("TET4", "01D0A", "1", channel.host, str(channel.port), "1", "300",
-            str(MAX_ROOMS), "0")
+def channel_row(number: int, channel: Endpoint, members: int) -> tuple[str, ...]:
+    return ("TET4", "01D0A", str(number), channel.host, str(channel.port), str(number),
+            str(MAX_MEMBERS), str(MAX_ROOMS), str(members))
 
 
-def answer(body: bytes, channel: Endpoint) -> bytes | None:
-    """The reply body for one request, or None for requests without a known reply."""
+def answer(body: bytes, channels: list[Endpoint], members: Callable[[], list[int]]
+           ) -> bytes | None:
+    """The reply body for one request, or None for requests without a known reply: one
+    row per channel, with the number of players in it now."""
     r = Reader(body)
     request_id = r.u32()
     if request_id != SELECT:
@@ -35,10 +38,11 @@ def answer(body: bytes, channel: Endpoint) -> bytes | None:
         return None
     tid, table = r.u32(), r.string()
     log.info("CDS <- select %s", table.decode("ascii", "replace"))
-    row = channel_row(channel)
+    rows = [channel_row(n, channel, count)
+            for n, (channel, count) in enumerate(zip(channels, members()), 1)]
     return b"".join([
         u32(SELECT_REPLY), u32(tid), i32(0),
         u32(len(COLUMNS)), *(string(c.encode()) for c in COLUMNS),
-        u32(1), u32(len(row)), *(string(v.encode()) for v in row),
+        u32(len(rows)), *(u32(len(row)) + b"".join(string(v.encode()) for v in row)
+                          for row in rows),
     ])
-

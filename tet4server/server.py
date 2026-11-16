@@ -1,11 +1,19 @@
-"""Run the TPack, CDS, channel, game and account services: python3 -m tet4server."""
+"""Run the TPack, CDS, account, channel and game services: python3 -m tet4server.
+
+The front (TPack, the CDS channel directory and the account service) leads players to
+the channels. A channel is one lobby with its rooms, on its own channel and game
+sockets; with --channels N, each channel runs in a process of its own, so that the
+channels share the machine's cores, and the database is what they share.
+"""
 import argparse
 import asyncio
 import functools
 import logging
+import multiprocessing
+import signal
 import ssl
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable
 
@@ -15,6 +23,7 @@ from .channel import ChannelConnection
 from .game import GameConnection
 from .lobby import Lobby
 from .messages import Endpoint
+from .records import REFRESH
 from .xdr import ProtocolError, frame, read_frame
 from .xlbp import Session, Tracer
 
@@ -34,78 +43,31 @@ log = logging.getLogger("tet4.server")
 @dataclass(frozen=True)
 class Ports:
     """The client's bootstrap string fixes the TPack and CDS ports; the CDS and room
-    replies announce the channel and game ports to it."""
+    replies announce the channel and game ports to it. Channel n listens on
+    channel + 2(n - 1) and game + 2(n - 1)."""
     tpack: int = 10454
     cds: int = 15000
     channel: int = 15001
     game: int = 15002
-    accounts: int = 15010    # registration and login, used by the launcher; with a database
+    accounts: int = 10455    # registration and login, used by the launcher; with a database
+
+    def of_channel(self, number: int) -> "Ports":
+        step = 2 * (number - 1)
+        return replace(self, channel=self.channel and self.channel + step,
+                       game=self.game and self.game + step)
 
 
-class Services:
-    """The listeners. `host` is the address to bind, `public_host` the one the replies
-    announce to clients (a VPS binds 0.0.0.0 and announces its public IP). A port of 0
-    binds any free port; the replies announce the ports actually bound.
+class Listeners:
+    """Bound sockets and their connection tasks."""
 
-    With `db` the server requires accounts: the account service registers players
-    and hands out tickets, and the channel service accepts only valid tickets.
-    Without it any account name is accepted and records last until the server stops.
-    """
-
-    def __init__(self, host: str = HOST, ports: Ports = Ports(), trace: Path | None = None,
-                 db: Path | None = None, public_host: str | None = None,
-                 tls: ssl.SSLContext | None = None):
+    def __init__(self, host: str, tracer: Tracer | None = None):
         self.host = host
-        self.public_host = public_host or host
-        self.ports = ports
-        self.db = Database(db) if db else None
-        self.lobby = Lobby(self.db)
-        self._tls = tls
-        self._tracer = Tracer(trace) if trace else None
+        self._tracer = tracer
         self._servers: list[asyncio.Server] = []
         self._connections: set[asyncio.Task] = set()
 
-    async def start(self) -> "Services":
-        try:
-            game = Endpoint(self.public_host, await self._listen(self.ports.game, self._secure(
-                "game", lambda session: GameConnection(session, self.lobby),
-                GAME_HANDSHAKE_DELAY)))
-            channel = Endpoint(self.public_host, await self._listen(
-                self.ports.channel, self._secure("channel", lambda session: ChannelConnection(
-                    session, self.lobby, game, self.db))))
-            cds_port = await self._listen(self.ports.cds, _plain(
-                "CDS", functools.partial(cds.answer, channel=channel)))
-            tpack_port = await self._listen(self.ports.tpack, _plain("TPack", tpack.answer))
-            accounts_port = 0
-            if self.db:
-                accounts_port = await self._listen(
-                    self.ports.accounts, AccountService(self.db).handle, self._tls)
-        except BaseException:
-            await self.close()
-            raise
-        self.ports = Ports(tpack_port, cds_port, channel.port, game.port, accounts_port)
-        return self
-
-    async def close(self) -> None:
-        for server in self._servers:
-            server.close()
-        for task in self._connections:
-            task.cancel()
-        await asyncio.gather(*self._connections, return_exceptions=True)
-        for server in self._servers:
-            await server.wait_closed()
-        if self._tracer:
-            self._tracer.close()
-        if self.db:
-            self.db.close()
-
-    async def __aenter__(self) -> "Services":
-        return await self.start()
-
-    async def __aexit__(self, *exc_info) -> None:
-        await self.close()
-
-    async def _listen(self, port: int, handler, tls: ssl.SSLContext | None = None) -> int:
+    async def listen(self, port: int, handler, tls: ssl.SSLContext | None = None) -> int:
+        """Serve `handler(reader, writer)` on `port` (0: any); the port bound."""
         async def connection(reader, writer):
             task = asyncio.current_task()
             self._connections.add(task)
@@ -121,8 +83,9 @@ class Services:
         self._servers.append(server)
         return server.sockets[0].getsockname()[1]
 
-    def _secure(self, service: str, connection: Callable[[Session], object],
-                handshake_delay: float = 0.0):
+    def secure(self, service: str, connection: Callable[[Session], object],
+               handshake_delay: float = 0.0):
+        """A handler for the secure socket, running one connection object per client."""
         async def handler(reader, writer):
             try:
                 session = Session(service, reader, writer, self._tracer, handshake_delay)
@@ -131,6 +94,191 @@ class Services:
             except (ProtocolError, ConnectionError, asyncio.IncompleteReadError) as exc:
                 log.info("%s connection closed: %s", service, str(exc) or type(exc).__name__)
         return handler
+
+    async def close(self) -> None:
+        for server in self._servers:
+            server.close()
+        for task in self._connections:
+            task.cancel()
+        await asyncio.gather(*self._connections, return_exceptions=True)
+        for server in self._servers:
+            await server.wait_closed()
+        if self._tracer:
+            self._tracer.close()
+
+
+class Channel:
+    """One channel: a lobby with its rooms, on its own channel and game sockets."""
+
+    def __init__(self, number: int, host: str, public_host: str, ports: Ports,
+                 db: Path | None = None, trace: Path | None = None):
+        self.number = number
+        self.public_host = public_host
+        self.ports = ports
+        self.db = Database(db) if db else None
+        self.lobby = Lobby(self.db)
+        self._listeners = Listeners(host, Tracer(trace) if trace else None)
+        self._refresh: asyncio.Task | None = None
+        self.endpoint = self.game = Endpoint(public_host, 0)
+
+    async def start(self) -> "Channel":
+        listen, secure = self._listeners.listen, self._listeners.secure
+        try:
+            self.game = Endpoint(self.public_host, await listen(self.ports.game, secure(
+                "game", lambda session: GameConnection(session, self.lobby),
+                GAME_HANDSHAKE_DELAY)))
+            self.endpoint = Endpoint(self.public_host, await listen(
+                self.ports.channel, secure("channel", lambda session: ChannelConnection(
+                    session, self.lobby, self.game, self.db))))
+        except BaseException:
+            await self.close()
+            raise
+        if self.db:
+            self._refresh = asyncio.create_task(self._refresh_records())
+        return self
+
+    async def _refresh_records(self) -> None:
+        """Other channels' games change the ranks: read everyone's records again."""
+        while True:
+            await asyncio.sleep(REFRESH)
+            await self.lobby.records.refresh()
+
+    @property
+    def members(self) -> int:
+        return len(self.lobby.players)
+
+    async def close(self) -> None:
+        if self._refresh:
+            self._refresh.cancel()
+        await self._listeners.close()
+        await self.lobby.close()
+        if self.db:
+            self.db.close()
+
+
+class Services:
+    """The front and the channels. `host` is the address to bind, `public_host` the
+    one the replies announce to clients (a VPS binds 0.0.0.0 and announces its public
+    IP). A port of 0 binds any free port; the replies announce the ports bound.
+
+    With `db` the server requires accounts: the account service registers players
+    and hands out tickets, and the channels accept only valid tickets; records and
+    wallets are kept in it. Without it any account name is accepted and everything
+    lasts until the server stops; more than one channel needs it.
+    """
+
+    def __init__(self, host: str = HOST, ports: Ports = Ports(), trace: Path | None = None,
+                 db: Path | None = None, public_host: str | None = None,
+                 tls: ssl.SSLContext | None = None, channels: int = 1):
+        if channels > 1 and not db:
+            raise ValueError("more than one channel needs a database")
+        self.host = host
+        self.public_host = public_host or host
+        self.ports = ports
+        self._db_path, self._trace, self._tls, self._count = db, trace, tls, channels
+        self.db = Database(db) if db else None
+        self.channels: list[Channel] = []            # with one channel, in this process
+        self._processes: list[multiprocessing.Process] = []
+        self._members = None                          # their member counts, shared
+        self._listeners = Listeners(host)
+
+    @property
+    def lobby(self) -> Lobby:
+        """The lobby of a server with one channel."""
+        return self.channels[0].lobby
+
+    async def start(self) -> "Services":
+        try:
+            if self._count == 1:
+                self.channels = [await Channel(1, self.host, self.public_host, self.ports,
+                                               self._db_path, self._trace).start()]
+                endpoints = [self.channels[0].endpoint]
+                ports = replace(self.ports, channel=endpoints[0].port,
+                                game=self.channels[0].game.port)
+            else:
+                endpoints = await self._start_processes()
+                ports = replace(self.ports, channel=endpoints[0].port)
+            listen = self._listeners.listen
+            cds_port = await listen(self.ports.cds, _plain("CDS", functools.partial(
+                cds.answer, channels=endpoints, members=self._member_counts)))
+            tpack_port = await listen(self.ports.tpack, _plain("TPack", tpack.answer))
+            accounts_port = 0
+            if self.db:
+                accounts_port = await listen(
+                    self.ports.accounts, AccountService(self.db).handle, self._tls)
+        except BaseException:
+            await self.close()
+            raise
+        self.ports = replace(ports, tpack=tpack_port, cds=cds_port, accounts=accounts_port)
+        return self
+
+    def _member_counts(self) -> list[int]:
+        if self.channels:
+            return [channel.members for channel in self.channels]
+        return list(self._members)
+
+    async def _start_processes(self) -> list[Endpoint]:
+        """One process per channel; each reports its bound ports when it listens."""
+        context = multiprocessing.get_context("spawn")
+        self._members = context.Array("i", self._count, lock=False)
+        ready = context.Queue()
+        for number in range(1, self._count + 1):
+            trace = self._trace and self._trace.with_suffix(f".{number}{self._trace.suffix}")
+            process = context.Process(
+                target=_channel_process, name=f"channel {number}", daemon=True,
+                args=(number, self.host, self.public_host, self.ports.of_channel(number),
+                      self._db_path, trace, logging.getLogger().level, self._members, ready))
+            process.start()
+            self._processes.append(process)
+        endpoints: dict[int, Endpoint] = {}
+        while len(endpoints) < self._count:
+            number, port = await asyncio.to_thread(ready.get, timeout=30)
+            if port is None:
+                raise OSError(f"channel {number} could not start")
+            endpoints[number] = Endpoint(self.public_host, port)
+        return [endpoints[n] for n in sorted(endpoints)]
+
+    async def close(self) -> None:
+        await self._listeners.close()
+        for channel in self.channels:
+            await channel.close()
+        for process in self._processes:
+            process.terminate()
+        for process in self._processes:
+            await asyncio.to_thread(process.join, 5)
+        if self.db:
+            self.db.close()
+
+    async def __aenter__(self) -> "Services":
+        return await self.start()
+
+    async def __aexit__(self, *exc_info) -> None:
+        await self.close()
+
+
+def _channel_process(number: int, host: str, public_host: str, ports: Ports, db: Path,
+                     trace: Path | None, log_level: int, members, ready) -> None:
+    """A channel's own process: serve it until terminated, keeping its member count
+    in the shared array for the directory."""
+    logging.basicConfig(level=log_level, format=f"%(asctime)s %(levelname)s channel {number} "
+                                                "%(name)s: %(message)s")
+
+    async def serve() -> None:
+        try:
+            channel = await Channel(number, host, public_host, ports, db, trace).start()
+        except OSError as exc:
+            log.error("cannot start: %s", exc)
+            ready.put((number, None))
+            return
+        ready.put((number, channel.endpoint.port))
+        log.info("channel %d on ports %d and %d", number, channel.endpoint.port,
+                 channel.game.port)
+        while True:
+            members[number - 1] = channel.members
+            await asyncio.sleep(1)
+
+    with suppress(KeyboardInterrupt):
+        asyncio.run(serve())
 
 
 def _plain(name: str, answer: Callable[[bytes], bytes | None]):
@@ -156,26 +304,34 @@ async def _run(args: argparse.Namespace) -> None:
         tls = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         tls.load_cert_chain(args.tls_cert, args.tls_key)
     async with Services(args.host, trace=args.trace, db=args.db, public_host=args.public_host,
-                        tls=tls) as services:
+                        tls=tls, channels=args.channels) as services:
         p = services.ports
-        log.info("listening on %s (announced as %s): TPack %d, CDS %d, channel %d, game %d",
-                 services.host, services.public_host, p.tpack, p.cds, p.channel, p.game)
+        log.info("listening on %s (announced as %s): TPack %d, CDS %d, %d channel%s from "
+                 "port %d", services.host, services.public_host, p.tpack, p.cds,
+                 args.channels, "s" if args.channels > 1 else "", p.channel)
         if services.db:
             log.info("accounts required; account service on port %d%s", p.accounts,
                      " with TLS" if tls else " WITHOUT TLS: passwords travel in the clear")
         if args.trace:
             log.info("tracing decrypted messages to %s", args.trace)
-        await asyncio.Event().wait()
+        stop = asyncio.Event()
+        asyncio.get_running_loop().add_signal_handler(signal.SIGTERM, stop.set)
+        await stop.wait()
+        log.info("stopping")
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="python3 -m tet4server", description=__doc__)
+    parser = argparse.ArgumentParser(prog="python3 -m tet4server", description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--host", default=HOST,
                         help="address to listen on (default %(default)s; 0.0.0.0 for all)")
     parser.add_argument("--public-host", metavar="ADDRESS",
                         help="address announced to clients (default: --host)")
     parser.add_argument("--db", type=Path, metavar="FILE",
-                        help="SQLite database: require accounts and keep records in FILE")
+                        help="SQLite database: require accounts, keep records and wallets")
+    parser.add_argument("--channels", type=int, default=1, metavar="N",
+                        help="channels, each in its own process with more than one "
+                             "(default %(default)s; needs --db above 1)")
     parser.add_argument("--tls-cert", type=Path, metavar="PEM",
                         help="certificate chain for the account service")
     parser.add_argument("--tls-key", type=Path, metavar="PEM",
@@ -188,6 +344,10 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--host 0.0.0.0 needs --public-host, the address clients connect to")
     if bool(args.tls_cert) != bool(args.tls_key):
         parser.error("--tls-cert and --tls-key go together")
+    if not 1 <= args.channels <= 99:
+        parser.error("--channels: 1 to 99")
+    if args.channels > 1 and not args.db:
+        parser.error("--channels above 1 needs --db, which the channels share")
     logging.basicConfig(level=args.log_level,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     try:

@@ -55,12 +55,13 @@ python3 -m unittest discover -s tests -t .
 python3 -m tet4server
 ```
 
-This listens on 127.0.0.1: TPack 10454, CDS 15000, channel 15001, game 15002.
-Any account name is accepted and records last until the server stops.
-`--db FILE` keeps accounts and records in an SQLite file and requires a login (the
-account service listens on 15010); `--host` and `--public-host` set the address
-to listen on and the one announced to clients. `--trace FILE` appends every
-decrypted message to FILE.
+This listens on 127.0.0.1: TPack 10454, CDS 15000, and one channel on 15001 (game
+15002). Any account name is accepted and records last until the server stops.
+`--db FILE` keeps accounts, records and wallets in an SQLite file and requires a
+login (the account service listens on 10455); `--channels N` runs N channels of up
+to 300 players, each in its own process, sharing that file. `--host` and
+`--public-host` set the address to listen on and the one announced to clients.
+`--trace FILE` appends every decrypted message to FILE.
 
 To run the client against it, copy your client folder into `client/` (it is
 git-ignored), then check it, make the patched copy and start it under Wine in a

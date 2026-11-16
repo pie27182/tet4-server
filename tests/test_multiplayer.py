@@ -137,6 +137,33 @@ class MultiplayerTest(Lobby):
             self.assertEqual((gone["member"], gone["host"]), (b"bob", b"alice"))
         self.assertEqual([m.member_id for m in self.services.lobby.rooms[1].members], [b"alice"])
 
+    async def test_disconnects_finish_and_record_a_running_game(self):
+        alice, bob = self.alice, self.bob
+        await alice.create_room(title=b"disconnects", limit=2)
+        await alice.enter_game(1)
+        await bob.channel.send(pack("Channel_GameJoinRoomToS", member=b"bob", room=1))
+        joined = await bob.until(bob.channel, "Channel_GameJoinRoomToC")
+        self.assertEqual(joined["failcode"], 0)
+        await bob.enter_game(1)
+
+        start = pack("Room_OrderTypeLetsGameStartTetris", map="거북이", place=1,
+                     players=[b"alice", b"bob", b"", b"", b"", b""], flags=[0] * 6)
+        await alice.game.send(start)
+        for player in (alice, bob):
+            await player.until(player.game, "Room_OrderTypeLetsGameStartOkTetris")
+
+        # Leaving while still alive counts as going out. The last disconnect ends the
+        # game too, even though the room has no remaining game-socket recipients.
+        await alice.game.send(pack("Room_ExitRoomToS"))
+        await alice.until(alice.game, "Room_DeleteMemberToC")
+        await bob.until(bob.game, "Room_DeleteMemberToC")
+        await bob.game.send(pack("Room_ExitRoomToS"))
+        await bob.until(bob.game, "Room_DeleteMemberToC")
+
+        self.assertEqual(self.services.lobby.ratings.standing(b"bob").points, 1616)
+        self.assertEqual(self.services.lobby.ratings.standing(b"alice").points, 1584)
+        self.assertNotIn(1, self.services.lobby.rooms)
+
     async def test_join_refusals(self):
         alice, bob = self.alice, self.bob
         await bob.channel.send(pack("Channel_GameJoinRoomToS", member=b"bob", room=7))

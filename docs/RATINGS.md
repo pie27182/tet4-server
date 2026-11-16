@@ -102,8 +102,10 @@ profile field mapping and the 24-grade calculation remain provisional.
 
 ## Next reverse-engineering steps
 
-1. Read the data and code around `0x005DC870` from the exact 1.3.4 executable;
-   dump the full 24-entry grade table and all associated score boundaries.
+1. Run `python3 tools/dump_rating_table.py /path/to/original/Tet4.exe` to map
+   VA `0x005DC870` to its PE raw-file offset and dump the bytes. The tool does not
+   modify the executable; save its output and decode the 24 entries and thresholds
+   from the surrounding code/data.
 2. Trace the reads of `_TetrisSchoolInfo` and `_TetrisMemberInfo` in the client,
    including the lobby row's `k31e`, and map every profile field before sending
    non-zero wins/losses/combo/streak values.

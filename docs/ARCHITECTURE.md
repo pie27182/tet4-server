@@ -32,6 +32,7 @@ players, and the domain builds no message, so either can change without the othe
 | `domain/lobby.py` | One channel: its players, its rooms, the map names learnt, background work |
 | `domain/room.py` | A room: settings, seats, host, the running game and its ranking |
 | `domain/records.py` | Single Mode records and ranks |
+| `domain/rating.py` | Global multiplayer rating, lifetime results and leaderboard |
 | `domain/shop.py` | Products and prices, wallets (TP and items), buying, showing and discarding |
 | `storage.py` | Accounts and tickets, records, wallets, presence; one writer thread |
 | `services/tpack.py`, `directory.py` | The plain-frame services: one function each |
@@ -150,7 +151,8 @@ capture, the client's code, or a live run.
 | `test_protocol` | Batches and layers, the codec on every message, layouts at the positions the client reads |
 | `test_tpack`, `test_directory` | The plain services against captured bytes |
 | `test_server` | A scripted client through login and Single Mode over TCP; records and ranks; channel processes |
-| `test_multiplayer` | Two scripted clients: presence, chat, rooms, a game to its end, invitations, banishing |
+| `test_multiplayer` | Two scripted clients: presence, chat, rooms, a game to its end, multiplayer rating, invitations, banishing |
+| `test_rating` | Multiplayer rating transfers, opponent strength, global order and SQLite persistence |
 | `test_shop` | The catalog, wallets, buying, the inventory, items in a game, profiles |
 | `test_accounts` | The database, the account service, tickets, logins across channels |
 | `test_reports` | Players' reports: logged, kept in the database, listed by `tools/reports.py` |

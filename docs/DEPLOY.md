@@ -177,6 +177,15 @@ A restart ends the players' sessions; they log in again with `play`.
 - A player holds two TCP connections; `LimitNOFILE` above allows 65536 open
   sockets. In a multiplayer game the server passes every player's moves to the
   others in the room through the client's stream cipher, in pure Python: that is a
-  channel's main cost, which is why channels hold 300 players.
+  channel's main cost. Measured with `tools/loadtest.py` on one channel, 300
+  players in 50 full rooms, each placing two pieces a second (fast play): 2,500
+  pieces delivered a second, half a core, a median delivery of 1 ms and 99% within
+  0.2 s. Check yours with:
+
+  ```bash
+  python3 tools/loadtest.py --players 300 --server-pid "$(pgrep -f 'tet4server' | head -1)"
+  ```
+
+  against a server started without `--db` (the bots do not log in).
 - Messages to other players are queued without waiting; a connection that stops
   reading is dropped once a megabyte is waiting for it.

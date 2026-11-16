@@ -669,10 +669,11 @@ as u16, lines); 평속 and 공속 are pieces and garbage lines a second. **code*
 
 This server's rules (config.py): a player starts at 1000 내공 and gains 100 for every
 player finished ahead of and loses 50 for every one finished behind, never below
-1000; a gain grows 50% with the Super Pack (T10006) and 20% in a room whose host holds
-plus room host (T10003), and doubles with 내공 time (T10021, T10022). A grade reached
-for the first time pays 500 TP. Games count with two players or more and 30 seconds
-played. The record is kept with the wallet.
+1000. As the shop's descriptions have it, a host holding super room host (T10006, the
+Super Pack's) or plus room host (T10003) gains 50% or 20% more and 10 more TP a game
+(방장추가 내공지급, 판당 방장추가 TP), and 내공 time (T10021, T10022) doubles a
+player's gain. A grade reached for the first time pays 500 TP. Games count with two
+players or more and 30 seconds played. The record is kept with the wallet.
 
 ## 11. The shop, items and profiles
 
@@ -717,11 +718,22 @@ parsed by 0x0052A710) or C with a `count` of uses. `Shop_GetPointInfoToS` (`kind
 ### 11.4 Items
 
 The client checks items by code itself: room creation by T10003, T10014, T10006 or a
-club (FUN_00491830), Ultra by T10006. The server acts on two, in StartNewGameToC's
-item list: T10004 unlimited hold and T10005 more preview pieces. Clubs and packs put
-several items in the inventory and give TP back. Items with uses (nickname change,
-rating changes, the record eraser, the Happy Cube hammer) can be bought but have no
-effect yet.
+club (FUN_00491830), Ultra by T10006. A game's items come in StartNewGameToC's
+Tetris list (`_UseAbleItem`: `member`, `hold` for T10004 unlimited hold, `next` for
+T10005 more preview pieces): Single Mode asks for it with StartNewGameToS, and the
+server sends it to every member before LetsGameStartOk too, or a multiplayer game
+starts with the hold limit of 5 whatever the player holds. **live** The server also
+acts on the room-host and 내공 time items in games (section 10.4). Clubs and packs put several items in the
+inventory and give TP back.
+
+The client's own product descriptions (Tet4/Shop/Data/ShopDataList.xml) say which
+items act when bought; the server applies them then and keeps nothing in the
+inventory: 내공1000플러스 (T10017) and 내공2000플러스 (T10018) add 1000 and 2000 내공,
+for players up to 마왕; 내공초기화 (T10019) puts 내공 back to the start and
+전적지우개 (T10016) clears the record (wins, losses, streaks, combo, speeds), both
+keeping the best grade. 내공 time (T10021, T10022) is for players below 초인. A
+refused purchase answers ResBuyProductToC with the reason in `error`, which the buy
+window shows; a changed record refreshes the player's row everywhere.
 
 ### 11.5 Profiles, emblems and titles
 

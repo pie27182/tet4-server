@@ -1296,7 +1296,7 @@ u32 · u32 · u32 · u32
 
 ### Room_OrderTypeStartNewGameTetrisToC
 
-`0x0F809B5A` · server → client · layer 3 · rides under Room_StartNewGameToC (own ID `0x06FE5D0A`) · **sent by `GameConnection.start_new_game`**
+`0x0F809B5A` · server → client · layer 3 · rides under Room_StartNewGameToC (own ID `0x06FE5D0A`) · **sent by `GameConnection._items`**
 
 `items` [_UseAbleItem]
 
@@ -1386,7 +1386,7 @@ u32 · u32 · u32
 
 ### Room_StartNewGameToC
 
-`0x0F809B5A` · server → client · layer 0 · **sent by `GameConnection.start_new_game`**
+`0x0F809B5A` · server → client · layer 0 · **sent by `GameConnection._items`**
 
 *(no fields)*
 

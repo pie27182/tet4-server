@@ -1,7 +1,9 @@
 """The shop: the catalog, buying with TP, the inventory, and wallets in the database."""
+import asyncio
 import tempfile
 import time
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 from tet4server.config import START_POINTS
@@ -41,6 +43,29 @@ class WalletTest(unittest.TestCase):
         self.assertEqual(wallet.points, START_POINTS + 1500)
         wallet.expire(now + 31 * 86400)
         self.assertEqual(sorted(wallet.items), ["T10003", "T10020", "T20062"])
+
+    def test_items_that_act_when_bought(self):
+        store = shop.Shop()
+
+        async def buy(code: str) -> str | None:
+            return await store.buy(b"alice", code, 1)
+
+        async def run():
+            self.assertIsNone(await buy("PF0HT10018C001"))           # 내공 +2000
+            self.assertIsNone(await buy("PF0HT10017C001"))           # 내공 +1000
+            record = store.wallet(b"alice").record
+            self.assertEqual((record.rating, record.best_grade), (4000, 1))
+            self.assertNotIn("T10017", store.wallet(b"alice").items)
+            store.wallet(b"alice").record = replace(record, rating=74000, wins=3, losses=2)
+            store.wallet(b"alice").points = 100_000
+            self.assertEqual(await buy("PF0HT10017C001"), "마왕 이하 등급에서만 구매 가능합니다.")
+            self.assertEqual(await buy("PF0HT10021H003"), "초인 등급 미만만 구매하실 수 있습니다.")
+            self.assertIsNone(await buy("PF0HT10019C001"))           # 내공 back to the start
+            self.assertIsNone(await buy("PF0HT10016C001"))           # the record cleared
+            record = store.wallet(b"alice").record
+            self.assertEqual((record.rating, record.plays, record.best_grade), (1000, 0, 1))
+
+        asyncio.run(run())
 
     def test_inventory_shelves(self):
         wallet = shop.Wallet()

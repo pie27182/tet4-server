@@ -8,9 +8,9 @@ import logging
 import time
 from functools import partial
 
-from ..config import (FAILED, GAME_POINTS, GRADE_REWARD, MAP_PLACES, MIN_GAME_SECONDS,
-                      NEXT_PIECES, NO_SUCH_ROOM, PLUS_HOST, PLUS_HOST_BONUS, RATING_TIME,
-                      SUPER_PACK, SUPER_PACK_BONUS, UNLIMITED_HOLD)
+from ..config import (FAILED, GAME_POINTS, GRADE_REWARD, HOST_POINTS, MAP_PLACES,
+                      MIN_GAME_SECONDS, NEXT_PIECES, NO_SUCH_ROOM, PLUS_HOST, PLUS_HOST_BONUS,
+                      RATING_TIME, SUPER_HOST, SUPER_HOST_BONUS, UNLIMITED_HOLD)
 from ..domain.lobby import Lobby
 from ..domain.rating import Result, finish
 from ..domain.records import GameReport
@@ -252,12 +252,17 @@ class GameConnection(Connection):
         if room is None or (room.host != self.member_id and not room.single):
             return
         room.playing = True
+        room.post(*self._items(room))
+        self._show(room)
+
+    def _items(self, room: Room) -> tuple[Message, Message]:
+        """StartNewGameToC with each member's items for the game: unlimited hold lifts
+        the hold limit, and next shows more of the coming pieces."""
         owns = self.lobby.shop.owns
-        room.post(pack("Room_StartNewGameToC"), pack(
+        return pack("Room_StartNewGameToC"), pack(
             "Room_OrderTypeStartNewGameTetrisToC",
             items=[dict(member=m.member_id, hold=owns(m.member_id, UNLIMITED_HOLD),
-                        next=owns(m.member_id, NEXT_PIECES)) for m in room.members]))
-        self._show(room)
+                        next=owns(m.member_id, NEXT_PIECES)) for m in room.members])
 
     @on("Room_OrderTypeLetsGameStartTetris")
     async def lets_game_start(self, request: dict) -> None:
@@ -271,6 +276,7 @@ class GameConnection(Connection):
         if request["map"] and request["place"] < MAP_PLACES:
             self.lobby.map_names[(room.mode, request["place"])] = request["map"][:64]
         room.start_game([player for player in request["players"] if player])
+        room.post(*self._items(room))
         room.post(pack("Room_OrderTypeLetsGameStartOkTetris", request))
         self._show(room)
 
@@ -295,11 +301,15 @@ class GameConnection(Connection):
         counts = len(ranking) > 1 and room.played_for() >= MIN_GAME_SECONDS
         today = time.strftime("%Y-%m-%d")
         settle = {}               # member -> (finish on its record, TP)
+        host_bonus = self._host_bonus(room)
         for rank, member_id in enumerate(ranking, 1):
             tp = GAME_POINTS[min(rank, len(GAME_POINTS)) - 1] if counts else 0
+            if member_id == room.host and host_bonus:
+                tp += HOST_POINTS
             play = room.plays.get(member_id) or Play()
             settle[member_id] = (partial(finish, players=len(ranking), rank=rank,
-                                         bonus_percent=self._bonus(room, member_id), tp=tp,
+                                         bonus_percent=self._bonus(room, member_id,
+                                                                   host_bonus), tp=tp,
                                          grade_reward=GRADE_REWARD, today=today, play=play)
                                  if counts else _unchanged, tp)
         shown = {m: f(self.lobby.shop.wallet(m).record) for m, (f, _) in settle.items()}
@@ -314,12 +324,17 @@ class GameConnection(Connection):
         if counts:
             self.lobby.spawn(self.keep_results(settle))
 
-    def _bonus(self, room: Room, member_id: bytes) -> int:
-        """The % more 내공 a player wins: the Super Pack's, the room host's plus room
-        host's, and twice everything with 내공 time."""
+    def _host_bonus(self, room: Room) -> int:
+        """The % more 내공 the host wins with super or plus room host (0 without)."""
         owns = self.lobby.shop.owns
-        percent = (SUPER_PACK_BONUS * owns(member_id, SUPER_PACK)
-                   + PLUS_HOST_BONUS * owns(room.host, PLUS_HOST))
+        return (SUPER_HOST_BONUS if owns(room.host, SUPER_HOST)
+                else PLUS_HOST_BONUS if owns(room.host, PLUS_HOST) else 0)
+
+    def _bonus(self, room: Room, member_id: bytes, host_bonus: int) -> int:
+        """The % more 내공 a player wins: the host's room-host bonus, and twice all of it
+        with 내공 time."""
+        percent = host_bonus if member_id == room.host else 0
+        owns = self.lobby.shop.owns
         return 2 * percent + 100 if any(owns(member_id, i) for i in RATING_TIME) else percent
 
     async def keep_results(self, settle: dict) -> None:

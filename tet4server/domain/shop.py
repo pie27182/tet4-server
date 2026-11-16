@@ -12,11 +12,11 @@ import asyncio
 import json
 import logging
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 
-from ..config import EMBLEM, MAX_QUANTITY, START_POINTS, TITLE
+from ..config import EMBLEM, MAX_QUANTITY, START_POINTS, START_RATING, TITLE
 from ..storage import Database
-from .rating import Record, Result
+from .rating import Record, Result, grade
 
 log = logging.getLogger("tet4.shop")
 
@@ -139,6 +139,22 @@ class Product:
 PRODUCTS = {group + period: Product(group + period, group, period, price)
             for group, (_, prices) in GROUPS.items() for period, price in prices.items()}
 
+# Items that act once, when bought, instead of going into the inventory (the client's
+# product descriptions): 내공 +1000 and +2000, 내공 back to the start (내공초기화), the
+# record cleared (전적지우개). The best grade stays.
+INSTANT = {
+    "T10017": lambda r: replace(r, rating=r.rating + 1000),
+    "T10018": lambda r: replace(r, rating=r.rating + 2000),
+    "T10019": lambda r: replace(r, rating=START_RATING),
+    "T10016": lambda r: replace(r, wins=0, losses=0, streak=0, best_streak=0, max_combo=0,
+                                pieces=0, attack=0, seconds=0.0),
+}
+# Items only players up to a grade may buy: the highest grade, and the refusal.
+UP_TO_MAWANG = (21, "마왕 이하 등급에서만 구매 가능합니다.")
+BELOW_CHOIN = (15, "초인 등급 미만만 구매하실 수 있습니다.")
+GRADE_LIMITS = {"T10017": UP_TO_MAWANG, "T10018": UP_TO_MAWANG,
+                "T10021": BELOW_CHOIN, "T10022": BELOW_CHOIN}
+
 
 @dataclass
 class Item:
@@ -159,6 +175,12 @@ class Wallet:
 
     def add(self, product: Product, quantity: int, now: float) -> None:
         for code in product.items:
+            if code in INSTANT:
+                for _ in range(quantity):
+                    self.record = INSTANT[code](self.record)
+                self.record = replace(self.record, best_grade=max(self.record.best_grade,
+                                                                  grade(self.record.rating)))
+                continue
             item = self.items.setdefault(code, Item(code, start=now))
             if product.period[0] == "C":
                 item.count += int(product.period[1:]) * quantity
@@ -238,6 +260,9 @@ class Shop:
         def pay(wallet: Wallet) -> str | None:
             if wallet.points < product.price * quantity:
                 return "TP가 부족합니다."
+            for code in product.items:
+                if code in GRADE_LIMITS and wallet.record.grade > GRADE_LIMITS[code][0]:
+                    return GRADE_LIMITS[code][1]
             wallet.points -= product.price * quantity
             wallet.add(product, quantity, time.time())
             return None

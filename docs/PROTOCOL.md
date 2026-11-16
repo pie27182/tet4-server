@@ -780,6 +780,7 @@ MESSAGES.md has every layout.
   expert), but does not prove that the same algorithm or constants shipped in this
   1.3.4 client. The exact 24 thresholds/name mapping, original score transfer,
   best-combo accumulation, best-grade field and rank-locked arenas remain open.
+  The evidence and current implementation status are collected in [RATINGS.md](RATINGS.md).
   NHN separately announced public Single Ranking and Multi Ranking lists in
   November 2008. Equivalent read-only HTML pages are now available at
   `http://server:10456/rankings`, with JSON at `/api/rankings/multiplayer` and

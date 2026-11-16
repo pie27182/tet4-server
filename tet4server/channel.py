@@ -7,7 +7,7 @@ import logging
 from . import messages as m
 from . import profiles, schema, shop
 from .accounts import Database
-from .lobby import Lobby, Player
+from .lobby import MAX_MEMBERS, Lobby, Player
 from .messages import Endpoint, Msg
 from .profiles import member_info, tetris_info
 from .room import SEATS, Room, room_info_to_c
@@ -73,6 +73,9 @@ class ChannelConnection:
             (3, schema.message_id("Shop_RequestCanPurchaseToS")): self.on_can_purchase,
             (3, Msg.Channel_OrderTypeGetDisplayMemberInfoTetrisToS): self.on_get_profile,
             (3, schema.message_id("Channel_OrderTypeChangeDisplayMemberInfoToS")): self.on_show,
+            (3, schema.message_id("Channel_RequestDeleteEmblemToS")): self.on_discard_emblem,
+            (3, schema.message_id("Channel_RequestDeleteAliasToS")): self.on_discard_title,
+            (0, schema.message_id("Channel_CouponCountToS")): self.on_coupon_count,
             (0, schema.message_id("Channel_InviteGameToMemberToS")): self.on_invite,
             (0, schema.message_id("Channel_ResponseInviteGameToS")): self.on_invite_answer,
         }
@@ -87,6 +90,7 @@ class ChannelConnection:
         if self.player and self.lobby.leave(self.player):
             self.lobby.post(schema.pack("Channel_DeleteMemberToC", CHANNEL_KEYS,
                                         k3e=self.player.member_id))
+            self.lobby.shop.forget(self.player.member_id)
         if self.member_id:
             self.lobby.close_rooms_of(self.member_id)
 
@@ -117,6 +121,13 @@ class ChannelConnection:
     async def on_enter_channel(self, r: Reader) -> None:
         request = m.read_enter_channel(r)
         member = self.member_id = self._claim(request.member_id)
+        if len(self.lobby.players) >= MAX_MEMBERS and member not in self.lobby.players:
+            await self.session.send(schema.pack("Channel_EnterChannelToC", k1e=b"v2e"))
+            raise ConnectionRefusedError(f"channel full, {member!r} refused")
+        # The player's wallet and records as the database has them now: the player may
+        # have played in another channel since this one last saw them.
+        await self.lobby.shop.load(member)
+        await self.lobby.records.load(member)
         # The channel's settings (HgCom3 converter 0x60139620, keys in field order):
         # MetpInfo(4).k23e/k24e come back from this reply and Msg_SendEnterRoom needs them;
         # k62e is a room's size, which HgModel3 _UpdateRoomMembers reads to seat the
@@ -250,8 +261,8 @@ class ChannelConnection:
             return
         member = self.player.member_id
         before = self.lobby.shop.wallet(member).points
-        error = self.lobby.shop.buy(member, request["code"].decode("latin-1"),
-                                    request["quantity"])
+        error = await self.lobby.shop.buy(member, request["code"].decode("latin-1"),
+                                          request["quantity"])
         wallet = self.lobby.shop.wallet(member)
         await self.session.send(schema.pack(
             "Shop_ResBuyProductToC", code=request["code"], quantity=request["quantity"],
@@ -281,10 +292,37 @@ class ChannelConnection:
         if self.player is None:
             return
         member = self.player.member_id
-        if self.lobby.shop.show(member, request["title"].decode("latin-1"),
-                                request["emblem"].decode("latin-1")):
+        if await self.lobby.shop.show(member, request["title"].decode("latin-1"),
+                                      request["emblem"].decode("latin-1")):
             self.lobby.post({3: profiles.change_display_member_info(
                 member, self.lobby.shop.wallet(member))})
+
+    async def on_discard_emblem(self, r: Reader) -> None:
+        await self._discard(schema.unpack("Channel_RequestDeleteEmblemToS", r)["code"], "2",
+                            "Channel_ResponseDeleteEmblemToC")
+
+    async def on_discard_title(self, r: Reader) -> None:
+        await self._discard(schema.unpack("Channel_RequestDeleteAliasToS", r)["code"], "3",
+                            "Channel_ResponseDeleteAliasToC")
+
+    async def _discard(self, code: bytes, kind: str, reply: str) -> None:
+        """The emblem and title lists' trash button: the item goes; the dialog drops it
+        when told it went (converters 0x004568F0, 0x00456630). If it was shown, no
+        emblem or title is, for everyone."""
+        if self.player is None:
+            return
+        member = self.player.member_id
+        done, shown = await self.lobby.shop.discard(member, code.decode("latin-1"), kind)
+        await self.session.send(schema.pack(reply, code=code, done=done), layer=3)
+        if shown:
+            self.lobby.post({3: profiles.change_display_member_info(
+                member, self.lobby.shop.wallet(member))})
+
+    async def on_coupon_count(self, r: Reader) -> None:
+        """The coupons a player holds: there are none."""
+        if self.player:
+            await self.session.send(schema.pack("Channel_CouponCountToC",
+                                                k3e=self.player.member_id))
 
     # --- invitations ------------------------------------------------------------
 

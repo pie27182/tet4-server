@@ -30,7 +30,20 @@ class PrimitiveTest(unittest.TestCase):
     def test_mt19937_init_by_array_reference_output(self):
         # First genrand_int32() of the reference mt19937ar.c after
         # init_by_array({0x123, 0x234, 0x345, 0x456}).
-        self.assertEqual(crypto.MT19937([0x123, 0x234, 0x345, 0x456]).next32(), 1067595299)
+        self.assertEqual(crypto.mt19937([0x123, 0x234, 0x345, 0x456]).getrandbits(32), 1067595299)
+
+    def test_stream_is_the_same_in_any_pieces(self):
+        # Whole blocks take a faster path than single bytes; both must agree.
+        master = tuple(range(7, 19))
+        data = bytes(range(256)) * 3
+        whole = crypto.downstream_cipher(master).encrypt(data)
+        pieces, cipher, i = [], crypto.downstream_cipher(master), 0
+        for size in (1, 7, 8, 9, 3, 16, 5, 64, 2, 300):
+            pieces.append(cipher.encrypt(data[i:i + size]))
+            i += size
+        pieces.append(cipher.encrypt(data[i:]))
+        self.assertEqual(b"".join(pieces), whole)
+        self.assertEqual(crypto.downstream_cipher(master).decrypt(whole), data)
 
     def test_share_round_trip(self):
         plain = crypto.new_share()

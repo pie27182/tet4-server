@@ -55,19 +55,37 @@ class WalletTest(unittest.TestCase):
                          [(b"TP", shop.START_POINTS)])
 
 
-class ShopDatabaseTest(unittest.TestCase):
-    def test_wallets_persist(self):
+class ShopDatabaseTest(unittest.IsolatedAsyncioTestCase):
+    async def test_wallets_persist(self):
         with tempfile.TemporaryDirectory() as tmp:
             db = Database(Path(tmp) / "tet4.db")
             store = shop.Shop(db)
-            self.assertIsNone(store.buy(b"alice", "PF0HT10005D007", 1))
-            self.assertEqual(store.earn(b"alice", 30), (9650, 9680))
-            self.assertEqual(store.buy(b"alice", "PP0HT10006D030", 1), "TP가 부족합니다.")
+            self.assertIsNone(await store.buy(b"alice", "PF0HT10005D007", 1))
+            self.assertEqual(await store.earn(b"alice", 30), (9650, 9680))
+            self.assertEqual(await store.buy(b"alice", "PP0HT10006D030", 1), "TP가 부족합니다.")
             db.close()
             db = Database(Path(tmp) / "tet4.db")
-            again = shop.Shop(db).wallet(b"alice")
-            self.assertEqual((again.points, sorted(again.items)), (9680, ["T10005"]))
+            again = shop.Shop(db)
+            await again.load(b"alice")
+            wallet = again.wallet(b"alice")
+            self.assertEqual((wallet.points, sorted(wallet.items)), (9680, ["T10005"]))
             db.close()
+
+    async def test_channels_sharing_the_database_keep_every_change(self):
+        # Two channel processes, each with its own connection and its own copy of the
+        # wallet: each change reads the database's, so neither undoes the other's.
+        with tempfile.TemporaryDirectory() as tmp:
+            one, two = Database(Path(tmp) / "tet4.db"), Database(Path(tmp) / "tet4.db")
+            first, second = shop.Shop(one), shop.Shop(two)
+            await first.load(b"alice")
+            await second.load(b"alice")
+            await first.earn(b"alice", 30)
+            self.assertIsNone(await second.buy(b"alice", "PF0HT10005D007", 1))   # 350 TP
+            await first.earn(b"alice", 20)
+            self.assertEqual(first.wallet(b"alice").points, shop.START_POINTS + 30 - 350 + 20)
+            self.assertIn("T10005", first.wallet(b"alice").items)
+            one.close()
+            two.close()
 
 
 class ShopServiceTest(unittest.IsolatedAsyncioTestCase):
@@ -119,7 +137,7 @@ class ProfileTest(unittest.IsolatedAsyncioTestCase):
         await bob.enter_channel()
         store = self.services.lobby.shop
         for code in ("PD0TT20062D000", "PD0TT30077D000", "PI0TT90003U000"):
-            self.assertIsNone(store.buy(b"alice", code, 1))
+            self.assertIsNone(await store.buy(b"alice", code, 1))
 
         # bob looks at alice's profile: her emblems and titles, with their names
         await bob.channel.send(schema.pack("Channel_OrderTypeGetDisplayMemberInfoTetrisToS",
@@ -144,5 +162,21 @@ class ProfileTest(unittest.IsolatedAsyncioTestCase):
         wallet = store.wallet(b"alice")
         self.assertEqual((wallet.emblem, wallet.title), ("T20062", "T30077"))
         # one she does not own is refused
-        self.assertFalse(store.show(b"alice", "T30001", ""))
-        self.assertEqual(wallet.title, "T30077")
+        self.assertFalse(await store.show(b"alice", "T30001", ""))
+        self.assertEqual(store.wallet(b"alice").title, "T30077")
+
+        # The trash button: the shown emblem goes, so she shows none, for everyone.
+        await alice.channel.send(schema.pack("Channel_RequestDeleteEmblemToS", code=b"T20062"),
+                                 layer=3)
+        gone = fields(await alice.until(alice.channel, ID("Channel_ResponseDeleteEmblemToC"), 3),
+                      "Channel_ResponseDeleteEmblemToC")
+        self.assertEqual((gone["code"], gone["done"]), (b"T20062", 1))
+        change = fields(await bob.until(
+            bob.channel, ID("Channel_OrderTypeChangeDisplayMemberInfoToC"), 3),
+            "Channel_OrderTypeChangeDisplayMemberInfoToC")
+        self.assertEqual((change["emblem"], change["title"]), (b"", b"T30077"))
+        await alice.channel.send(schema.pack("Channel_RequestDeleteAliasToS", code=b"T30001"),
+                                 layer=3)
+        kept = fields(await alice.until(alice.channel, ID("Channel_ResponseDeleteAliasToC"), 3),
+                      "Channel_ResponseDeleteAliasToC")
+        self.assertEqual(kept["done"], 0)                     # not hers

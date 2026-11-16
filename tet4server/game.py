@@ -178,13 +178,13 @@ class GameConnection:
         })
         self.lobby.room_changed(room)
         if room.played_for() >= shop.MIN_GAME_SECONDS:
-            self.reward(room.ranking())
+            self.lobby.spawn(self.reward(room.ranking()))
 
-    def reward(self, ranking: list[bytes]) -> None:
+    async def reward(self, ranking: list[bytes]) -> None:
         """TP for a finished game by rank; each player's lobby shows the new balance."""
         for rank, member_id in enumerate(ranking, 1):
             points = shop.GAME_POINTS[min(rank, len(shop.GAME_POINTS)) - 1]
-            before, after = self.lobby.shop.earn(member_id, points)
+            before, after = await self.lobby.shop.earn(member_id, points)
             player = self.lobby.players.get(member_id)
             if player:
                 player.channel.session.post(shop.change_point_info_to_c(before, after), layer=3)

@@ -3,10 +3,12 @@
 The channel and game services only touch it from the event loop, so it needs no
 locks. Messages to other players go out with Session.post, which never waits.
 """
+import asyncio
 import itertools
 import logging
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+import secrets
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Coroutine
 
 from .accounts import Database
 from .messages import RoomRequest
@@ -20,6 +22,9 @@ if TYPE_CHECKING:
 log = logging.getLogger("tet4.lobby")
 
 MAX_ROOMS = 100           # numbered room slots in the channel's room list (CDS MaxRoom)
+MAX_MEMBERS = 300         # players in one channel (CDS MaxMember): every lobby event goes
+                          # to all of them, so more players means more channels
+PRESENCE = 2.0            # seconds between checks for players logged in elsewhere
 
 
 @dataclass(eq=False)
@@ -29,18 +34,36 @@ class Player:
     host: str             # the client's address, to bind its game connection
     channel: "ChannelConnection"
     room: Room | None = None
+    session: str = field(default_factory=lambda: secrets.token_hex(8))
 
 
 class Lobby:
-    def __init__(self, db: Database | None = None):
+    def __init__(self, db: Database | None = None, number: int = 1):
         self.records = Records(db)
         self.shop = Shop(db)
         self.db = db
+        self.number = number      # the channel's
         self.players: dict[bytes, Player] = {}
         self.rooms: dict[int, Room] = {}
         # Map names by mode letter and place in the client's map list, learnt from game
         # starts: the map choice the host sends carries only the place (MapSetTetrisToS).
         self.map_names: dict[tuple[bytes, int], bytes] = {}
+        self._tasks: set[asyncio.Task] = set()
+
+    def spawn(self, work: Coroutine) -> None:
+        """Run work in the background, logging its failure."""
+        task = asyncio.get_running_loop().create_task(work)
+        self._tasks.add(task)
+        task.add_done_callback(self._done)
+
+    def _done(self, task: asyncio.Task) -> None:
+        self._tasks.discard(task)
+        if not task.cancelled() and task.exception():
+            log.error("background work failed", exc_info=task.exception())
+
+    async def close(self) -> None:
+        """Let the background work finish (the server is stopping)."""
+        await asyncio.gather(*self._tasks, return_exceptions=True)
 
     @property
     def requires_login(self) -> bool:
@@ -54,6 +77,9 @@ class Lobby:
         old = self.players.get(player.member_id)
         self.players[player.member_id] = player
         log.info("%r entered the channel (%d online)", player.member_id, len(self.players))
+        if self.db:
+            self.db.submit(self.db.arrive, player.member_id.decode("latin-1"), self.number,
+                           player.session)
         return old
 
     def leave(self, player: Player) -> bool:
@@ -62,7 +88,21 @@ class Lobby:
             return False
         del self.players[player.member_id]
         log.info("%r left the channel (%d online)", player.member_id, len(self.players))
+        if self.db:
+            self.db.submit(self.db.depart, player.member_id.decode("latin-1"), player.session)
         return True
+
+    async def end_replaced_sessions(self) -> None:
+        """Close the sessions of players who have since logged in again in another
+        channel (each channel runs this every PRESENCE seconds)."""
+        names = [member_id.decode("latin-1") for member_id in self.players]
+        if not names:
+            return
+        current = await asyncio.to_thread(self.db.sessions, names)
+        for player in list(self.players.values()):
+            if current.get(player.member_id.decode("latin-1"), player.session) != player.session:
+                log.info("%r logged in again elsewhere", player.member_id)
+                player.channel.session.close()
 
     def online_from(self, member_id: bytes, host: str) -> bool:
         """Whether the member is in the channel from `host` (for the game socket)."""

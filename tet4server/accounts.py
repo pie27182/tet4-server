@@ -47,6 +47,8 @@ CREATE TABLE IF NOT EXISTS tickets (
 CREATE TABLE IF NOT EXISTS single_mode (
     name TEXT NOT NULL, mode INTEGER NOT NULL, plays INTEGER NOT NULL,
     top TEXT NOT NULL, PRIMARY KEY (name, mode));
+CREATE TABLE IF NOT EXISTS presence (
+    name TEXT PRIMARY KEY, channel INTEGER NOT NULL, session TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS wallets (
     name TEXT PRIMARY KEY, points INTEGER NOT NULL, items TEXT NOT NULL,
     title TEXT NOT NULL, emblem TEXT NOT NULL);
@@ -69,14 +71,16 @@ def _log_failure(future: Future) -> None:
 class Database:
     """Blocking SQLite access, one connection shared under a lock. The services read
     through asyncio.to_thread and write through `write`, on one thread, so that the
-    writes land in the order they were made."""
+    writes land in the order they were made. Several processes (channels) may share
+    the file: a change that reads before it writes runs as one `transaction`."""
 
     def __init__(self, path: Path):
         path.parent.mkdir(parents=True, exist_ok=True)
         self._db = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
         self._db.execute("PRAGMA journal_mode=WAL")
+        self._db.execute("PRAGMA busy_timeout=10000")     # other processes' writes
         self._db.executescript(SCHEMA)
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()                    # a transaction's own reads take it again
         self._writer = ThreadPoolExecutor(1, thread_name_prefix="db-write")
 
     def close(self) -> None:
@@ -95,6 +99,19 @@ class Database:
     def _run(self, sql: str, args=()) -> list[tuple]:
         with self._lock:
             return self._db.execute(sql, args).fetchall()
+
+    def transaction(self, fn, *args):
+        """fn(*args), its reads and writes in one immediate transaction: no other
+        process writes in between, so a read-change-write loses no one else's change."""
+        with self._lock:
+            self._db.execute("BEGIN IMMEDIATE")
+            try:
+                result = fn(*args)
+            except BaseException:
+                self._db.execute("ROLLBACK")
+                raise
+            self._db.execute("COMMIT")
+            return result
 
     def register(self, name: str, password: str) -> str:
         if not NAME.fullmatch(name):
@@ -129,17 +146,41 @@ class Database:
         row = self._run("SELECT name, expires FROM tickets WHERE ticket = ?", (ticket,))
         return bool(row) and hmac.compare_digest(row[0][0], name) and row[0][1] > time.time()
 
-    def load_single_mode(self) -> list[tuple[str, int, int, list[tuple[int, str]]]]:
+    def load_single_mode(self, name: str | None = None
+                         ) -> list[tuple[str, int, int, list[tuple[int, str]]]]:
+        """Everyone's records, or one player's."""
+        rows = (self._run("SELECT * FROM single_mode WHERE name = ?", (name,)) if name
+                else self._run("SELECT * FROM single_mode"))
         return [(name, mode, plays, [tuple(e) for e in json.loads(top)])
-                for name, mode, plays, top in self._run("SELECT * FROM single_mode")]
+                for name, mode, plays, top in rows]
 
     def save_single_mode(self, name: str, mode: int, plays: int,
                          top: list[tuple[int, str]]) -> None:
         self._run("INSERT OR REPLACE INTO single_mode VALUES (?, ?, ?, ?)",
                   (name, mode, plays, json.dumps(top)))
 
-    def load_wallets(self) -> list[tuple[str, int, str, str, str]]:
-        return self._run("SELECT name, points, items, title, emblem FROM wallets")
+    # Presence: the channel and session each logged-in player is in, so that a player
+    # logging in again in another channel's process ends the older session there.
+
+    def arrive(self, name: str, channel: int, session: str) -> None:
+        self._run("INSERT OR REPLACE INTO presence VALUES (?, ?, ?)", (name, channel, session))
+
+    def depart(self, name: str, session: str) -> None:
+        self._run("DELETE FROM presence WHERE name = ? AND session = ?", (name, session))
+
+    def sessions(self, names: list[str]) -> dict[str, str]:
+        marks = ",".join("?" * len(names))
+        return dict(self._run(f"SELECT name, session FROM presence WHERE name IN ({marks})",
+                              names))
+
+    def clear_channel(self, channel: int) -> None:
+        """Forget a channel's players (it starts, so none of them is still there)."""
+        self._run("DELETE FROM presence WHERE channel = ?", (channel,))
+
+    def load_wallet(self, name: str) -> tuple[int, str, str, str] | None:
+        rows = self._run("SELECT points, items, title, emblem FROM wallets WHERE name = ?",
+                         (name,))
+        return rows[0] if rows else None
 
     def save_wallet(self, name: str, points: int, items: str, title: str, emblem: str) -> None:
         self._run("INSERT OR REPLACE INTO wallets VALUES (?, ?, ?, ?, ?)",

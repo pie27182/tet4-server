@@ -8,7 +8,9 @@ TPack host names, which point at the server.
 
 The server implements the protocol the client already speaks, reconstructed from
 captured traffic and the client's code. [`docs/PROTOCOL.md`](docs/PROTOCOL.md)
-describes the protocol and the evidence for every reply.
+describes the protocol and the evidence for every reply, and
+[`docs/MESSAGES.md`](docs/MESSAGES.md) lists all 233 messages the client knows with
+what the server does with each.
 
 ## Status
 
@@ -55,12 +57,13 @@ python3 -m unittest discover -s tests -t .
 python3 -m tet4server
 ```
 
-This listens on 127.0.0.1: TPack 10454, CDS 15000, channel 15001, game 15002.
-Any account name is accepted and records last until the server stops.
-`--db FILE` keeps accounts and records in an SQLite file and requires a login (the
-account service listens on 15010); `--host` and `--public-host` set the address
-to listen on and the one announced to clients. `--trace FILE` appends every
-decrypted message to FILE.
+This listens on 127.0.0.1: TPack 10454, CDS 15000, and one channel on 15001 (game
+15002). Any account name is accepted and records last until the server stops.
+`--db FILE` keeps accounts, records and wallets in an SQLite file and requires a
+login (the account service listens on 10455); `--channels N` runs N channels of up
+to 300 players, each in its own process, sharing that file. `--host` and
+`--public-host` set the address to listen on and the one announced to clients.
+`--trace FILE` appends every decrypted message to FILE.
 
 To run the client against it, copy your client folder into `client/` (it is
 git-ignored), then check it, make the patched copy and start it under Wine in a
@@ -98,8 +101,9 @@ tet4server/  the server
   shop.py      catalog, TP, inventory   server.py   listeners and command line
   accounts.py  accounts, tickets, database, account service
 tests/       captured vectors, layouts, scripted clients for every service
-tools/       client.py, the sample bootstrap, a winedbg command file
-docs/        PROTOCOL.md, DEBUGGING.md, DEPLOY.md
+tools/       client.py (check, patch, run the client), loadtest.py, messages.py
+             (writes docs/MESSAGES.md), the sample bootstrap, a winedbg command file
+docs/        PROTOCOL.md, MESSAGES.md, DEPLOY.md, DEBUGGING.md
 ```
 
 The decompiled client and the analysis scripts used to recover the protocol are

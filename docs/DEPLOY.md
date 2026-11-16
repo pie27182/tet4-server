@@ -21,10 +21,10 @@ README lists what is not implemented yet.
 | Port | Service |
 |---|---|
 | 10454 | TPack (login handshake) |
+| 10455 | accounts (registration and login, TLS) |
 | 15000 | CDS (channel directory) |
-| 15001 | channel |
-| 15002 | game |
-| 15010 | accounts (registration and login, TLS) |
+| 15001, 15002 | channel 1: channel and game sockets |
+| 15003, 15004 | channel 2, and so on: channel n uses 15001 + 2(n - 1) and the next |
 
 ## 2. Install
 
@@ -80,7 +80,7 @@ Wants=network-online.target
 User=tet4
 WorkingDirectory=/opt/tet4-server
 ExecStart=/usr/bin/python3 -m tet4server --host 0.0.0.0 --public-host 203.0.113.5 \
-    --db /var/lib/tet4/tet4.db \
+    --db /var/lib/tet4/tet4.db --channels 2 \
     --tls-cert /var/lib/tet4/tls/fullchain.pem --tls-key /var/lib/tet4/tls/privkey.pem
 Restart=on-failure
 NoNewPrivileges=yes
@@ -99,7 +99,7 @@ systemctl daemon-reload && systemctl enable --now tet4
 Open the ports:
 
 ```bash
-ufw allow OpenSSH && ufw allow 10454,15000,15001,15002,15010/tcp && ufw enable
+ufw allow OpenSSH && ufw allow 10454,10455,15000/tcp && ufw allow 15001:15004/tcp && ufw enable
 ```
 
 Check it:
@@ -108,7 +108,9 @@ Check it:
 systemctl status tet4 && journalctl -u tet4 -n 20
 ```
 
-The log should say `accounts required; account service on port 15010 with TLS`.
+The log should say `accounts required; account service on port 10455 with TLS` and
+name each channel with its ports. With `--channels N` open the channel ports up to
+15000 + 2N.
 
 ## 5. Players
 
@@ -162,12 +164,28 @@ A restart ends the players' sessions; they log in again with `play`.
   is valid for 12 hours and only for its account; a new login issues a new one.
 - The game socket carries no ticket. The server accepts a player there only while
   the same account is logged in on a channel connection from the same address.
-- One process, one thread for the network (asyncio) and a worker thread for
-  database writes, which land in the order they were made. A player holds two TCP
-  connections; `LimitNOFILE` above allows 65536 open sockets. Idle players in the
-  lobby cost almost nothing, but in a multiplayer game the server passes every
-  player's moves to the others in the room, and the client's stream cipher runs in
-  pure Python: that relay is the main cost, so measure with the load you expect
-  before counting on thousands of players in games at once.
+- Channels, as on the original service: a channel holds up to 300 players (the
+  client's channel list shows how many are in each), and every lobby event (a
+  player arriving, a room changing, a chat line) goes to everyone in it.
+  `--channels N` runs N channels, each in its own process with its own event loop
+  (asyncio) and database writer thread, so that they use the machine's cores; the
+  front process answers TPack, the directory and the account service. Plan one
+  channel per core and 300 players per channel: 4 cores, 4 channels, 1200 players.
+- The processes share the SQLite database: a change to a wallet or a record reads
+  and writes it in one transaction, so no channel undoes another's. Ranks count
+  other channels' records within a minute.
+- A player holds two TCP connections; `LimitNOFILE` above allows 65536 open
+  sockets. In a multiplayer game the server passes every player's moves to the
+  others in the room through the client's stream cipher, in pure Python: that is a
+  channel's main cost. Measured with `tools/loadtest.py` on one channel, 300
+  players in 50 full rooms, each placing two pieces a second (fast play): 2,500
+  pieces delivered a second, half a core, a median delivery of 1 ms and 99% within
+  0.2 s. Check yours with:
+
+  ```bash
+  python3 tools/loadtest.py --players 300 --server-pid "$(pgrep -f 'tet4server' | head -1)"
+  ```
+
+  against a server started without `--db` (the bots do not log in).
 - Messages to other players are queued without waiting; a connection that stops
   reading is dropped once a megabyte is waiting for it.

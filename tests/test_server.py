@@ -16,6 +16,7 @@ from tet4server.server import Ports, Services
 from tet4server.xdr import Reader, frame, read_frame, string, u8, u32, u64
 from tet4server.xlbp import MAGIC, Message, decode_batch, encode_batch
 
+from tests.test_cds import SELECT_COMMON
 from tests.test_messages import ROOM_INFO, parse
 
 TIMEOUT = 5
@@ -108,6 +109,23 @@ class RecordTest(unittest.IsolatedAsyncioTestCase):
         await self.play(lobby, [(0, 300, True), (1, 3000, True)])
         self.assertEqual(lobby.single_mode(MEMBER, 0)[2:], (2, 2))
         self.assertEqual(lobby.single_mode(MEMBER, 1)[2:], (1, 2))
+
+    async def test_ranks_match_a_full_sort(self):
+        # Ranks come from sorted bests; they must agree with ranking everyone directly,
+        # ties included, also when a player's best improves.
+        import random
+        rng, lobby, best = random.Random(7), Records(), {}
+        for _ in range(400):
+            member, mode = b"p%d" % rng.randrange(60), rng.choice((0, 1))
+            value = rng.randrange(1, 40) * 100
+            await lobby.add_game(GameReport(member, mode, value, True))
+            old = best.get((member, mode))
+            best[(member, mode)] = value if old is None else (
+                min(old, value) if mode == 1 else max(old, value))
+        for (member, mode), value in best.items():
+            others = [v for (_, m), v in best.items() if m == mode]
+            better = sum(v < value if mode == 1 else v > value for v in others)
+            self.assertEqual(lobby.single_mode(member, mode)[2:], (better + 1, len(others)))
 
     async def test_records_survive_in_the_database(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -310,3 +328,34 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ChannelProcessTest(unittest.IsolatedAsyncioTestCase):
+    async def test_channels_in_their_own_processes(self):
+        # Two channels, each a process of its own: the directory lists both with the
+        # ports they bound, and counts the players in each.
+        with tempfile.TemporaryDirectory() as tmp:
+            services = await Services(ports=Ports(0, 0, 0, 0, 0), db=Path(tmp) / "tet4.db",
+                                      channels=2).start()
+            self.addAsyncCleanup(services.close)
+            reader, writer = await asyncio.open_connection("127.0.0.1", services.ports.cds)
+            self.addCleanup(writer.close)
+
+            async def directory() -> list[list[bytes]]:
+                writer.write(frame(SELECT_COMMON))
+                r = Reader(await asyncio.wait_for(read_frame(reader), TIMEOUT))
+                r.u32(), r.u32(), r.u32()
+                [r.string() for _ in range(r.u32())]
+                return [[r.string() for _ in range(r.u32())] for _ in range(r.u32())]
+
+            rows = await directory()
+            self.assertEqual([row[2] for row in rows], [b"1", b"2"])
+            second = int(rows[1][4])
+            self.assertNotEqual(second, int(rows[0][4]))
+            # A secure session with channel 2's process (not logged in: refused, but
+            # the handshake proves the process serves it).
+            client = await SecureClient.connect(second)
+            self.addAsyncCleanup(client.close)
+            await client.send(b"".join([u32(Msg.AuthToS), bytes(8), string(b"x"), bytes(12),
+                                        string(b"TET4"), string(b"no ticket"), string(b"")]))
+            self.assertEqual((await client.receive()).id, Msg.AuthToC)

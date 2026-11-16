@@ -5,13 +5,14 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
-from tet4server import accounts
+from tet4server import accounts, server
 from tet4server import messages as m
 from tet4server.accounts import AccountError, AccountService, Database
 from tet4server.messages import Msg
 from tet4server.server import Ports, Services
-from tet4server.xdr import Reader, string, u32
+from tet4server.xdr import Reader, string, u32, u64
 
 from tests.test_server import TIMEOUT, SecureClient
 
@@ -132,3 +133,47 @@ class LoginTest(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PresenceTest(unittest.IsolatedAsyncioTestCase):
+    @mock.patch.object(server, "PRESENCE", 0.05)
+    async def test_logging_in_in_another_channel_ends_the_older_session(self):
+        # Two channels sharing the database, as two processes would: alice logs in to
+        # channel 1, then again to channel 2; channel 1 closes her older session.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "tet4.db"
+            accounts = Database(path)
+            self.addCleanup(accounts.close)
+            first_ticket = accounts.register("alice", "correct horse")
+            second_ticket = accounts.login("alice", "correct horse")
+            channels = []
+            for number in (1, 2):
+                channel = await server.Channel(number, "127.0.0.1", "127.0.0.1",
+                                               Ports(0, 0, 0, 0, 0), path).start()
+                self.addAsyncCleanup(channel.close)
+                channels.append(channel)
+
+            async def enter(channel: server.Channel, ticket: str) -> SecureClient:
+                client = await SecureClient.connect(channel.endpoint.port)
+                self.addAsyncCleanup(client.close)
+                await client.send(auth("alice", ticket))
+                await client.send(u32(Msg.Channel_GetUserIdByMemberIdToS) + string(b"alice"))
+                await client.send(b"".join([
+                    u32(Msg.Channel_EnterChannelByUserIdToS), u64(0), string(b"alice"),
+                    string(b"TET4"), string(b""), string(b"1"), string(b""), u32(0),
+                    string(b""), string(b""), u64(0)]))
+                while (await client.receive()).id != Msg.Channel_EnterChannelToC:
+                    pass
+                return client
+
+            older = await enter(channels[0], first_ticket)
+            await enter(channels[1], second_ticket)
+            with self.assertRaises((asyncio.IncompleteReadError, ConnectionError)):
+                while True:                      # until channel 1 closes it
+                    await older.receive()
+            for _ in range(50):
+                if not channels[0].lobby.players:
+                    break
+                await asyncio.sleep(0.02)
+            self.assertEqual(list(channels[0].lobby.players), [])
+            self.assertEqual(list(channels[1].lobby.players), [b"alice"])

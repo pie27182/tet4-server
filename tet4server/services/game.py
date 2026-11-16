@@ -255,13 +255,15 @@ class GameConnection(Connection):
             return
         self.room.post(message, exclude=self)
         if self.room.player_out(self.member_id):
-            self.end_game(self.room)
+            await self.end_game(self.room)
 
-    def end_game(self, room: Room) -> None:
+    async def end_game(self, room: Room) -> None:
         """The result board: one report per player, winner first, with rank and levels.
         Then the game report, which resets the seats and closes the board five seconds
         later, and TP for the players."""
         ranking = room.ranking()
+        if not room.single and len(ranking) > 1:
+            await self.lobby.ratings.add_game(ranking)
         log.info("room %d: game over, %s", room.number,
                  ", ".join(f"{i}. {m!r}" for i, m in enumerate(ranking, 1)))
         room.post(pack("Room_OrderTypeLetsGameEndTetrisToC", reports=[

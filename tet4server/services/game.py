@@ -119,7 +119,7 @@ class GameConnection(Connection):
             return
         log.info("%r left room %d", member.member_id, room.number)
         if room.player_out(member.member_id) and room.members:
-            self.end_game(room)
+            self.lobby.spawn(self.end_game(room))
         if tell_self:
             self.session.post(gone(room, member))
         room.post(gone(room, member))

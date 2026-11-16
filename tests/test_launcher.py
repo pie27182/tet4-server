@@ -88,6 +88,77 @@ class LauncherTest(unittest.TestCase):
         self.assertEqual((copy / "Tet4.exe").read_bytes(), exe)
 
 
+class ControlsTest(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.tmp = Path(tmp.name)
+        patch = mock.patch.object(client, "data_dir", lambda: self.tmp / "data")
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def table(self, controls: dict) -> bytes:
+        data = client.controls_runtime(controls)
+        self.assertEqual(len(data), 0x114)                    # the size the game reads
+        self.assertEqual(data[:16], b"HTC2" + bytes.fromhex("01000000")
+                         + controls["das_ms"].to_bytes(4, "little")
+                         + controls["arr_ms"].to_bytes(4, "little"))
+        self.assertEqual(data[-4:], controls["soft_drop_arr_ms"].to_bytes(4, "little"))
+        return data[16:-4]
+
+    def test_the_defaults(self):
+        controls = client.load_controls()
+        table = self.table(controls)
+        self.assertEqual((controls["das_ms"], controls["arr_ms"], controls["soft_drop_arr_ms"]),
+                         (145, 33, 33))
+        self.assertEqual({name: table[code] for name, code in client.KEYS.items()
+                          if table[code] != 0xFF},
+                         {"Left": 1, "Right": 2, "Down": 4, "Space": 5, "Up": 7, "X": 7,
+                          "Z": 8, "LControl": 8, "RControl": 8, "LShift": 6, "RShift": 6,
+                          "C": 6, "End": 0, "PageUp": 0, "Home": 0, "PageDown": 0,
+                          "Insert": 0})       # the game's other rotate and hold keys go off
+
+    def test_bound_items_and_taken_keys(self):
+        controls = client.load_controls()
+        controls["keys"]["use_item"] = ["F"]
+        controls["keys"]["left"] = ["Left", "Q"]               # Q is item target 1's own key
+        table = self.table(client.check_controls(controls))
+        self.assertEqual((table[client.KEYS["F"]], table[client.KEYS["Grave"]],
+                          table[client.KEYS["V"]]), (15, 0, 0))
+        self.assertEqual((table[client.KEYS["Q"]], table[client.KEYS["1"]]), (1, 0xFF))
+
+    def test_refused_settings(self):
+        controls = client.load_controls()
+        for change, message in (
+                ({"das_ms": "1001"}, "DAS must be"), ({"soft_drop_arr_ms": "x"}, "SDF must be"),
+                ({"keys": {**controls["keys"], "hold": []}}, "Set a key for: Hold"),
+                ({"keys": {**controls["keys"], "use_item": ["Space"]}}, "Space is set for two"),
+                ({"keys": {**controls["keys"], "use_item": ["F13"]}}, "Unsupported key")):
+            with self.subTest(change=change), self.assertRaisesRegex(client.LaunchError,
+                                                                      message):
+                client.check_controls({**controls, **change})
+
+    def test_saved_and_applied(self):
+        game, copy = self.tmp / "game", self.tmp / "copy"
+        game.mkdir()
+        copy.mkdir()
+        (game / "controls.json").write_text(json.dumps({**client.DEFAULT_CONTROLS,
+                                                        "das_ms": 107}))
+        self.assertEqual(client.load_controls(game)["das_ms"], 107)   # the game folder's
+        client.save_controls({**client.load_controls(game), "arr_ms": 0})
+        self.assertEqual(client.load_controls(game)["arr_ms"], 0)     # then the saved ones
+        client.apply_controls(copy, game)
+        self.assertEqual(len((copy / "controls.runtime.bin").read_bytes()), 0x114)
+        client.save_controls({**client.load_controls(), "enabled": False})
+        client.apply_controls(copy, game)
+        self.assertFalse((copy / "controls.runtime.bin").exists())
+
+    def test_key_names_from_tk(self):
+        self.assertEqual([client.key_name(sym, 0) for sym in (
+            "a", "Shift_R", "Prior", "KP_7", "KP_Home", "grave", "F13", "Escape")],
+            ["A", "RShift", "PageUp", "NumPad7", "NumPad7", "Grave", None, None])
+
+
 class LoginTest(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         tmp = tempfile.TemporaryDirectory()

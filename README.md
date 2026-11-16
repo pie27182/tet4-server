@@ -18,7 +18,13 @@ folder, the one that contains `Tet4.exe`.
 3. Type an account name and a password. The first time, click **Create account**;
    after that, **Log in and play** (or press Enter).
 
-The launcher remembers the server, the game folder and your account name. The
+**Keys and speed...** sets your keys (up to three per action, items included) and
+the movement speeds: DAS, the wait before a held key repeats; ARR, the time between
+repeated moves (0 sends a piece straight to the wall); SDF, the time between soft
+drop steps. *Original speed* restores the game's 145, 33 and 33 ms. Changes apply
+from the next game start.
+
+The launcher remembers the server, the game folder, your account name and keys. The
 first time you play on a server it makes a copy of the game that connects there, in
 `%LOCALAPPDATA%\Tet4`; your own game folder is never changed. The launcher closes
 once the game starts.

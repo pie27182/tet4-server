@@ -24,10 +24,13 @@ repeated moves (0 sends a piece straight to the wall); SDF, the time between sof
 drop steps. *Original speed* restores the game's 145, 33 and 33 ms. Changes apply
 from the next game start.
 
-The launcher remembers the server, the game folder, your account name and keys. The
-first time you play on a server it makes a copy of the game that connects there, in
-`%LOCALAPPDATA%\Tet4`; your own game folder is never changed. The launcher closes
-once the game starts.
+The launcher remembers the server, the game folder, your account name and keys. After
+a successful login it saves the password in the OS credential store (Windows Credential
+Manager or Linux Secret Service), keyed by server and account. On Linux this needs
+`python-keyring` and an unlocked Secret Service provider; without one, the launcher
+continues to ask for the password. The first time you play on a server it makes a copy
+of the game that connects there, in `%LOCALAPPDATA%\Tet4`; your own game folder is
+never changed. The launcher closes once the game starts.
 
 ## Play on Linux
 
@@ -46,8 +49,11 @@ git clone https://github.com/pie27182/tet4-server.git
 python3 tet4-server/tools/client.py
 ```
 
-The same window opens; the copies of the game go to `~/.local/share/tet4`. Without
-a display, `--console` asks the same questions in the terminal.
+The same window opens; the copies of the game go to `~/.local/share/tet4`. For
+password saving on Arch Linux, install `python-keyring` and a Secret Service provider
+such as GNOME Keyring (`sudo pacman -S python-keyring gnome-keyring`). Without an
+available keyring, the launcher still works but asks for the password each time.
+Without a display, `--console` asks the same questions in the terminal.
 
 ## If something goes wrong
 

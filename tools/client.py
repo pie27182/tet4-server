@@ -32,6 +32,11 @@ import threading
 import time
 from pathlib import Path
 
+try:
+    import keyring
+except ImportError:
+    keyring = None
+
 DEFAULT_SERVER = "tet4server.duckdns.org"
 ACCOUNTS_PORT = 10455        # the server's account service (TLS)
 DIRECTORY_PORT = 15000       # the server's channel directory, named in the bootstrap
@@ -90,6 +95,27 @@ def save_settings(settings: dict) -> None:
         (data_dir() / "launcher.json").write_text(json.dumps(settings, indent=2), "utf-8")
     except OSError:
         pass                    # only a convenience: the next start asks again
+
+
+def get_saved_password(server: str, name: str) -> str | None:
+    if keyring is None or not server or not name:
+        return None
+    try:
+        return keyring.get_password(
+            "Tet4Launcher", f"{server.strip().casefold()}:{name.strip().casefold()}")
+    except Exception:
+        return None
+
+
+def save_password(server: str, name: str, password: str) -> bool:
+    if keyring is None or not server or not name or not password:
+        return False
+    try:
+        keyring.set_password(
+            "Tet4Launcher", f"{server.strip().casefold()}:{name.strip().casefold()}", password)
+        return True
+    except Exception:
+        return False
 
 
 # --- keys and speed ----------------------------------------------------------------
@@ -365,7 +391,9 @@ def play(game: Path, server: str, op: str, name: str, password: str, secure: boo
     apply_controls(copy, game)
     report("Logging in..." if op == "login" else "Creating the account...")
     ticket = request_ticket(server, op, name.strip(), password, secure)
-    report("Starting the game...")
+    stored = save_password(server, name.strip(), password)
+    report("Starting the game..." if stored else
+           "Starting the game... (system keyring unavailable; password not saved)")
     return start_game(copy, bootstrap(server, name.strip(), ticket))
 
 
@@ -538,7 +566,9 @@ def window(secure: bool) -> int:
     frame = ttk.Frame(root, padding=16)
     frame.grid()
     fields = {key: tk.StringVar(value=settings[key]) for key in ("server", "game", "name")}
-    password = tk.StringVar()
+    password = tk.StringVar(value=get_saved_password(settings["server"], settings["name"]) or "")
+    for field in ("server", "name"):
+        fields[field].trace_add("write", lambda *_: password.set(""))
     status = tk.StringVar(value="Choose your game folder, then log in or create an account.")
 
     def row(number: int, label: str, variable, **options):
@@ -570,13 +600,14 @@ def window(secure: bool) -> int:
             values["game"] = fields["game"].get().strip()
             if not values["game"]:
                 return
-        if not values["name"] or not password.get():
+        password_value = password.get() or get_saved_password(values["server"], values["name"])
+        if not values["name"] or not password_value:
             status.set("Enter your account name and password.")
             (name_entry if not values["name"] else password_entry).focus()
             return
         if op == "register" and simpledialog.askstring(
                 "Create account", "Type the password again:", show="•",
-                parent=root) != password.get():
+                parent=root) != password_value:
             status.set("The passwords did not match. Try again.")
             return
         save_settings(values)
@@ -585,14 +616,17 @@ def window(secure: bool) -> int:
 
         def work():
             try:
-                play(Path(values["game"]), values["server"], op, values["name"], password.get(),
+                play(Path(values["game"]), values["server"], op, values["name"], password_value,
                      secure, report=lambda text: root.after(0, status.set, text))
             except LaunchError as exc:
                 root.after(0, failed, str(exc))
             except Exception as exc:          # a bug: say so instead of vanishing
                 root.after(0, failed, f"Unexpected error: {exc!r}")
             else:
-                root.after(0, status.set, "The game is starting. Have fun!")
+                message = "The game is starting. Have fun!"
+                if not get_saved_password(values["server"], values["name"]):
+                    message += " Password was not saved; check your system keyring."
+                root.after(0, status.set, message)
                 root.after(3000, root.destroy)
 
         threading.Thread(target=work, daemon=True).start()
@@ -629,7 +663,7 @@ def console(secure: bool) -> int:
     settings["game"] = ask("Game folder (the one with Tet4.exe)", settings["game"])
     register = ask("Do you have an account? (y/n)", "y").lower().startswith("n")
     settings["name"] = ask("Account name", settings["name"])
-    password = getpass.getpass("Password: ")
+    password = get_saved_password(settings["server"], settings["name"]) or getpass.getpass("Password: ")
     if register and getpass.getpass("Password again: ") != password:
         print("The passwords did not match.")
         return 1
@@ -700,7 +734,7 @@ def main(argv: list[str] | None = None) -> int:
         settings = load_settings()
         game = args.game or Path(settings["game"])
         name = args.name or input("Account name: ")
-        password = getpass.getpass("Password: ")
+        password = get_saved_password(args.server, name) or getpass.getpass("Password: ")
         if args.register and getpass.getpass("Password again: ") != password:
             raise LaunchError("The passwords did not match.")
         print(play(game, args.server, "register" if args.register else "login", name,

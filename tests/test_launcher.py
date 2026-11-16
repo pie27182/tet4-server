@@ -159,6 +159,30 @@ class ControlsTest(unittest.TestCase):
             ["A", "RShift", "PageUp", "NumPad7", "NumPad7", "Grave", None, None])
 
 
+class PasswordStorageTest(unittest.TestCase):
+    def test_password_is_scoped_to_server_and_account(self):
+        backend = mock.Mock()
+        backend.get_password.return_value = "secret"
+        with mock.patch.object(client, "keyring", backend):
+            self.assertTrue(client.save_password("Tet4Server.example", "Alice", "secret"))
+            backend.set_password.assert_called_once_with(
+                "Tet4Launcher", "tet4server.example:alice", "secret")
+            self.assertEqual(
+                client.get_saved_password("TET4SERVER.EXAMPLE", "ALICE"), "secret")
+
+    def test_missing_or_locked_keyring_falls_back(self):
+        with mock.patch.object(client, "keyring", None):
+            self.assertIsNone(client.get_saved_password("server", "alice"))
+            self.assertFalse(client.save_password("server", "alice", "secret"))
+
+        backend = mock.Mock()
+        backend.get_password.side_effect = RuntimeError("locked")
+        backend.set_password.side_effect = RuntimeError("locked")
+        with mock.patch.object(client, "keyring", backend):
+            self.assertIsNone(client.get_saved_password("server", "alice"))
+            self.assertFalse(client.save_password("server", "alice", "secret"))
+
+
 class LoginTest(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         tmp = tempfile.TemporaryDirectory()

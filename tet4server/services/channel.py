@@ -218,27 +218,29 @@ class ChannelConnection(Connection):
     @on("Channel_InviteGameToMemberToS")
     async def invite(self, request: dict) -> None:
         """초대하기: a player in a room invites one in the lobby, who is asked with the
-        room's number and password; a player who cannot be asked declines at once."""
+        room's number, title and password and the invitation's text. A player who cannot
+        be asked answers at once, for the inviter's waiting dialog to close."""
         room = self.player.room if self.player else None
         target = self.lobby.players.get(request["target"])
         if room is None or target is None or target.room is not None:
             await self.session.send(pack("Channel_ResponseInviteGameToC", member=request["target"],
-                                         inviter=request["member"], declined=1))
+                                         inviter=request["member"], k64e=1))
             return
         target.session.post(pack(
             "Channel_InviteGameToMemberToC", member=self.player.member_id, room=room.number,
-            room_title=room.settings.title, password=room.settings.password,
-            k64e=request["k64e"]))
+            title=room.settings.title, password=room.settings.password,
+            message=request["message"]))
 
     @on("Channel_ResponseInviteGameToS")
     async def invite_answer(self, request: dict) -> None:
-        """The invited player's answer, for the player who asked; accepting, the invited
-        player joins the room by itself."""
+        """The invited player's answer, for the player who asked, whose waiting dialog
+        closes. The client answers alike whether it accepts or declines (k64e 0);
+        accepting, it then joins the room by itself."""
         inviter = self.lobby.players.get(request["inviter"])
         if inviter and self.player:
             inviter.session.post(pack(
                 "Channel_ResponseInviteGameToC", member=self.player.member_id,
-                inviter=request["inviter"], declined=request["declined"]))
+                inviter=request["inviter"], k64e=request["k64e"]))
 
     # --- profiles ------------------------------------------------------------------------
 

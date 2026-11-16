@@ -136,22 +136,22 @@ class InvitationTest(Lobby):
                          {b"alice": 1, b"bob": 0})
 
         await alice.channel.send(pack("Channel_InviteGameToMemberToS", member=b"alice",
-                                      k64e=b"play?", target=b"bob"))
+                                      room=1, message=b"play?", target=b"bob"))
         invite = await bob.until(bob.channel, "Channel_InviteGameToMemberToC")
-        self.assertEqual((invite["member"], invite["room"], invite["room_title"], invite["k64e"]),
+        self.assertEqual((invite["member"], invite["room"], invite["title"], invite["message"]),
                          (b"alice", 1, b"come", b"play?"))
 
-        # bob's answer goes to alice: 0 accepted, then he joins the room himself.
+        # bob's answer goes to alice (accepting, he then joins the room himself).
         await bob.channel.send(pack("Channel_ResponseInviteGameToS", member=b"bob",
-                                    inviter=b"alice", declined=0))
+                                    inviter=b"alice"))
         answer = await alice.until(alice.channel, "Channel_ResponseInviteGameToC")
-        self.assertEqual((answer["member"], answer["declined"]), (b"bob", 0))
+        self.assertEqual((answer["member"], answer["k64e"]), (b"bob", 0))
 
-        # Someone who is not in the lobby cannot be asked: declined at once.
+        # Someone who is not in the lobby cannot be asked: the answer comes at once.
         await alice.channel.send(pack("Channel_InviteGameToMemberToS", member=b"alice",
                                       target=b"nobody"))
         answer = await alice.until(alice.channel, "Channel_ResponseInviteGameToC")
-        self.assertEqual((answer["member"], answer["declined"]), (b"nobody", 1))
+        self.assertEqual((answer["member"], answer["k64e"]), (b"nobody", 1))
 
 
 class BanishTest(Lobby):

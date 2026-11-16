@@ -330,13 +330,13 @@ u64 · `member` str (k3e) · `error` str (k2e) · `login_result` u32 (k161e)
 
 `0x08E980CA` · server → client · layer 0 · **sent by `ChannelConnection.invite`**
 
-`result` str (k1e) · `failcode` u32 · `error` str (k2e) · `member` str (k3e) · `room` u32 (k42e) · `room_title` str (k65e) · `password` str (k67e) · `k64e` str · u8
+`result` str (k1e) · `failcode` u32 · `error` str (k2e) · `member` str (k3e) · `room` u32 (k42e) · `title` str · `password` str (k67e) · `message` str · `k64e` u8
 
 ### Channel_InviteGameToMemberToS
 
 `0x0264355A` · client → server · layer 0 · **handled by `ChannelConnection.invite`**
 
-`member` str (k3e) · `room` u32 (k42e) · `k64e` str · `target` str · u8
+`member` str (k3e) · `room` u32 (k42e) · `message` str (k65e) · `target` str · u8
 
 ### Channel_LevelUpRewardToC
 
@@ -492,13 +492,13 @@ str · u32
 
 `0x02593F5A` · server → client · layer 0 · **sent by `ChannelConnection.invite`, `ChannelConnection.invite_answer`**
 
-`member` str (k3e) · `inviter` str (k64e) · `declined` u8
+`member` str (k3e) · `inviter` str · `k64e` u8
 
 ### Channel_ResponseInviteGameToS
 
 `0x02163F5A` · client → server · layer 0 · **handled by `ChannelConnection.invite_answer`**
 
-`member` str (k3e) · `inviter` str (k64e) · `declined` u8
+`member` str (k3e) · `inviter` str · `k64e` u8
 
 ### Channel_RoomInfoToC
 
@@ -534,7 +534,7 @@ str
 
 `0x0A101CBA` · client → server · layer 0 · **no reply needed: sent periodically; the session goes on**
 
-str · str · str
+`game_id` str · `member` str · `ticket` str
 
 ### Channel_TodayMatchInfoToC
 
@@ -860,7 +860,7 @@ u32
 
 `0x0510821A` · client → server · layer 0 · **handled by `GameConnection.exit_room`**
 
-str · u32 · str · str
+str · u32 · `member` str · str
 
 ### Room_GaeaGameValueSvcKorToS
 
@@ -896,7 +896,7 @@ str · [_PromotionMastInfoSvcKor] · [_PromotionUserInfoSvcKor] · str
 
 `0x0B81FF1A` · client → server · layer 0 · **no reply needed: HgCom3's generic game report; the client goes on**
 
-str · str · str · str · str · u8 · u8 · [_MemberScore] · str
+`game_id` str · `sub_id` str · `channel_id` str · `room` str · str · u8 · u8 · `scores` [_MemberScore] · str
 
 ### Room_GetMemberListSvcKorToC
 
@@ -1588,7 +1588,7 @@ u8 · u8 · u8
 
 ### _MemberScore
 
-str · u32 · u32 · u32 · u64 · u32 · [_ExScore] · str
+`member` str · u32 · u32 · u32 · u64 · u32 · [_ExScore] · str
 
 ### _MemberScoreReport
 
@@ -1736,9 +1736,8 @@ each; a key named after itself is one whose meaning is not known.
 | k61e | — | Channel_EnterChannelToC |
 | k62e | `room_size` | Channel_EnterChannelToC |
 | k63e | — | Channel_EnterChannelToC |
-| k64e | `inviter` | Channel_ResponseInviteGameToC, Channel_ResponseInviteGameToS |
-| k64e | — | Channel_InviteGameToMemberToC, Channel_InviteGameToMemberToS |
-| k65e | `room_title` | Channel_InviteGameToMemberToC |
+| k64e | — | Channel_InviteGameToMemberToC, Channel_ResponseInviteGameToC, Channel_ResponseInviteGameToS |
+| k65e | `message` | Channel_InviteGameToMemberToS |
 | k66e | `limit` | Channel_AutoEnterRoomToS, Channel_CreateRoomToC, Channel_CreateRoomToS and 5 more |
 | k67e | `password` | Channel_AutoEnterRoomToS, Channel_CreateRoomToC, Channel_CreateRoomToS and 7 more |
 | k68e | `private` | _RoomInfo |

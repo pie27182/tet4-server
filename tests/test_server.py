@@ -128,7 +128,7 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
         await player.message(channel, "Item_GetItemStateToC")
 
         # A message without a reply leaves the connection usable.
-        await channel.send(pack("Channel_TicketReissueToS", f0=b"ticket"))
+        await channel.send(pack("Channel_TicketReissueToS", ticket=b"ticket"))
 
         # The Single Mode button: AutoEnter (layer 3), then the client creates the room.
         await channel.send(pack("Room_OrderTypeAutoEnterSingleModeRoomTetrisToS", member=MEMBER,
@@ -174,10 +174,13 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
                          (0, 1, 1, [246, 0, 0, 0, 0], 246, 1))
         self.assertRegex(standing["dates"][0], rb"^\d{4}\.\d\d\.\d\d$")
 
-        # The exit button: the client leaves once its player is deleted.
+        # The exit button: the client leaves once its player is deleted, and the room's
+        # slot is empty again in the player's own room list, the only one it was in.
         await game.send(Message(0, EXIT_ROOM_CAPTURED))
         gone = await player.until(game, "Room_DeleteMemberToC")
         self.assertEqual(gone["member"], MEMBER)
+        freed = (await player.until(channel, "Channel_RoomInfoToC"))["info"]
+        self.assertEqual((freed["room"], freed["state"], freed["title"]), (1, 0, b""))
 
         await game.close()
         for _ in range(100):

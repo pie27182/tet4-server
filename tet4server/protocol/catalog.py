@@ -50,7 +50,7 @@ STRUCTS = {
     "_MemberInfoRoomSvcKor": "u8 u8 u8",
     "_MemberInfoShort": "member:str=k3e seat:u32=k43e",
     "_MemberInfoStartNewGame": "member:str=k3e k118e:u8 k119e:u8 u8",
-    "_MemberScore": "str u32 u32 u32 u64 u32 [{_ExScore}] str",
+    "_MemberScore": "member:str u32 u32 u32 u64 u32 [{_ExScore}] str",
     "_MemberScoreReport": "member:str u32 u32 u32 u32 u32 u32 str u32 u32 str u64 u64 u32 "
         "[u32]",
     "_MemberScoreReportSvcKor": "u8 u8 u32",
@@ -182,10 +182,10 @@ MESSAGES = {
     "Channel_GetUserIdToC": (0x0A80E29A, 0,
         "u64 member:str=k3e error:str=k2e login_result:u32=k161e"),
     "Channel_InviteGameToMemberToC": (0x08E980CA, 0,
-        "result:str=k1e failcode:u32 error:str=k2e member:str=k3e room:u32=k42e "
-        "room_title:str=k65e password:str=k67e k64e:str u8"),
+        "result:str=k1e failcode:u32 error:str=k2e member:str=k3e room:u32=k42e title:str "
+        "password:str=k67e message:str k64e:u8"),
     "Channel_InviteGameToMemberToS": (0x0264355A, 0,
-        "member:str=k3e room:u32=k42e k64e:str target:str u8"),
+        "member:str=k3e room:u32=k42e message:str=k65e target:str u8"),
     "Channel_LevelUpRewardToC": (0x0AE7C20A, 3, "[str] u32"),
     "Channel_MakeUserIdToC": (0x0F05E5AA, 0, "u64 str str u32"),
     "Channel_MakeUserIdToS": (0x02FAB30A, 0, "str"),
@@ -223,16 +223,14 @@ MESSAGES = {
     "Channel_ReserveBanishToC": (0x0478479A, 0, "str u32"),
     "Channel_ResponseDeleteAliasToC": (0x09E9027A, 3, "code:str done:u8"),
     "Channel_ResponseDeleteEmblemToC": (0x0DFFF7CA, 3, "code:str done:u8"),
-    "Channel_ResponseInviteGameToC": (0x02593F5A, 0,
-        "member:str=k3e inviter:str=k64e declined:u8"),
-    "Channel_ResponseInviteGameToS": (0x02163F5A, 0,
-        "member:str=k3e inviter:str=k64e declined:u8"),
+    "Channel_ResponseInviteGameToC": (0x02593F5A, 0, "member:str=k3e inviter:str k64e:u8"),
+    "Channel_ResponseInviteGameToS": (0x02163F5A, 0, "member:str=k3e inviter:str k64e:u8"),
     "Channel_RoomInfoToC": (0x0A680DDA, 0, "info:{_RoomInfo}"),
     "Channel_SearchMemberToC": (0x0ED42B6A, 0, "u8 str str"),
     "Channel_SendErrorToMemberToC": (0x0C81679A, 0, "str u32"),
     "Channel_ShutdownTimeToC": (0x0E33181A, 0, "u32 u32 u32"),
     "Channel_TicketReissueToC": (0x0C6600AA, 0, "str"),
-    "Channel_TicketReissueToS": (0x0A101CBA, 0, "str str str"),
+    "Channel_TicketReissueToS": (0x0A101CBA, 0, "game_id:str member:str ticket:str"),
     "Channel_TodayMatchInfoToC": (0x083DB78A, 0, ""),
     "Channel_ViewRoomToC": (0x00B45AEA, 0,
         "str u32 str str str str u32 str str u32 u32 str str str u32 str"),
@@ -280,7 +278,7 @@ MESSAGES = {
         "room:u32=k42e title:str=k45e password:str=k67e k127e:u32 limit:u32=k66e "
         "options:str=k46e k82e:str k57e:str k200e:str seat:u32=k58e member:str=k3e "
         "k52e:str k53e:u32 u32"),
-    "Room_ExitRoomToS": (0x0510821A, 0, "str u32 str str"),
+    "Room_ExitRoomToS": (0x0510821A, 0, "str u32 member:str str"),
     "Room_GaeaGameValueSvcKorToS": (0x09C5368A, 1, "[{_GaeaGameValue}]"),
     "Room_GaeaPrizeDataSvcKorToC": (0x025A9BEA, 1,
         "str u32 u32 str u64 u64 u64 u64 u64 str"),
@@ -289,7 +287,9 @@ MESSAGES = {
     "Room_GameReportSvcKorToC": (0x034AF4BA, 1, "[{_MemberScoreReportSvcKor}]"),
     "Room_GameReportToC": (0x0EC0F66A, 0,
         "result:str=k1e failcode:u32 members:[{_MemberScoreReport}]"),
-    "Room_GameReportToS": (0x0B81FF1A, 0, "str str str str str u8 u8 [{_MemberScore}] str"),
+    "Room_GameReportToS": (0x0B81FF1A, 0,
+        "game_id:str sub_id:str channel_id:str room:str str u8 u8 scores:[{_MemberScore}] "
+        "str"),
     "Room_GetMemberListSvcKorToC": (0x086ECFCA, 1, "[{_MemberInfoRoomSvcKor}]"),
     "Room_GetMemberListToC": (0x03753C2A, 0,
         "k25e:u32 creator:str=k116e host:str=k50e k103e:u8 k104e:u8 member:str=k3e "

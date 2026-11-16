@@ -127,8 +127,17 @@ class GameConnection(Connection):
             player.room = None
         if room.members:
             self._show(room)
-        elif self.lobby.close_room(room) and not room.single:
-            self.lobby.post(views.free_slot(room.number))
+        elif self.lobby.close_room(room):
+            self._free(room)
+
+    def _free(self, room: Room) -> None:
+        """A closed room's slot is empty again in the room list: in everyone's, or for a
+        Single Mode room in its player's, the only list it was in."""
+        news = views.free_slot(room.number)
+        if not room.single:
+            self.lobby.post(news)
+        elif player := self.lobby.players.get(room.creator):
+            player.session.post(news)
 
     @on("Room_ReqBanishMemberToS")
     async def banish(self, request: dict) -> None:

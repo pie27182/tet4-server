@@ -19,7 +19,7 @@ from typing import Callable
 
 from .config import (ACCOUNTS_PORT, CDS_PORT, CHANNEL_PORT, CHANNEL_START_TIMEOUT,
                      GAME_HANDSHAKE_DELAY, GAME_PORT, HOST, MAX_CHANNELS, PRESENCE_CHECK,
-                     RECORDS_REFRESH, TPACK_PORT)
+                     RECORDS_REFRESH, RANKINGS_PORT, TPACK_PORT)
 from .domain.lobby import Lobby
 from .protocol.session import Session, Tracer
 from .protocol.wire import Endpoint, ProtocolError, frame, read_frame
@@ -27,6 +27,7 @@ from .services import directory, tpack
 from .services.accounts import AccountService
 from .services.channel import ChannelConnection
 from .services.game import GameConnection
+from .services.rankings import Rankings
 from .storage import Database
 
 log = logging.getLogger("tet4.server")
@@ -42,6 +43,7 @@ class Ports:
     channel: int = CHANNEL_PORT
     game: int = GAME_PORT
     accounts: int = ACCOUNTS_PORT
+    rankings: int = 0
 
     def of_channel(self, number: int) -> "Ports":
         step = 2 * (number - 1)
@@ -163,13 +165,15 @@ class Services:
 
     def __init__(self, host: str = HOST, ports: Ports = Ports(), trace: Path | None = None,
                  db: Path | None = None, public_host: str | None = None,
-                 tls: ssl.SSLContext | None = None, channels: int = 1):
+                 tls: ssl.SSLContext | None = None, channels: int = 1,
+                 rankings_port: int | None = None):
         if channels > 1 and not db:
             raise ValueError("more than one channel needs a database")
         self.host = host
         self.public_host = public_host or host
         self.ports = ports
         self._db_path, self._trace, self._tls, self._count = db, trace, tls, channels
+        self._rankings_port = rankings_port
         self.db = Database(db) if db else None
         self.channels: list[Channel] = []            # with one channel, in this process
         self._processes: list[multiprocessing.Process] = []
@@ -200,10 +204,14 @@ class Services:
             if self.db:
                 accounts_port = await listen(
                     self.ports.accounts, AccountService(self.db).handle, self._tls)
+            rankings_port = 0
+            if self.db and self._rankings_port is not None:
+                rankings_port = await listen(self._rankings_port, Rankings(self.db).handle)
         except BaseException:
             await self.close()
             raise
-        self.ports = replace(ports, tpack=tpack_port, cds=cds_port, accounts=accounts_port)
+        self.ports = replace(ports, tpack=tpack_port, cds=cds_port, accounts=accounts_port,
+                             rankings=rankings_port)
         return self
 
     def _member_counts(self) -> list[int]:
@@ -308,7 +316,8 @@ async def _run(args: argparse.Namespace) -> None:
         tls = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         tls.load_cert_chain(args.tls_cert, args.tls_key)
     async with Services(args.host, trace=args.trace, db=args.db, public_host=args.public_host,
-                        tls=tls, channels=args.channels) as services:
+                        tls=tls, channels=args.channels,
+                        rankings_port=None if args.no_rankings else args.rankings_port) as services:
         p = services.ports
         log.info("listening on %s (announced as %s): TPack %d, CDS %d, %d channel%s from "
                  "port %d", services.host, services.public_host, p.tpack, p.cds,
@@ -316,6 +325,10 @@ async def _run(args: argparse.Namespace) -> None:
         if services.db:
             log.info("accounts required; account service on port %d%s", p.accounts,
                      " with TLS" if tls else " WITHOUT TLS: passwords travel in the clear")
+            if p.rankings:
+                log.info("public Single and Multiplayer rankings on port %d", p.rankings)
+        elif not args.no_rankings:
+            log.info("public rankings disabled: they require --db")
         if args.trace:
             log.info("tracing decrypted messages to %s", args.trace)
         stop = asyncio.Event()
@@ -340,6 +353,10 @@ def main(argv: list[str] | None = None) -> int:
                         help="certificate chain for the account service")
     parser.add_argument("--tls-key", type=Path, metavar="PEM",
                         help="private key for --tls-cert")
+    parser.add_argument("--rankings-port", type=int, default=RANKINGS_PORT, metavar="PORT",
+                        help="public ranking pages (default %(default)s; requires --db)")
+    parser.add_argument("--no-rankings", action="store_true",
+                        help="disable the public ranking pages")
     parser.add_argument("--trace", type=Path, metavar="FILE",
                         help="append every decrypted channel/game message to FILE (JSON lines)")
     parser.add_argument("--log-level", default="INFO", choices=("DEBUG", "INFO", "WARNING"))

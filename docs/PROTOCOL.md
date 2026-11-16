@@ -764,11 +764,23 @@ MESSAGES.md has every layout.
   close and relaunch through the Hangame web site (Msg_Destroy → reloadHanGame →
   ReloadLogonHangameWeb): here it simply closes. Arenas by grade (초보, 고수, ...)
   need the ratings below. **live**
-- **Ratings and records** (내공, 등급, 전적). The profile, the member list and the exit
-  dialog show 내공 (rating points), a grade from it (24 grades from 초보 to 절대신,
-  table at Tet4.exe 0x005DC870), wins, losses, win rate, best combo and streak, the
-  best grade and today's TP; the server sends them all as 0: games are ranked and
-  paid in TP, but no record is kept of them. **live**
+- **Ratings and records** (내공, 등급, 전적). NHN announced this grade system
+  in 2008: 내공 goes up or down with player skill. The current client stores the
+  school/rating in `_TetrisSchoolInfo` (`u8 · str · u32 · u16`); its 24-grade lookup
+  table is at Tet4.exe 0x005DC870. A 2008 player report places a new rating near
+  1600 and says the amount changes with the opponent's rating. The server now stores
+  global multiplayer points, games, wins, losses, win rate and current/best streaks
+  in `multiplayer_ratings`; each completed multiplayer room updates them atomically.
+  The member row's `k31e` and `_TetrisSchoolInfo`'s third field carry the points.
+  The score update is a provisional zero-sum, placement-based Elo reconstruction
+  (initial 1600, K=32), **not a recovered copy of Hangame's exact formula**.
+  NHN's 2010 patent describes score rules that differ by grade (beginner, middle,
+  expert), but does not prove that the same algorithm or constants shipped in this
+  1.3.4 client. The exact 24 thresholds/name mapping, original score transfer,
+  best-combo accumulation, best-grade field and rank-locked arenas remain open.
+  NHN separately announced public Single Ranking and Multi Ranking lists in
+  November 2008; the old in-game/web UI or its ranking-query path is not yet
+  reproduced. **partially implemented**
 - **Missions and levels.** `_TetrisMissionMastInfo`/`_TetrisMissionUserInfo` in the
   profiles (sent empty), `Channel_OrderTypeMissionCompleteTetrisToC`,
   `Room_OrderTypeMissionCompleteTetrisToC`, `Room_OrderTypeSetEmblemTetrisToC` (an

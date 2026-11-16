@@ -354,6 +354,33 @@ def start_game(copy: Path, boot: str) -> Path:
 
 # --- the account -------------------------------------------------------------------
 
+KEYRING_SERVICE = "Tet4 Launcher"
+
+
+def load_password(server: str, name: str) -> str | None:
+    try:
+        import keyring
+        return keyring.get_password(KEYRING_SERVICE, f"{server.strip().lower()}:{name.strip().lower()}")
+    except Exception:
+        return None
+
+
+def save_password(server: str, name: str, password: str) -> bool:
+    try:
+        import keyring
+        keyring.set_password(KEYRING_SERVICE, f"{server.strip().lower()}:{name.strip().lower()}",
+                             password)
+        return True
+    except Exception:
+        return False
+
+
+def ask_to_save_password(server: str, name: str, password: str) -> None:
+    if input("Remember password in the system keyring? [y/N] ").strip().lower() in ("y", "yes"):
+        if not save_password(server, name, password):
+            print("Could not save the password. Install keyring and enable a system keyring.")
+
+
 def request_ticket(server: str, op: str, name: str, password: str,
                    secure: bool = True, port: int = ACCOUNTS_PORT) -> str:
     """Log in (op "login") or create an account ("register"); the ticket the game
@@ -588,10 +615,12 @@ def window(secure: bool) -> int:
     ttk.Button(frame, text="Browse...", command=browse).grid(row=1, column=2, padx=(6, 0))
     name_entry = row(2, "Account name", fields["name"])
     password_entry = row(3, "Password", password, show="•")
+    ttk.Checkbutton(frame, text="Remember password in system keyring",
+                    variable=remember_password).grid(row=4, column=0, columnspan=3, sticky="w")
     buttons = ttk.Frame(frame)
-    buttons.grid(row=4, column=0, columnspan=3, pady=(12, 6))
+    buttons.grid(row=5, column=0, columnspan=3, pady=(8, 6))
     ttk.Label(frame, textvariable=status, wraplength=420, justify="left").grid(
-        row=5, column=0, columnspan=3, sticky="w")
+        row=6, column=0, columnspan=3, sticky="w")
 
     def go(op: str):
         values = {key: variable.get().strip() for key, variable in fields.items()}
@@ -674,6 +703,8 @@ def console(secure: bool) -> int:
     except LaunchError as exc:
         print(f"\n{exc}")
         return 1
+    if not load_password(settings["server"], settings["name"]):
+        ask_to_save_password(settings["server"], settings["name"], password)
     print(f"The game is starting. Its log is {log}.")
     return 0
 
@@ -737,8 +768,11 @@ def main(argv: list[str] | None = None) -> int:
         password = get_saved_password(args.server, name) or getpass.getpass("Password: ")
         if args.register and getpass.getpass("Password again: ") != password:
             raise LaunchError("The passwords did not match.")
-        print(play(game, args.server, "register" if args.register else "login", name,
-                   password, secure))
+        log = play(game, args.server, "register" if args.register else "login", name,
+                   password, secure)
+        if not load_password(args.server, name):
+            ask_to_save_password(args.server, name, password)
+        print(log)
         return 0
     except LaunchError as exc:
         print(exc, file=sys.stderr)

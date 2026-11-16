@@ -160,18 +160,26 @@ class ControlsTest(unittest.TestCase):
 
 
 class PasswordStorageTest(unittest.TestCase):
-    def test_passwords_use_the_system_keyring_per_server_and_account(self):
+    def test_password_is_scoped_to_server_and_account(self):
         backend = mock.Mock()
-        with mock.patch.dict("sys.modules", {"keyring": backend}):
+        backend.get_password.return_value = "secret"
+        with mock.patch.object(client, "keyring", backend):
             self.assertTrue(client.save_password("Tet4Server.example", "Alice", "secret"))
             backend.set_password.assert_called_once_with(
-                client.KEYRING_SERVICE, "tet4server.example:alice", "secret")
-            backend.get_password.return_value = "secret"
-            self.assertEqual(client.load_password("Tet4Server.example", "Alice"), "secret")
+                "Tet4Launcher", "tet4server.example:alice", "secret")
+            self.assertEqual(
+                client.get_saved_password("TET4SERVER.EXAMPLE", "ALICE"), "secret")
 
-    def test_unavailable_keyring_falls_back_without_crashing(self):
-        with mock.patch.dict("sys.modules", {"keyring": None}):
-            self.assertIsNone(client.load_password("server", "alice"))
+    def test_missing_or_locked_keyring_falls_back(self):
+        with mock.patch.object(client, "keyring", None):
+            self.assertIsNone(client.get_saved_password("server", "alice"))
+            self.assertFalse(client.save_password("server", "alice", "secret"))
+
+        backend = mock.Mock()
+        backend.get_password.side_effect = RuntimeError("locked")
+        backend.set_password.side_effect = RuntimeError("locked")
+        with mock.patch.object(client, "keyring", backend):
+            self.assertIsNone(client.get_saved_password("server", "alice"))
             self.assertFalse(client.save_password("server", "alice", "secret"))
 
 

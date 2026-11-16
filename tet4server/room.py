@@ -38,6 +38,8 @@ class Room:
         self.single = single      # Single Mode: private to its player, not listed
         self.members: list[Member] = []
         self.playing = False
+        self.alive: list[bytes] = []      # players of the running game still in it
+        self.out: list[bytes] = []        # players out of it, first out first
 
     @property
     def limit(self) -> int:
@@ -75,6 +77,26 @@ class Room:
                     self.host = self.members[0].member_id
                 return member
         return None
+
+    def start_game(self) -> None:
+        self.playing = True
+        self.alive = [m.member_id for m in self.members]
+        self.out = []
+
+    def player_out(self, member_id: bytes) -> bool:
+        """Count a player out of the running game (IWillDie, or leaving). True when that
+        ended the game: every player has reported, the survivor last."""
+        if member_id in self.alive:
+            self.alive.remove(member_id)
+            self.out.append(member_id)
+        if self.playing and not self.alive:
+            self.playing = False
+            return True
+        return False
+
+    def ranking(self) -> list[bytes]:
+        """The finished game's players, winner first: the last one out."""
+        return list(reversed(self.out))
 
     def member(self, member_id: bytes) -> Member | None:
         return next((m for m in self.members if m.member_id == member_id), None)

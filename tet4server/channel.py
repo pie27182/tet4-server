@@ -76,6 +76,7 @@ class ChannelConnection:
             (3, Msg.Room_OrderTypeAutoEnterSingleModeRoomTetrisToS): self.on_auto_enter,
             (0, Msg.Channel_CreateRoomToS): self.on_create_room,
             (0, schema.message_id("Channel_GameJoinRoomToS")): self.on_join_room,
+            (0, schema.message_id("Channel_AutoEnterRoomToS")): self.on_auto_enter_room,
             (0, schema.message_id("Chatting_ChatStringToS")): self.on_chat,
             (0, schema.message_id("Chatting_HanChatStringToS")): self.on_han_chat,
         }
@@ -150,9 +151,10 @@ class ChannelConnection:
         })
 
     async def on_get_room_list(self, r: Reader) -> None:
+        # Msg_FillRoomList (HgModel3 0x60909BE0) reads k51e rooms, not the vector's length.
+        slots = self.lobby.room_slots()
         await self.session.send(schema.pack(
-            "Channel_GetRoomListToC", CHANNEL_KEYS,
-            rooms=[room.info() for room in self.lobby.listed_rooms()]))
+            "Channel_GetRoomListToC", CHANNEL_KEYS, k51e=len(slots), rooms=slots))
 
     async def on_get_item_state(self, r: Reader) -> None:
         await self.session.send(m.get_item_state_to_c())
@@ -191,6 +193,21 @@ class ChannelConnection:
         await self.session.send(create_room_to_c(room, request, self.game))
         if room is not None and room.single:
             await self.session.send(room_info_to_c(room))
+
+    async def on_auto_enter_room(self, r: Reader) -> None:
+        """The create-room dialog (Msg_SetCreateRoomReturn, Tet4.exe 0x004CA230) asks
+        for a room this way, any slot (k42e -1). The reply only reports success
+        (Net_Channel_AutoEnterRoom, HgCtr3 0x6020A4B0 acts on failure alone); the
+        CreateRoomToC after it makes the client connect to the game socket."""
+        f = schema.unpack("Channel_AutoEnterRoomToS", r)
+        request = m.RoomRequest(
+            member_id=self.member_id or f["k3e"], k42e=f["k42e"] if f["k42e"] < 1 << 31 else 0,
+            k67e=f["k67e"], k45e=f["k45e"], k46e=f["k46e"], k127e=f["k127e"], k66e=f["k66e"],
+            k200e=f["k200e"], k69e=0, k22e=f["k22e"], k23e=f["k23e"], k24e=f["k24e"])
+        room = self.lobby.create_room(request.member_id, request)
+        await self.session.send(schema.pack("Channel_AutoEnterRoomToC",
+                                            k1e=b"" if room else b"v2e"))
+        await self.session.send(create_room_to_c(room, request, self.game))
 
     async def on_join_room(self, r: Reader) -> None:
         request = schema.unpack("Channel_GameJoinRoomToS", r)

@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("tet4.lobby")
 
-MAX_ROOMS = 100           # numbered room slots in the channel's room list
+MAX_ROOMS = 100           # numbered room slots in the channel's room list (CDS MaxRoom)
 
 
 @dataclass(eq=False)
@@ -75,6 +75,12 @@ class Lobby:
 
     def listed_rooms(self) -> list[Room]:
         return sorted((r for r in self.rooms.values() if not r.single), key=lambda r: r.number)
+
+    def room_slots(self) -> list[dict]:
+        """Every numbered slot of the room list: the client only updates rooms it got here
+        (SetRoomInfo looks the number up), so empty slots are listed too, in state 0."""
+        return [self.rooms[n].info() if n in self.rooms and not self.rooms[n].single
+                else dict(k42e=n) for n in range(1, MAX_ROOMS + 1)]
 
     def create_room(self, creator: bytes, fields: RoomRequest) -> Room | None:
         """A new room in the requested slot (k42e) if it is free, else the first free one."""

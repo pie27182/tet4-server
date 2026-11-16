@@ -19,12 +19,11 @@ RELAYED = {schema.message_id(name) for name in (
     "Room_OrderTypeCheckBombTetris", "Room_OrderTypeCheckCollapseTetris",
     "Room_OrderTypeComboTetris", "Room_OrderTypeGameEndOkTetris",
     "Room_OrderTypeGameStartOkTetris", "Room_OrderTypeGarbageSendTetris",
-    "Room_OrderTypeIWillDieTetris", "Room_OrderTypeItemApplyTetris",
+    "Room_OrderTypeItemApplyTetris",
     "Room_OrderTypeItemGetTetris", "Room_OrderTypeItemRemoveTetris",
     "Room_OrderTypeItemReflectTetris", "Room_OrderTypeItemStealTetris",
     "Room_OrderTypeItemStoleTetris", "Room_OrderTypeItemStolenTetris",
     "Room_OrderTypeItemUseTetris", "Room_OrderTypeItemSendTetris",
-    "Room_OrderTypeLetsGameStartTetris", "Room_OrderTypeLetsGameStartOkTetris",
     "Room_OrderTypeLineUpTetris", "Room_OrderTypeMapSetSyncTetris",
     "Room_OrderTypePolyMinoPutTetris", "Room_OrderTypePolyMinoPutPieceTetris",
     "Room_OrderTypeRankOfMeTetris", "Room_OrderTypeRoomInfoTetris",
@@ -67,6 +66,8 @@ class GameConnection:
             (3, Msg.Room_OrderTypeSingleModeGameReportTetrisToS): self.on_single_mode_report,
             (0, Msg.Room_ExitRoomToS): self.on_exit_room,
             (0, schema.message_id("Chatting_ChatStringToS")): self.on_chat,
+            (3, schema.message_id("Room_OrderTypeLetsGameStartTetris")): self.on_lets_game_start,
+            (3, schema.message_id("Room_OrderTypeIWillDieTetris")): self.on_out,
         }
         for msg_id in RELAYED:
             self.handlers[(3, msg_id)] = self.relay
@@ -115,6 +116,48 @@ class GameConnection:
         room.post(m.start_new_game_to_c([member.member_id for member in room.members]))
         self.lobby.room_changed(room)
 
+    async def on_lets_game_start(self, r: Reader) -> None:
+        """The host starts a multiplayer game: every member, the host included, gets
+        LetsGameStartOkTetris with the same seats and map data, and starts on it
+        (FUN_004586B0); the client never sends LetsGameStartOk itself."""
+        room = self.room
+        if room is None or room.host != self.member_id:
+            return
+        start = schema.unpack("Room_OrderTypeLetsGameStartTetris", r)
+        start.pop("kind")
+        room.start_game()
+        room.post(schema.pack("Room_OrderTypeLetsGameStartOkTetris", start), layer=3)
+        self.lobby.room_changed(room)
+
+    async def on_out(self, r: Reader) -> None:
+        """IWillDie: a player is out (topped out, or the last one left once the others
+        are). The others see it; when everyone has reported, the game ends."""
+        if self.room is None:
+            return
+        self.room.post(r.data, layer=3, exclude=self)
+        if self.room.player_out(self.member_id):
+            self.end_game(self.room)
+
+    def end_game(self, room: Room) -> None:
+        """LetsGameEndTetrisToC to every member: one _TetrisGameReport per player, winner
+        first. CTetMainBody's handler (slot 15, 0x005796C0) shows the result board
+        from them: rank (+0x28), team (+0x2C), name, level before and after."""
+        reports = [dict(k3e=member_id, rank=rank, level=1, level_after=1)
+                   for rank, member_id in enumerate(room.ranking(), 1)]
+        log.info("room %d: game over, %s", room.number,
+                 ", ".join(f"{i}. {m!r}" for i, m in enumerate(room.ranking(), 1)))
+        room.post(schema.pack("Room_OrderTypeLetsGameEndTetrisToC", reports=reports), layer=3)
+        # The game report: HgCom3's member scores at layer 0 and Tet4.exe's at layer 3.
+        # The layer-3 converter (0x0045B070) checks the room number, resets every seat
+        # and closes the result board five seconds later.
+        players = [dict(k3e=member_id) for member_id in room.ranking()]
+        room.post_layers({
+            0: schema.pack("Room_GameReportToC", members=players),
+            3: schema.pack_as("Room_GameReportToC", "Room_OrderTypeGameReportTetrisToC",
+                              room=room.number, reports=players),
+        })
+        self.lobby.room_changed(room)
+
     async def relay(self, r: Reader) -> None:
         """Pass an in-game message on to the other players in the room, unchanged."""
         if self.room is not None:
@@ -147,6 +190,8 @@ class GameConnection:
         if member is None:
             return
         log.info("%r left room %d", member.member_id, room.number)
+        if room.player_out(member.member_id) and room.members:
+            self.end_game(room)
         notice = delete_member_to_c(room, member)
         if tell_self:
             self.session.post(notice)
@@ -158,6 +203,4 @@ class GameConnection:
             room.playing = False
             self.lobby.close_room(room)
         else:
-            if room.playing and len(room.members) < 2:
-                room.playing = False
             self.lobby.room_changed(room)

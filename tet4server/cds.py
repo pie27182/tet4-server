@@ -9,6 +9,7 @@ column 3 and the port from column 4 by position, not by column name.
 """
 import logging
 
+from .lobby import MAX_ROOMS
 from .messages import Endpoint
 from .xdr import Reader, i32, string, u32
 
@@ -21,7 +22,8 @@ log = logging.getLogger("tet4.cds")
 
 
 def channel_row(channel: Endpoint) -> tuple[str, ...]:
-    return ("TET4", "01D0A", "1", channel.host, str(channel.port), "1", "100", "10", "0")
+    return ("TET4", "01D0A", "1", channel.host, str(channel.port), "1", "300",
+            str(MAX_ROOMS), "0")
 
 
 def answer(body: bytes, channel: Endpoint) -> bytes | None:

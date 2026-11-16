@@ -311,7 +311,7 @@ NAMES = {
                             "k31e k13e k34e k32e k33e k102e k37e k38e k35e k151e k201e k153e k1e",
     "Channel_OrderTypeAddMemberTetrisToC": "member",
     "Channel_DeleteMemberToC": "k22e k23e k24e k3e",
-    "Channel_GetRoomListToC": "k22e k23e k24e k25e k1e rooms",
+    "Channel_GetRoomListToC": "k22e k23e k24e k51e k1e rooms",
     "Channel_RoomInfoToC": "room",
     "Channel_OrderTypeDayCntInfoTetrisToC": "k3e used allowed _ _ pcbang",
     "Chatting_ChatStringToS": "k57e k3e k38e k40e k41e",
@@ -323,10 +323,21 @@ NAMES = {
     "Channel_CreateRoomToC": "k1e failcode k2e k3e k42e k67e k45e k46e k127e k66e k200e k69e "
                              "k22e k23e k24e _ k52e k53e k82e",
     "Channel_GameJoinRoomToS": "k3e k42e k67e",
+    "Channel_AutoEnterRoomToS": "k3e k42e k67e k45e k46e k127e k66e k200e k22e k23e k24e",
+    "Channel_AutoEnterRoomToC": "k1e _ k2e",
     "Channel_GameJoinRoomToC": "k1e failcode k2e k22e k23e k24e k42e k45e k67e k127e k66e k46e "
                                "k200e k52e k53e k82e",
     # Room
     "Room_EnterRoomToC": "k1e failcode k2e",
+    "Room_OrderTypeLetsGameStartTetris": "kind f1 f2 f3 f4 f5 members flags",
+    "Room_OrderTypeLetsGameStartOkTetris": "f1 f2 f3 f4 f5 members flags last",
+    "Room_OrderTypeIWillDieTetris": "seat",
+    "Room_OrderTypeLetsGameEndTetrisToC": "_ _ reports",
+    "_TetrisGameReport": "k3e rank team title level level_after",
+    "Room_GameReportToC": "k1e failcode members",
+    "_MemberScoreReport": "k3e",
+    "Room_OrderTypeGameReportTetrisToC": "room reports",
+    "_TetrisMemberGameReport": "k3e",
     "Room_EnterRoomToS": "k42e k45e k67e k127e k66e k46e k82e k57e k200e k58e k3e k52e k53e",
     "Room_AddMemberToC": "k50e k57e k58e k3e k7e k8e k11e k10e k12e k34e k13e k26e k27e k28e "
                          "k29e k30e k31e k32e k33e k102e k37e k38e k52e k53e k35e k153e",

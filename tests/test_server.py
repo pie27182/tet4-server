@@ -151,7 +151,9 @@ class ServiceTest(unittest.IsolatedAsyncioTestCase):
             skip()
         count = r.u32()
         fields = parse(reply.body, "s s s u32 s u32" + f" {ROOM_INFO}" * count)
-        return fields[6::len(ROOM_INFO.split())]  # k42e of each _RoomInfo
+        size = len(ROOM_INFO.split())
+        slots = [fields[6 + i * size:6 + (i + 1) * size] for i in range(count)]
+        return [slot[0] for slot in slots if slot[7]]  # k42e of the slots not empty (k47e)
 
     async def test_directory_announces_the_bound_channel_port(self):
         tpack = await self.plain_request(self.ports.tpack, b"".join([

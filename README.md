@@ -8,7 +8,9 @@ TPack host names, which point at the server.
 
 The server implements the protocol the client already speaks, reconstructed from
 captured traffic and the client's code. [`docs/PROTOCOL.md`](docs/PROTOCOL.md)
-describes the protocol and the evidence for every reply.
+describes the protocol and the evidence for every reply, and
+[`docs/MESSAGES.md`](docs/MESSAGES.md) lists all 233 messages the client knows with
+what the server does with each.
 
 ## Status
 
@@ -99,8 +101,9 @@ tet4server/  the server
   shop.py      catalog, TP, inventory   server.py   listeners and command line
   accounts.py  accounts, tickets, database, account service
 tests/       captured vectors, layouts, scripted clients for every service
-tools/       client.py, the sample bootstrap, a winedbg command file
-docs/        PROTOCOL.md, DEBUGGING.md, DEPLOY.md
+tools/       client.py (check, patch, run the client), loadtest.py, messages.py
+             (writes docs/MESSAGES.md), the sample bootstrap, a winedbg command file
+docs/        PROTOCOL.md, MESSAGES.md, DEPLOY.md, DEBUGGING.md
 ```
 
 The decompiled client and the analysis scripts used to recover the protocol are

@@ -25,7 +25,7 @@ presentation; the complete scoring rules have not yet been recovered from the
 Useful historical sources:
 
 - https://www.navercorp.com/media/pressReleasesDetail?seq=26815
-- https://www.navercorp.com/media/pressReleasesDetail?seq=26818
+- https://www.navercorp.com/media/pressReleasesDetail?seq=26793
 - https://www.navercorp.com/media/pressReleasesDetail?seq=26726
 - https://www.inews24.com/view/733019
 

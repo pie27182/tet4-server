@@ -22,6 +22,7 @@ README lists what is not implemented yet.
 |---|---|
 | 10454 | TPack (login handshake) |
 | 10455 | accounts (registration and login, TLS) |
+| 10456 | public Single and Multiplayer ranking pages |
 | 15000 | CDS (channel directory) |
 | 15001, 15002 | channel 1: channel and game sockets |
 | 15003, 15004 | channel 2, and so on: channel n uses 15001 + 2(n - 1) and the next |

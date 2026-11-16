@@ -304,7 +304,7 @@ class GameConnection(Connection):
         host_bonus = self._host_bonus(room)
         for rank, member_id in enumerate(ranking, 1):
             tp = GAME_POINTS[min(rank, len(GAME_POINTS)) - 1] if counts else 0
-            if member_id == room.host and host_bonus:
+            if counts and member_id == room.host and host_bonus:
                 tp += HOST_POINTS
             play = room.plays.get(member_id) or Play()
             settle[member_id] = (partial(finish, players=len(ranking), rank=rank,

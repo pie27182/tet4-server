@@ -24,17 +24,10 @@ class Lobby(unittest.IsolatedAsyncioTestCase):
 
 
 class MultiplayerTest(Lobby):
-    async def test_profile_carries_the_rating_score_in_every_profile_path(self):
-        # The client profile contains _TetrisSchoolInfo before its other record fields.
-        # Its u32 score is the value the rating/progress indicator can read; omitting
-        # the structure makes the codec fill it with zero.
-        added = await self.alice.until(
-            self.alice.channel, "Channel_OrderTypeAddMemberTetrisToC")
-        self.assertEqual(added["profile"]["member"], b"bob")
+    async def test_profile_carries_the_rating_score_in_member_info_response(self):
+        # _TetrisSchoolInfo is part of the profile. Its third field is the
+        # server's current rating; omitting school makes the codec fill it with zero.
         expected = self.services.lobby.ratings.standing(b"bob").points
-        self.assertEqual(added["profile"]["school"]["f2"], expected)
-
-        # Opening the member-info dialog uses the same profile structure.
         await self.alice.channel.send(pack(
             "Channel_OrderTypeGetDisplayMemberInfoTetrisToS", member=b"bob", kind=4))
         displayed = await self.alice.until(

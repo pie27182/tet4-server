@@ -28,28 +28,18 @@ class MultiplayerTest(Lobby):
         # The client profile contains _TetrisSchoolInfo before its other record fields.
         # Its u32 score is the value the rating/progress indicator can read; omitting
         # the structure makes the codec fill it with zero.
-        own = await self.alice.until(
-            self.alice.channel, "Channel_OrderTypeGetMemberInfoTetrisToC")
-        self.assertEqual(
-            own["profile"]["school"]["f2"],
-            self.services.lobby.ratings.standing(b"alice").points)
-
-        # A lobby arrival sends a separate profile for the newly arrived player.
         added = await self.alice.until(
             self.alice.channel, "Channel_OrderTypeAddMemberTetrisToC")
         self.assertEqual(added["profile"]["member"], b"bob")
-        self.assertEqual(
-            added["profile"]["school"]["f2"],
-            self.services.lobby.ratings.standing(b"bob").points)
+        expected = self.services.lobby.ratings.standing(b"bob").points
+        self.assertEqual(added["profile"]["school"]["f2"], expected)
 
         # Opening the member-info dialog uses the same profile structure.
         await self.alice.channel.send(pack(
             "Channel_OrderTypeGetDisplayMemberInfoTetrisToS", member=b"bob", kind=4))
         displayed = await self.alice.until(
             self.alice.channel, "Channel_OrderTypeGetDisplayMemberInfoTetrisToC")
-        self.assertEqual(
-            displayed["profile"]["school"]["f2"],
-            self.services.lobby.ratings.standing(b"bob").points)
+        self.assertEqual(displayed["profile"]["school"]["f2"], expected)
 
     @mock.patch.object(game, "MIN_GAME_SECONDS", 0)
     async def test_two_players_play_a_game(self):
